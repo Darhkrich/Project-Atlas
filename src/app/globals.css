@@ -1,26 +1,286 @@
-@import "tailwindcss";
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* ============================================================
+     Atlas Design System
+     Core visual tokens for the Atlas platform.
+     ============================================================ */
+
+  /* ------------------------------------------------------------
+     Backgrounds & surfaces
+     ------------------------------------------------------------ */
+
+  --atlas-background: #fafaf8;
+  --atlas-background-subtle: #f5f5f1;
+
+  --atlas-surface: #ffffff;
+  --atlas-surface-raised: #ffffff;
+  --atlas-surface-subtle: #f6f6f3;
+  --atlas-surface-muted: #eeeeea;
+
+  /* ------------------------------------------------------------
+     Borders
+     ------------------------------------------------------------ */
+
+  --atlas-border: #e5e5df;
+  --atlas-border-subtle: #ecece7;
+  --atlas-border-strong: #d5d5ce;
+
+  /* ------------------------------------------------------------
+     Text
+     ------------------------------------------------------------ */
+
+  --atlas-text-primary: #20211e;
+  --atlas-text-secondary: #62635d;
+  --atlas-text-muted: #8b8c84;
+  --atlas-text-disabled: #adaea7;
+
+  /* ------------------------------------------------------------
+     Brand
+     ------------------------------------------------------------ */
+
+  --atlas-primary: #315c4c;
+  --atlas-primary-hover: #294f41;
+  --atlas-primary-active: #234437;
+  --atlas-primary-subtle: #e8f0ec;
+  --atlas-primary-foreground: #ffffff;
+
+  /* ------------------------------------------------------------
+     Semantic colors
+     ------------------------------------------------------------ */
+
+  --atlas-success: #397052;
+  --atlas-success-subtle: #e8f1eb;
+
+  --atlas-warning: #9a7133;
+  --atlas-warning-subtle: #f5efe3;
+
+  --atlas-danger: #a34d49;
+  --atlas-danger-subtle: #f5e9e8;
+
+  --atlas-info: #506f82;
+  --atlas-info-subtle: #e9eff2;
+
+  /* ------------------------------------------------------------
+     Focus
+     ------------------------------------------------------------ */
+
+  --atlas-focus-ring: rgb(49 92 76 / 22%);
+
+  /* ------------------------------------------------------------
+     Shadows
+     ------------------------------------------------------------ */
+
+  /*
+   * Atlas intentionally uses restrained elevation.
+   * Surfaces should feel physical and trustworthy,
+   * not heavily floating.
+   */
+
+  --atlas-shadow-xs:
+    0 1px 2px rgb(20 24 21 / 3%);
+
+  --atlas-shadow-sm:
+    0 2px 5px rgb(20 24 21 / 4%);
+
+  --atlas-shadow-md:
+    0 6px 18px rgb(20 24 21 / 6%);
+
+  --atlas-shadow-lg:
+    0 14px 36px rgb(20 24 21 / 8%);
+
+  /* ------------------------------------------------------------
+     Radius
+     ------------------------------------------------------------ */
+
+  --atlas-radius-sm: 6px;
+  --atlas-radius-md: 10px;
+  --atlas-radius-lg: 14px;
+  --atlas-radius-xl: 18px;
+  --atlas-radius-pill: 999px;
+
+  /* ------------------------------------------------------------
+     Spacing
+     ------------------------------------------------------------ */
+
+  --atlas-space-1: 4px;
+  --atlas-space-2: 8px;
+  --atlas-space-3: 12px;
+  --atlas-space-4: 16px;
+  --atlas-space-5: 20px;
+  --atlas-space-6: 24px;
+  --atlas-space-8: 32px;
+  --atlas-space-10: 40px;
+  --atlas-space-12: 48px;
+  --atlas-space-16: 64px;
+  --atlas-space-20: 80px;
+  --atlas-space-24: 96px;
+
+  /* ------------------------------------------------------------
+     Typography
+     ------------------------------------------------------------ */
+
+  --atlas-font-sans:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  --atlas-font-mono:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+
+  /* ------------------------------------------------------------
+     Motion
+     ------------------------------------------------------------ */
+
+  --atlas-duration-fast: 120ms;
+  --atlas-duration-normal: 180ms;
+  --atlas-duration-slow: 240ms;
+
+  --atlas-ease-standard:
+    cubic-bezier(0.2, 0, 0, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark {
+  /* ============================================================
+     Atlas Dark Theme
+     Dark mode uses warm charcoal surfaces rather than
+     absolute black, preserving the natural Atlas palette.
+     ============================================================ */
+
+  /* ------------------------------------------------------------
+     Backgrounds & surfaces
+     ------------------------------------------------------------ */
+
+  --atlas-background: #151714;
+  --atlas-background-subtle: #1a1c19;
+
+  --atlas-surface: #1d201d;
+  --atlas-surface-raised: #222521;
+  --atlas-surface-subtle: #272a26;
+  --atlas-surface-muted: #2d302c;
+
+  /* ------------------------------------------------------------
+     Borders
+     ------------------------------------------------------------ */
+
+  --atlas-border: #30332f;
+  --atlas-border-subtle: #292c28;
+  --atlas-border-strong: #3d403b;
+
+  /* ------------------------------------------------------------
+     Text
+     ------------------------------------------------------------ */
+
+  --atlas-text-primary: #f0f1ed;
+  --atlas-text-secondary: #b0b2aa;
+  --atlas-text-muted: #858780;
+  --atlas-text-disabled: #656761;
+
+  /* ------------------------------------------------------------
+     Brand
+     ------------------------------------------------------------ */
+
+  --atlas-primary: #82aa96;
+  --atlas-primary-hover: #91b8a3;
+  --atlas-primary-active: #a0c4b2;
+  --atlas-primary-subtle: #26372f;
+  --atlas-primary-foreground: #152019;
+
+  /* ------------------------------------------------------------
+     Semantic colors
+     ------------------------------------------------------------ */
+
+  --atlas-success: #79a98b;
+  --atlas-success-subtle: #23352b;
+
+  --atlas-warning: #c2a069;
+  --atlas-warning-subtle: #3a3020;
+
+  --atlas-danger: #d0807b;
+  --atlas-danger-subtle: #3b2827;
+
+  --atlas-info: #82a4b7;
+  --atlas-info-subtle: #26323a;
+
+  /* ------------------------------------------------------------
+     Focus
+     ------------------------------------------------------------ */
+
+  --atlas-focus-ring: rgb(130 170 150 / 28%);
+
+  /* ------------------------------------------------------------
+     Shadows
+     ------------------------------------------------------------ */
+
+  --atlas-shadow-xs:
+    0 1px 2px rgb(0 0 0 / 18%);
+
+  --atlas-shadow-sm:
+    0 2px 6px rgb(0 0 0 / 20%);
+
+  --atlas-shadow-md:
+    0 8px 22px rgb(0 0 0 / 24%);
+
+  --atlas-shadow-lg:
+    0 16px 40px rgb(0 0 0 / 30%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+   Atlas Global Application
+   Connects the design tokens to the actual document.
+   ============================================================ */
+
+html {
+  background: var(--atlas-background);
+  color: var(--atlas-text-primary);
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+
+  background-color: var(--atlas-background);
+  color: var(--atlas-text-primary);
+
+  font-family: var(--atlas-font-sans);
+
+  transition:
+    background-color var(--atlas-duration-normal)
+      var(--atlas-ease-standard),
+    color var(--atlas-duration-normal)
+      var(--atlas-ease-standard);
+}
+
+/* Prevent the browser's default button/input styling
+   from introducing colors outside the Atlas system. */
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+/* Atlas links inherit the current text system unless
+   a component intentionally applies brand styling. */
+
+a {
+  color: inherit;
+}
+
+/* Consistent focus treatment across interactive elements. */
+
+:focus-visible {
+  outline: 2px solid var(--atlas-focus-ring);
+  outline-offset: 2px;
 }

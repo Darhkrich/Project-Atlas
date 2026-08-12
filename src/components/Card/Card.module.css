@@ -1,0 +1,82 @@
+.card {
+  width: 100%;
+
+  background: var(--atlas-surface);
+
+  color: var(--atlas-text-primary);
+
+  border-radius: 16px;
+
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+/* Variants */
+
+.default {
+  border: 1px solid transparent;
+}
+
+.outlined {
+  border: 1px solid var(--atlas-border);
+}
+
+.elevated {
+  border: 1px solid var(--atlas-border);
+
+  box-shadow: var(--atlas-shadow-md);
+}
+
+.interactive {
+  border: 1px solid var(--atlas-border);
+
+  cursor: pointer;
+}
+
+.interactive:hover {
+  border-color: var(--atlas-primary);
+
+  transform: translateY(-2px);
+
+  box-shadow: var(--atlas-shadow-md);
+}
+
+/* Padding */
+
+.paddingNone {
+  padding: 0;
+}
+
+.paddingSm {
+  padding: 12px;
+}
+
+.paddingMd {
+  padding: 20px;
+}
+
+.paddingLg {
+  padding: 28px;
+}
+
+/* Header */
+
+.header {
+  padding-bottom: 16px;
+
+  border-bottom: 1px solid var(--atlas-border);
+
+  margin-bottom: 20px;
+}
+
+/* Footer */
+
+.footer {
+  padding-top: 16px;
+
+  border-top: 1px solid var(--atlas-border);
+
+  margin-top: 20px;
+}

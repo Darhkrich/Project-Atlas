@@ -1,0 +1,71 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--atlas-text-primary);
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  min-height: 48px;
+
+  padding: 0 14px;
+
+  background: var(--atlas-surface);
+
+  border: 1px solid var(--atlas-border);
+
+  border-radius: 12px;
+
+  transition: all 180ms ease;
+}
+
+.container:focus-within {
+  border-color: var(--atlas-primary);
+}
+
+.input {
+  flex: 1;
+
+  border: none;
+
+  outline: none;
+
+  background: transparent;
+
+  color: var(--atlas-text-primary);
+
+  font-size: 15px;
+}
+
+.input::placeholder {
+  color: var(--atlas-text-muted);
+}
+
+.helper {
+  font-size: 13px;
+
+  color: var(--atlas-text-secondary);
+}
+
+.error {
+  font-size: 13px;
+
+  color: var(--atlas-danger);
+}
+
+.errorBorder {
+  border-color: var(--atlas-danger);
+}

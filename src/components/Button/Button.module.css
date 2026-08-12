@@ -1,0 +1,297 @@
+/**
+ * Atlas Button
+ *
+ * Buttons use the Atlas semantic design tokens rather than hard-coded
+ * application colors. This keeps light and dark themes consistent.
+ */
+
+.button {
+  position: relative;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  border: 1px solid transparent;
+  outline: none;
+
+  cursor: pointer;
+
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1;
+
+  white-space: nowrap;
+  user-select: none;
+
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 100ms ease;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--atlas-primary);
+  outline-offset: 3px;
+}
+
+.button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+}
+
+.icon {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Sizes
+   ============================================================ */
+
+.sm {
+  min-height: 36px;
+
+  padding: 0 14px;
+
+  font-size: 13px;
+
+  border-radius: 7px;
+}
+
+.md {
+  min-height: 42px;
+
+  padding: 0 17px;
+
+  font-size: 14px;
+
+  border-radius: 8px;
+}
+
+.lg {
+  min-height: 48px;
+
+  padding: 0 20px;
+
+  font-size: 15px;
+
+  border-radius: 9px;
+}
+
+/* ============================================================
+   Primary
+   ============================================================ */
+
+.primary {
+  background: var(--atlas-primary);
+
+  color: var(--atlas-primary-foreground);
+
+  border-color: var(--atlas-primary);
+
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 6%),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.primary:not(:disabled):hover {
+  background: var(--atlas-primary-hover);
+
+  border-color: var(--atlas-primary-hover);
+
+  box-shadow:
+    0 2px 5px rgb(0 0 0 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.primary:not(:disabled):active {
+  background: var(--atlas-primary-hover);
+
+  box-shadow: none;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Secondary
+   ============================================================ */
+
+.secondary {
+  background: var(--atlas-surface);
+
+  color: var(--atlas-text-primary);
+
+  border-color: var(--atlas-border);
+
+  box-shadow: var(--atlas-shadow-sm);
+}
+
+.secondary:not(:disabled):hover {
+  background: var(--atlas-surface-subtle);
+
+  border-color: var(--atlas-border-strong);
+
+  box-shadow: var(--atlas-shadow-md);
+}
+
+.secondary:not(:disabled):active {
+  background: var(--atlas-surface-subtle);
+
+  box-shadow: var(--atlas-shadow-sm);
+}
+
+.secondary:disabled {
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Outline
+   ============================================================ */
+
+.outline {
+  background: transparent;
+
+  color: var(--atlas-text-primary);
+
+  border-color: var(--atlas-border-strong);
+}
+
+.outline:not(:disabled):hover {
+  background: var(--atlas-surface-subtle);
+
+  border-color: var(--atlas-border-strong);
+}
+
+.outline:not(:disabled):active {
+  background: var(--atlas-surface-subtle);
+}
+
+.outline:disabled {
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Ghost
+   ============================================================ */
+
+.ghost {
+  background: transparent;
+
+  color: var(--atlas-text-secondary);
+
+  border-color: transparent;
+}
+
+.ghost:not(:disabled):hover {
+  background: var(--atlas-surface-subtle);
+
+  color: var(--atlas-text-primary);
+}
+
+.ghost:not(:disabled):active {
+  background: var(--atlas-surface-subtle);
+}
+
+.ghost:disabled {
+  opacity: 0.45;
+}
+
+/* ============================================================
+   Danger
+   ============================================================ */
+
+.danger {
+  background: var(--atlas-danger);
+
+  color: var(--atlas-primary-foreground);
+
+  border-color: var(--atlas-danger);
+
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 6%),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.danger:not(:disabled):hover {
+  filter: brightness(0.94);
+
+  box-shadow:
+    0 2px 5px rgb(0 0 0 / 8%),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.danger:not(:disabled):active {
+  filter: brightness(0.9);
+
+  box-shadow: none;
+}
+
+.danger:disabled {
+  opacity: 0.5;
+}
+
+/* ============================================================
+   Full Width
+   ============================================================ */
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ============================================================
+   Loading
+   ============================================================ */
+
+.loading {
+  cursor: wait;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+
+  flex-shrink: 0;
+
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+
+  border-radius: 50%;
+
+  animation: atlas-button-spin 700ms linear infinite;
+}
+
+@keyframes atlas-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   Reduced Motion
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
+}
