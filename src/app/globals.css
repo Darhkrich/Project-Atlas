@@ -1,286 +1,198 @@
-:root {
-  /* ============================================================
-     Atlas Design System
-     Core visual tokens for the Atlas platform.
-     ============================================================ */
+@import "tailwindcss";
 
-  /* ------------------------------------------------------------
-     Backgrounds & surfaces
-     ------------------------------------------------------------ */
+/* Atlas Design Tokens */
+@theme {
+  /* Brand */
+  --color-brand-50: #f2f7f1;
+  --color-brand-100: #e2efe0;
+  --color-brand-200: #c5e0c2;
+  --color-brand-300: #9bc795;
+  --color-brand-400: #6faa66;
+  --color-brand-500: #4d8e44;
+  --color-brand-600: #3a7233;
+  --color-brand-700: #2e5b28;
+  --color-brand-800: #264a22;
+  --color-brand-900: #1f3d1d;
+  --color-brand-950: #0e200d;
 
-  --atlas-background: #fafaf8;
-  --atlas-background-subtle: #f5f5f1;
+  /* Neutral warm */
+  --color-neutral-50: #fafaf8;
+  --color-neutral-100: #f5f4f1;
+  --color-neutral-200: #ebea
+  --color-neutral-300: #d6d5d0;
+  --color-neutral-400: #b0aea7;
+  --color-neutral-500: #8a8881;
+  --color-neutral-600: #6b6963;
+  --color-neutral-700: #565450;
+  --color-neutral-800: #3f3d3b;
+  --color-neutral-900: #2b2a28;
+  --color-neutral-950: #1a1918;
 
-  --atlas-surface: #ffffff;
-  --atlas-surface-raised: #ffffff;
-  --atlas-surface-subtle: #f6f6f3;
-  --atlas-surface-muted: #eeeeea;
+  /* Accent - semantic */
+  --color-success-50: #f0f9f3;
+  --color-success-100: #daf0df;
+  --color-success-200: #b8e2c0;
+  --color-success-300: #86cc94;
+  --color-success-400: #52b066;
+  --color-success-500: #2d9444;
+  --color-success-600: #1f7733;
+  --color-success-700: #19602b;
+  --color-success-800: #164d24;
+  --color-success-900: #133f1f;
+  --color-success-950: #0a2311;
 
-  /* ------------------------------------------------------------
-     Borders
-     ------------------------------------------------------------ */
+  --color-warning-50: #fcf9ec;
+  --color-warning-100: #f7efc9;
+  --color-warning-200: #f0de8f;
+  --color-warning-300: #e8c954;
+  --color-warning-400: #dfb429;
+  --color-warning-500: #c89c1e;
+  --color-warning-600: #a07c19;
+  --color-warning-700: #7f611b;
+  --color-warning-800: #6b521e;
+  --color-warning-900: #5c471e;
+  --color-warning-950: #34260e;
 
-  --atlas-border: #e5e5df;
-  --atlas-border-subtle: #ecece7;
-  --atlas-border-strong: #d5d5ce;
+  --color-danger-50: #fcf6f5;
+  --color-danger-100: #f8e9e7;
+  --color-danger-200: #f2d3cf;
+  --color-danger-300: #e8b3ab;
+  --color-danger-400: #d9877a;
+  --color-danger-500: #c56151;
+  --color-danger-600: #a94739;
+  --color-danger-700: #8d3a2f;
+  --color-danger-800: #75332b;
+  --color-danger-900: #623029;
+  --color-danger-950: #351612;
 
-  /* ------------------------------------------------------------
-     Text
-     ------------------------------------------------------------ */
+  --color-info-50: #f2f7f9;
+  --color-info-100: #e2eef4;
+  --color-info-200: #c5ddeb;
+  --color-info-300: #98c4de;
+  --color-info-400: #64a4ce;
+  --color-info-500: #4089bb;
+  --color-info-600: #2e6f9e;
+  --color-info-700: #265980;
+  --color-info-800: #234b6a;
+  --color-info-900: #20405a;
+  --color-info-950: #11293b;
 
-  --atlas-text-primary: #20211e;
-  --atlas-text-secondary: #62635d;
-  --atlas-text-muted: #8b8c84;
-  --atlas-text-disabled: #adaea7;
+  /* Spacing scale */
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-20: 80px;
+  --spacing-24: 96px;
 
-  /* ------------------------------------------------------------
-     Brand
-     ------------------------------------------------------------ */
+  /* Typography */
+  --font-family-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
 
-  --atlas-primary: #315c4c;
-  --atlas-primary-hover: #294f41;
-  --atlas-primary-active: #234437;
-  --atlas-primary-subtle: #e8f0ec;
-  --atlas-primary-foreground: #ffffff;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
 
-  /* ------------------------------------------------------------
-     Semantic colors
-     ------------------------------------------------------------ */
+  /* Border radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 
-  --atlas-success: #397052;
-  --atlas-success-subtle: #e8f1eb;
-
-  --atlas-warning: #9a7133;
-  --atlas-warning-subtle: #f5efe3;
-
-  --atlas-danger: #a34d49;
-  --atlas-danger-subtle: #f5e9e8;
-
-  --atlas-info: #506f82;
-  --atlas-info-subtle: #e9eff2;
-
-  /* ------------------------------------------------------------
-     Focus
-     ------------------------------------------------------------ */
-
-  --atlas-focus-ring: rgb(49 92 76 / 22%);
-
-  /* ------------------------------------------------------------
-     Shadows
-     ------------------------------------------------------------ */
-
-  /*
-   * Atlas intentionally uses restrained elevation.
-   * Surfaces should feel physical and trustworthy,
-   * not heavily floating.
-   */
-
-  --atlas-shadow-xs:
-    0 1px 2px rgb(20 24 21 / 3%);
-
-  --atlas-shadow-sm:
-    0 2px 5px rgb(20 24 21 / 4%);
-
-  --atlas-shadow-md:
-    0 6px 18px rgb(20 24 21 / 6%);
-
-  --atlas-shadow-lg:
-    0 14px 36px rgb(20 24 21 / 8%);
-
-  /* ------------------------------------------------------------
-     Radius
-     ------------------------------------------------------------ */
-
-  --atlas-radius-sm: 6px;
-  --atlas-radius-md: 10px;
-  --atlas-radius-lg: 14px;
-  --atlas-radius-xl: 18px;
-  --atlas-radius-pill: 999px;
-
-  /* ------------------------------------------------------------
-     Spacing
-     ------------------------------------------------------------ */
-
-  --atlas-space-1: 4px;
-  --atlas-space-2: 8px;
-  --atlas-space-3: 12px;
-  --atlas-space-4: 16px;
-  --atlas-space-5: 20px;
-  --atlas-space-6: 24px;
-  --atlas-space-8: 32px;
-  --atlas-space-10: 40px;
-  --atlas-space-12: 48px;
-  --atlas-space-16: 64px;
-  --atlas-space-20: 80px;
-  --atlas-space-24: 96px;
-
-  /* ------------------------------------------------------------
-     Typography
-     ------------------------------------------------------------ */
-
-  --atlas-font-sans:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-
-  --atlas-font-mono:
-    "SFMono-Regular",
-    Consolas,
-    "Liberation Mono",
-    monospace;
-
-  /* ------------------------------------------------------------
-     Motion
-     ------------------------------------------------------------ */
-
-  --atlas-duration-fast: 120ms;
-  --atlas-duration-normal: 180ms;
-  --atlas-duration-slow: 240ms;
-
-  --atlas-ease-standard:
-    cubic-bezier(0.2, 0, 0, 1);
+  /* Box shadow (restrained) */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.05), 0 4px 6px rgba(0, 0, 0, 0.04);
 }
 
-.dark {
-  /* ============================================================
-     Atlas Dark Theme
-     Dark mode uses warm charcoal surfaces rather than
-     absolute black, preserving the natural Atlas palette.
-     ============================================================ */
+/* Dark mode custom variant */
+@custom-variant dark (&:where(.dark, .dark *));
 
-  /* ------------------------------------------------------------
-     Backgrounds & surfaces
-     ------------------------------------------------------------ */
+/* Base styles */
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-neutral-50 text-neutral-900;
+  }
+  .dark body {
+    @apply bg-neutral-950 text-neutral-100;
+  }
 
-  --atlas-background: #151714;
-  --atlas-background-subtle: #1a1c19;
-
-  --atlas-surface: #1d201d;
-  --atlas-surface-raised: #222521;
-  --atlas-surface-subtle: #272a26;
-  --atlas-surface-muted: #2d302c;
-
-  /* ------------------------------------------------------------
-     Borders
-     ------------------------------------------------------------ */
-
-  --atlas-border: #30332f;
-  --atlas-border-subtle: #292c28;
-  --atlas-border-strong: #3d403b;
-
-  /* ------------------------------------------------------------
-     Text
-     ------------------------------------------------------------ */
-
-  --atlas-text-primary: #f0f1ed;
-  --atlas-text-secondary: #b0b2aa;
-  --atlas-text-muted: #858780;
-  --atlas-text-disabled: #656761;
-
-  /* ------------------------------------------------------------
-     Brand
-     ------------------------------------------------------------ */
-
-  --atlas-primary: #82aa96;
-  --atlas-primary-hover: #91b8a3;
-  --atlas-primary-active: #a0c4b2;
-  --atlas-primary-subtle: #26372f;
-  --atlas-primary-foreground: #152019;
-
-  /* ------------------------------------------------------------
-     Semantic colors
-     ------------------------------------------------------------ */
-
-  --atlas-success: #79a98b;
-  --atlas-success-subtle: #23352b;
-
-  --atlas-warning: #c2a069;
-  --atlas-warning-subtle: #3a3020;
-
-  --atlas-danger: #d0807b;
-  --atlas-danger-subtle: #3b2827;
-
-  --atlas-info: #82a4b7;
-  --atlas-info-subtle: #26323a;
-
-  /* ------------------------------------------------------------
-     Focus
-     ------------------------------------------------------------ */
-
-  --atlas-focus-ring: rgb(130 170 150 / 28%);
-
-  /* ------------------------------------------------------------
-     Shadows
-     ------------------------------------------------------------ */
-
-  --atlas-shadow-xs:
-    0 1px 2px rgb(0 0 0 / 18%);
-
-  --atlas-shadow-sm:
-    0 2px 6px rgb(0 0 0 / 20%);
-
-  --atlas-shadow-md:
-    0 8px 22px rgb(0 0 0 / 24%);
-
-  --atlas-shadow-lg:
-    0 16px 40px rgb(0 0 0 / 30%);
+  /* Focus states */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
 }
 
-/* ============================================================
-   Atlas Global Application
-   Connects the design tokens to the actual document.
-   ============================================================ */
 
-html {
-  background: var(--atlas-background);
-  color: var(--atlas-text-primary);
-  color-scheme: light;
-}
 
-html.dark {
-  color-scheme: dark;
-}
+@import "tailwindcss";
 
-body {
-  margin: 0;
-  min-height: 100vh;
+@theme {
+  /* Atlas Brand — dark forest green */
+  --color-brand-50: #f2f7f5;
+  --color-brand-100: #e2eee9;
+  --color-brand-200: #c0dcd2;
+  --color-brand-300: #9bc7b8;
+  --color-brand-400: #6aa595;
+  --color-brand-500: #3f8874;
+  --color-brand-600: #166e59;
+  --color-brand-700: #0d5a49;
+  --color-brand-800: #0a3d32;
+  --color-brand-900: #07332a;
+  --color-brand-950: #04211c;
 
-  background-color: var(--atlas-background);
-  color: var(--atlas-text-primary);
+  /* Atlas Accent — amber orange */
+  --color-accent-500: #ffa000;
+  --color-accent-600: #e69000;
 
-  font-family: var(--atlas-font-sans);
+  /* Neutral warm */
+  --color-neutral-50: #fafaf8;
+  --color-neutral-100: #f5f4f1;
+  --color-neutral-200: #ebea;
+  --color-neutral-300: #d6d5d0;
+  --color-neutral-400: #b0aea7;
+  --color-neutral-500: #8a8881;
+  --color-neutral-600: #6b6963;
+  --color-neutral-700: #565450;
+  --color-neutral-800: #3f3d3b;
+  --color-neutral-900: #1a1a1a;
+  --color-neutral-950: #0f0f0e;
 
-  transition:
-    background-color var(--atlas-duration-normal)
-      var(--atlas-ease-standard),
-    color var(--atlas-duration-normal)
-      var(--atlas-ease-standard);
-}
+  /* Semantic colors remain as before */
+  --color-success-500: #2d9444;
+  --color-warning-500: #c89c1e;
+  --color-danger-500: #c56151;
+  --color-info-500: #4089bb;
 
-/* Prevent the browser's default button/input styling
-   from introducing colors outside the Atlas system. */
+  /* Fonts */
+  --font-family-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
 
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-/* Atlas links inherit the current text system unless
-   a component intentionally applies brand styling. */
-
-a {
-  color: inherit;
-}
-
-/* Consistent focus treatment across interactive elements. */
-
-:focus-visible {
-  outline: 2px solid var(--atlas-focus-ring);
-  outline-offset: 2px;
+  /* Spacing / radius / shadow kept from existing system */
 }

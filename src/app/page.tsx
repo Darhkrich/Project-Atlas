@@ -1,64 +1,31 @@
-"use client";
+import { AtlasNavbar } from "@/components/landing/AtlasNavbar";
+import { AtlasHero } from "@/components/landing/AtlasHero";
+import { TrustMockupSection } from "@/components/landing/TrustMockupSection";
+import { PopularServices } from "@/components/landing/PopularServices";
+import { AudienceSection } from "@/components/landing/AudienceSection";
+import { TrustStats } from "@/components/landing/TrustStats";
+import { BlogSection } from "@/components/landing/BlogSection";
+import { ResellerSection } from "@/components/landing/ResellerSection";
+import { EcommerceSection } from "@/components/landing/EcommerceSection";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { AtlasFooter } from "@/components/atlas/atlas-footer";
 
-import { Button, Card, Input } from "@/components";
-import { ThemeContext } from "@/providers";
-import { useContext } from "react";
-
-export default function Home() {
-  const { toggleTheme } = useContext(ThemeContext);
-
+export default function HomePage() {
   return (
-    <main
-      style={{
-        maxWidth: 700,
-        margin: "40px auto",
-        padding: "0 20px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 20,
-      }}
-    >
-      <Card
-        variant="outlined"
-        header={
-          <div>
-            <h2>Account Settings</h2>
-            <p>
-              Manage your Atlas account.
-            </p>
-          </div>
-        }
-        footer={
-          <Button>
-            Save Changes
-          </Button>
-        }
-      >
-        <Input
-          label="Email"
-          placeholder="Enter your email"
-        />
-      </Card>
-
-      <Card variant="elevated">
-        <h2>Atlas Workspace</h2>
-
-        <p>
-          Your workspace is ready.
-        </p>
-      </Card>
-
-      <Card variant="interactive">
-        <h2>Interactive Card</h2>
-
-        <p>
-          This card responds to interaction.
-        </p>
-      </Card>
-
-      <Button onClick={toggleTheme}>
-        Toggle Theme
-      </Button>
-    </main>
+    <>
+      <AtlasNavbar />
+      <main>
+        <AtlasHero />
+        <TrustMockupSection />
+        <PopularServices />
+        <AudienceSection />
+        <TrustStats />
+        <BlogSection />
+        <ResellerSection />
+        <EcommerceSection />
+        <FinalCTA />
+      </main>
+      <AtlasFooter />
+    </>
   );
 }
