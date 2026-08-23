@@ -11,7 +11,7 @@ const navItems = [
   { label: "Home", href: "/", exact: true },
   { label: "Services", href: "/services", exact: false },
   { label: "For Resellers", href: "/resellers", exact: false },
-  { label: "For Customers", href: "/ecommerce", exact: false },
+  { label: "E-Commerce", href: "/ecommerce", exact: false },
   { label: "Dashboard", href: "/dashboard", exact: false },
   { label: "Resources", href: "/resources", exact: false },
   { label: "Company", href: "/company", exact: false },

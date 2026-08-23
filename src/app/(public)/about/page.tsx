@@ -4,102 +4,119 @@ import {
   AtlasSection,
   AtlasGrid,
 } from "@/components/atlas";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
-const problems = [
+const problems: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Different platforms",
     description: "Different services often require different platforms.",
-    icon: <GridIcon />,
+    icon: "grid",
   },
   {
     title: "Repeated steps",
     description: "Customers may have to repeat similar information across services.",
-    icon: <RepeatIcon />,
+    icon: "repeat",
   },
   {
     title: "Unclear status",
     description: "Transaction status may not always be clear.",
-    icon: <QuestionIcon />,
+    icon: "help-circle",
   },
   {
     title: "Disconnected experience",
     description: "Payment and fulfillment can feel disconnected.",
-    icon: <DisconnectIcon />,
+    icon: "disconnect",
   },
   {
     title: "Unnecessary effort",
     description: "Finding the right service can take unnecessary effort.",
-    icon: <SearchIcon />,
+    icon: "search",
   },
 ];
 
-const principles = [
+const principles: {
+  step: string;
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     step: "01",
     title: "Simplicity",
     description: "Customers should be able to understand what to do without unnecessary complexity.",
-    icon: <SimpleIcon />,
+    icon: "check",
   },
   {
     step: "02",
     title: "Transparency",
     description: "Transactions should be clear, understandable and easy to track.",
-    icon: <EyeIcon />,
+    icon: "eye",
   },
   {
     step: "03",
     title: "Reliability",
     description: "The platform should be designed around dependable service delivery and clear transaction states.",
-    icon: <ShieldIcon />,
+    icon: "shield",
   },
   {
     step: "04",
     title: "Security",
     description: "Customer accounts, information and transactions should be handled responsibly.",
-    icon: <LockIcon />,
+    icon: "lock",
   },
   {
     step: "05",
     title: "Accessibility",
     description: "Essential digital services should be easier for people to discover and use.",
-    icon: <AccessIcon />,
+    icon: "accessibility",
   },
 ];
 
-const trustItems = [
+const trustItems: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Clear pricing",
     description: "Customers should understand what they are paying.",
-    icon: <PriceIcon />,
+    icon: "price",
   },
   {
     title: "Clear status",
     description: "Customers should know what is happening with their transaction.",
-    icon: <StatusIcon />,
+    icon: "status",
   },
   {
     title: "Account protection",
     description: "Customer accounts and information should be handled responsibly.",
-    icon: <ProtectIcon />,
+    icon: "protect",
   },
   {
     title: "Transaction records",
     description: "Customers should be able to review their activity.",
-    icon: <RecordIcon />,
+    icon: "record",
   },
   {
     title: "Support",
     description: "Customers should have a clear path when they need help.",
-    icon: <SupportIcon />,
+    icon: "headphones",
   },
 ];
 
-const services = [
-  { name: "Airtime", icon: <AirtimeIcon /> },
-  { name: "Data", icon: <DataIcon /> },
-  { name: "Electricity", icon: <ElectricityIcon /> },
-  { name: "TV Subscriptions", icon: <TVIcon /> },
-  { name: "Results Checker", icon: <ResultsIcon /> },
+const services: {
+  name: string;
+  icon: AtlasIconName;
+}[] = [
+  { name: "Airtime", icon: "phone" },
+  { name: "Data", icon: "globe" },
+  { name: "Electricity", icon: "zap" },
+  { name: "TV Subscriptions", icon: "tv" },
+  { name: "Results Checker", icon: "graduation" },
 ];
 
 export default function AboutPage() {
@@ -159,9 +176,10 @@ export default function AboutPage() {
                 key={service.name}
                 className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950"
               >
-                <span className="text-brand-800 dark:text-brand-300">
-                  {service.icon}
-                </span>
+                <AtlasIcon
+                  name={service.icon}
+                  className="h-6 w-6 text-brand-800 dark:text-brand-300"
+                />
                 <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
                   {service.name}
                 </span>
@@ -191,7 +209,7 @@ export default function AboutPage() {
                 className="rounded-lg border border-neutral-200 bg-neutral-50 p-6 dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                  {problem.icon}
+                  <AtlasIcon name={problem.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {problem.title}
@@ -237,10 +255,7 @@ export default function AboutPage() {
                   "Receive",
                   "Track",
                 ].map((step, index) => (
-                  <li
-                    key={step}
-                    className="flex items-center gap-4"
-                  >
+                  <li key={step} className="flex items-center gap-4">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800 dark:bg-brand-900 dark:text-brand-300">
                       {index + 1}
                     </span>
@@ -272,7 +287,7 @@ export default function AboutPage() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600">
-                    {principle.icon}
+                    <AtlasIcon name={principle.icon} className="h-6 w-6" />
                   </div>
                   <span className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
                     {principle.step}
@@ -334,9 +349,10 @@ export default function AboutPage() {
                     className="flex items-center justify-between rounded-md bg-neutral-50 p-4 dark:bg-neutral-800"
                   >
                     <span className="flex items-center gap-3 text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                      <span className="text-brand-800 dark:text-brand-300">
-                        {service.icon}
-                      </span>
+                      <AtlasIcon
+                        name={service.icon}
+                        className="h-6 w-6 text-brand-800 dark:text-brand-300"
+                      />
                       {service.name}
                     </span>
                     <span className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -354,10 +370,7 @@ export default function AboutPage() {
               <ul className="space-y-3">
                 {["Select", "Enter details", "Review", "Pay", "Track"].map(
                   (step, index) => (
-                    <li
-                      key={step}
-                      className="flex items-center gap-4"
-                    >
+                    <li key={step} className="flex items-center gap-4">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800 dark:bg-brand-900 dark:text-brand-300">
                         {index + 1}
                       </span>
@@ -393,7 +406,7 @@ export default function AboutPage() {
                 className="rounded-lg border border-neutral-200 bg-neutral-50 p-6 text-center dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                  {item.icon}
+                  <AtlasIcon name={item.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {item.title}
@@ -436,167 +449,5 @@ export default function AboutPage() {
         </AtlasContainer>
       </AtlasSection>
     </>
-  );
-}
-
-/* ---------- Icons ---------- */
-function AirtimeIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-    </svg>
-  );
-}
-
-function DataIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-    </svg>
-  );
-}
-
-function ElectricityIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-  );
-}
-
-function TVIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
-function ResultsIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function GridIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-    </svg>
-  );
-}
-
-function RepeatIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  );
-}
-
-function QuestionIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function DisconnectIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-  );
-}
-
-function SimpleIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  );
-}
-
-function AccessIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  );
-}
-
-function PriceIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function StatusIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function ProtectIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  );
-}
-
-function RecordIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function SupportIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" />
-    </svg>
   );
 }

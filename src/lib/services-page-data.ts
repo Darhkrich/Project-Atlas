@@ -32,6 +32,7 @@ export type ServiceCategory = {
     fields: FormFieldConfig[];
     plans?: Plan[];
     planCategories?: PlanCategory[];
+    networkPlanCategories?: Record<string, PlanCategory[]>;
     customAmount?: {
       label: string;
       min?: number;
@@ -46,10 +47,10 @@ export const servicesCategories: ServiceCategory[] = [
     id: "airtime",
     name: "Airtime",
     description: "Top up anytime",
-    icon: "📱",
+    icon: "phone",
     available: true,
     filterGroup: "airtime",
-    networkOptions: ["MTN", "Vodafone", "AirtelTigo"],
+    networkOptions: ["MTN", "Telecel", "AirtelTigo"],
     formConfig: {
       selectionType: "amounts",
       fields: [
@@ -61,7 +62,6 @@ export const servicesCategories: ServiceCategory[] = [
           required: true,
         },
       ],
-      // Amount suggestions
       plans: [
         { id: "5", name: "GHS 5", price: 5 },
         { id: "10", name: "GHS 10", price: 10 },
@@ -80,10 +80,10 @@ export const servicesCategories: ServiceCategory[] = [
     id: "data",
     name: "Data",
     description: "Buy data bundles",
-    icon: "🌐",
+    icon: "globe",
     available: true,
     filterGroup: "data",
-    networkOptions: ["MTN", "Vodafone", "AirtelTigo"],
+    networkOptions: ["MTN", "Telecel", "AirtelTigo"],
     formConfig: {
       selectionType: "plans",
       fields: [
@@ -95,51 +95,110 @@ export const servicesCategories: ServiceCategory[] = [
           required: true,
         },
       ],
-      planCategories: [
-        {
-          name: "All",
-          plans: [
-            { id: "mtn-250mb-1d", name: "250MB", description: "Valid for 1 day", price: 2 },
-            { id: "mtn-500mb-1d", name: "500MB", description: "Valid for 1 day", price: 3 },
-            { id: "mtn-1gb-7d", name: "1GB", description: "Valid for 7 days", price: 6 },
-            { id: "mtn-2gb-7d", name: "2GB", description: "Valid for 7 days", price: 11 },
-            { id: "mtn-5gb-30d", name: "5GB", description: "Valid for 30 days", price: 25 },
-            { id: "mtn-10gb-30d", name: "10GB", description: "Valid for 30 days", price: 45 },
-            { id: "mtn-20gb-30d", name: "20GB", description: "Valid for 30 days", price: 80 },
-          ],
-        },
-        {
-          name: "Unlimited",
-          plans: [
-            { id: "mtn-unlimited-1d", name: "Unlimited 1 Day", description: "Unlimited data for 1 day", price: 10 },
-            { id: "mtn-unlimited-7d", name: "Unlimited 7 Days", description: "Unlimited data for 7 days", price: 40 },
-            { id: "mtn-unlimited-30d", name: "Unlimited 30 Days", description: "Unlimited data for 30 days", price: 100 },
-          ],
-        },
-        {
-          name: "Non-Expiry",
-          plans: [
-            { id: "mtn-non-1gb", name: "1GB", description: "No expiry", price: 15 },
-            { id: "mtn-non-3gb", name: "3GB", description: "No expiry", price: 40 },
-            { id: "mtn-non-5gb", name: "5GB", description: "No expiry", price: 60 },
-          ],
-        },
-        {
-          name: "Just4U",
-          plans: [
-            { id: "mtn-just4u-1gb", name: "1GB", description: "Special offer", price: 5 },
-            { id: "mtn-just4u-2gb", name: "2GB", description: "Special offer", price: 9 },
-            { id: "mtn-just4u-5gb", name: "5GB", description: "Special offer", price: 20 },
-          ],
-        },
-      ],
+      networkPlanCategories: {
+        MTN: [
+          {
+            name: "All",
+            plans: [
+              { id: "mtn-250mb-1d", name: "250MB", description: "Valid for 1 day", price: 2 },
+              { id: "mtn-500mb-1d", name: "500MB", description: "Valid for 1 day", price: 3 },
+              { id: "mtn-1gb-7d", name: "1GB", description: "Valid for 7 days", price: 6 },
+              { id: "mtn-2gb-7d", name: "2GB", description: "Valid for 7 days", price: 11 },
+              { id: "mtn-5gb-30d", name: "5GB", description: "Valid for 30 days", price: 25 },
+              { id: "mtn-10gb-30d", name: "10GB", description: "Valid for 30 days", price: 45 },
+              { id: "mtn-20gb-30d", name: "20GB", description: "Valid for 30 days", price: 80 },
+            ],
+          },
+          {
+            name: "Unlimited",
+            plans: [
+              { id: "mtn-unlimited-1d", name: "Unlimited 1 Day", description: "Unlimited data for 1 day", price: 10 },
+              { id: "mtn-unlimited-7d", name: "Unlimited 7 Days", description: "Unlimited data for 7 days", price: 40 },
+              { id: "mtn-unlimited-30d", name: "Unlimited 30 Days", description: "Unlimited data for 30 days", price: 100 },
+            ],
+          },
+          {
+            name: "Non-Expiry",
+            plans: [
+              { id: "mtn-non-1gb", name: "1GB", description: "No expiry", price: 15 },
+              { id: "mtn-non-3gb", name: "3GB", description: "No expiry", price: 40 },
+              { id: "mtn-non-5gb", name: "5GB", description: "No expiry", price: 60 },
+            ],
+          },
+          {
+            name: "Just4U",
+            plans: [
+              { id: "mtn-just4u-1gb", name: "1GB", description: "Special offer", price: 5 },
+              { id: "mtn-just4u-2gb", name: "2GB", description: "Special offer", price: 9 },
+              { id: "mtn-just4u-5gb", name: "5GB", description: "Special offer", price: 20 },
+            ],
+          },
+        ],
+        Telecel: [
+          {
+            name: "All",
+            plans: [
+              { id: "telecel-200mb-1d", name: "200MB", description: "Valid for 1 day", price: 2 },
+              { id: "telecel-1gb-3d", name: "1GB", description: "Valid for 3 days", price: 5 },
+              { id: "telecel-3gb-7d", name: "3GB", description: "Valid for 7 days", price: 15 },
+              { id: "telecel-5gb-30d", name: "5GB", description: "Valid for 30 days", price: 30 },
+            ],
+          },
+          {
+            name: "Browse & Stream",
+            plans: [
+              { id: "voda-browse-1gb", name: "1GB Browse", description: "For social & browsing", price: 4 },
+              { id: "voda-stream-2gb", name: "2GB Stream", description: "For video streaming", price: 8 },
+            ],
+          },
+          {
+            name: "Non-Expiry",
+            plans: [
+              { id: "voda-non-2gb", name: "2GB", description: "No expiry", price: 20 },
+              { id: "voda-non-5gb", name: "5GB", description: "No expiry", price: 45 },
+            ],
+          },
+          {
+            name: "Special",
+            plans: [
+              { id: "voda-special-1gb", name: "1GB Special", description: "Limited offer", price: 3 },
+              { id: "voda-special-3gb", name: "3GB Special", description: "Limited offer", price: 8 },
+            ],
+          },
+        ],
+        AirtelTigo: [
+          {
+            name: "All",
+            plans: [
+              { id: "at-250mb-1d", name: "250MB", description: "Valid for 1 day", price: 2 },
+              { id: "at-1gb-7d", name: "1GB", description: "Valid for 7 days", price: 6 },
+              { id: "at-2gb-7d", name: "2GB", description: "Valid for 7 days", price: 11 },
+              { id: "at-5gb-30d", name: "5GB", description: "Valid for 30 days", price: 25 },
+            ],
+          },
+          {
+            name: "Unlimited",
+            plans: [
+              { id: "at-unlimited-1d", name: "Unlimited 1 Day", description: "Unlimited data for 1 day", price: 10 },
+              { id: "at-unlimited-7d", name: "Unlimited 7 Days", description: "Unlimited data for 7 days", price: 40 },
+            ],
+          },
+          {
+            name: "Non-Expiry",
+            plans: [
+              { id: "at-non-1gb", name: "1GB", description: "No expiry", price: 15 },
+              { id: "at-non-5gb", name: "5GB", description: "No expiry", price: 60 },
+            ],
+          },
+        ],
+      },
     },
   },
   {
     id: "cabletv",
     name: "Cable TV",
     description: "Pay TV subscription",
-    icon: "📺",
+    icon: "tv",
     available: true,
     filterGroup: "tv",
     networkOptions: ["DSTV", "GOtv", "StarTimes"],
@@ -165,7 +224,7 @@ export const servicesCategories: ServiceCategory[] = [
     id: "electricity",
     name: "Electricity",
     description: "Pay electricity bills",
-    icon: "⚡",
+    icon: "zap",
     available: true,
     filterGroup: "bills",
     formConfig: {
@@ -202,11 +261,11 @@ export const servicesCategories: ServiceCategory[] = [
     id: "internet",
     name: "Internet",
     description: "Buy internet",
-    icon: "📶",
+    icon: "wifi",
     available: false,
     comingSoon: true,
     filterGroup: "more",
-    networkOptions: ["MTN", "Vodafone", "Surfline"],
+    networkOptions: ["MTN", "Telecel", "Surfline"],
     formConfig: {
       selectionType: "plans",
       fields: [
@@ -229,7 +288,7 @@ export const servicesCategories: ServiceCategory[] = [
     id: "billpayments",
     name: "Bill Payments",
     description: "Pay other bills",
-    icon: "🧾",
+    icon: "receipt",
     available: false,
     comingSoon: true,
     filterGroup: "bills",
@@ -267,7 +326,7 @@ export const servicesCategories: ServiceCategory[] = [
     id: "exampins",
     name: "Exam Pins",
     description: "WAEC, JAMB, NECO etc.",
-    icon: "🎓",
+    icon: "graduation",
     available: true,
     filterGroup: "more",
     formConfig: {
@@ -301,7 +360,7 @@ export const servicesCategories: ServiceCategory[] = [
     id: "giftcards",
     name: "Gift Cards",
     description: "Purchase digital gift cards",
-    icon: "🎁",
+    icon: "gift",
     available: false,
     comingSoon: true,
     filterGroup: "more",

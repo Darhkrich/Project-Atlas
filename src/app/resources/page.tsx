@@ -7,13 +7,14 @@ import { AtlasContainer, AtlasSection } from "@/components/atlas";
 import { AtlasFooter } from "@/components/atlas/atlas-footer";
 import { ResourceSearch, type ResourceItem } from "@/components/resources/ResourceSearch";
 import { ResourceModal } from "@/components/resources/ResourceModal";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
 const categories: ResourceItem[] = [
   {
     id: "customer-help",
     title: "Customer Help",
     category: "Category",
-    icon: "📘",
+    icon: "headphones",
     content:
       "Get help with buying airtime, data, electricity, and more. Learn how to manage your wallet, track transactions, and resolve common issues.",
   },
@@ -21,7 +22,7 @@ const categories: ResourceItem[] = [
     id: "reseller-resources",
     title: "Reseller Resources",
     category: "Category",
-    icon: "📈",
+    icon: "store",
     content:
       "Resources to help you grow your reseller business: setting up your storefront, earning commissions, and managing customers.",
   },
@@ -29,7 +30,7 @@ const categories: ResourceItem[] = [
     id: "store-owner",
     title: "Store Owner Guides",
     category: "Category",
-    icon: "🛍️",
+    icon: "bag",
     content:
       "Learn how to set up and customize your white-label e-commerce store, add products, and start selling.",
   },
@@ -37,7 +38,7 @@ const categories: ResourceItem[] = [
     id: "developer",
     title: "Developer Docs",
     category: "Category",
-    icon: "💻",
+    icon: "code",
     content:
       "API documentation, SDKs, and integration guides to build Atlas services into your own applications.",
   },
@@ -48,7 +49,7 @@ const articles: ResourceItem[] = [
     id: "buy-airtime",
     title: "How to buy airtime on Atlas",
     category: "Customer Help",
-    icon: "📱",
+    icon: "phone",
     content:
       "1. Open the Services page and select Airtime. 2. Choose a network and amount. 3. Enter the recipient phone number. 4. Review and confirm your purchase.",
   },
@@ -56,7 +57,7 @@ const articles: ResourceItem[] = [
     id: "fund-wallet",
     title: "How to fund your Atlas wallet",
     category: "Customer Help",
-    icon: "👛",
+    icon: "wallet",
     content:
       "You can add money to your Atlas wallet using mobile money, bank card, or bank transfer. Go to Wallet > Fund Wallet and follow the steps.",
   },
@@ -64,7 +65,7 @@ const articles: ResourceItem[] = [
     id: "transaction-statuses",
     title: "Understanding transaction statuses",
     category: "Customer Help",
-    icon: "🔄",
+    icon: "clock",
     content:
       "Transactions can have different statuses: Processing, Successful, Pending, Failed, or Cancelled. Each status tells you what is happening with your order.",
   },
@@ -72,7 +73,7 @@ const articles: ResourceItem[] = [
     id: "become-reseller",
     title: "How to become a reseller",
     category: "Reseller Resources",
-    icon: "🏪",
+    icon: "store",
     content:
       "Sign up as a reseller, customize your storefront, choose services to sell, and share your unique store link with customers to start earning.",
   },
@@ -80,7 +81,7 @@ const articles: ResourceItem[] = [
     id: "setup-store",
     title: "Setting up your e-commerce store",
     category: "Store Owner",
-    icon: "🛠️",
+    icon: "bag",
     content:
       "Pick a template, customize your branding, add products, and publish your store. No coding needed.",
   },
@@ -88,7 +89,7 @@ const articles: ResourceItem[] = [
     id: "api-getting-started",
     title: "Getting started with the Atlas API",
     category: "Developer",
-    icon: "💻",
+    icon: "code",
     content:
       "Use the Atlas REST API to create transactions, check balances, and manage services. Check the API documentation for endpoints and authentication.",
   },
@@ -99,21 +100,21 @@ const learningItems: ResourceItem[] = [
     id: "blog",
     title: "Atlas Blog",
     category: "Resource",
-    icon: "📰",
+    icon: "file-text",
     content: "Product updates, tips, and industry news.",
   },
   {
     id: "faq",
     title: "FAQ",
     category: "Resource",
-    icon: "❓",
+    icon: "help-circle",
     content: "Answers to common questions.",
   },
   {
     id: "community",
     title: "Community",
     category: "Resource",
-    icon: "👥",
+    icon: "users",
     content: "Connect with other Atlas users.",
   },
 ];
@@ -127,7 +128,6 @@ export default function ResourcesPage() {
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-to-b from-white to-neutral-50 py-20 md:py-24 dark:from-neutral-950 dark:to-neutral-900">
-        {/* ... same hero as before ... */}
         <div className="absolute inset-0 opacity-[0.04]">
           <svg className="h-full w-full" viewBox="0 0 100 100" fill="none">
             <circle cx="10" cy="10" r="1" fill="currentColor" />
@@ -172,7 +172,10 @@ export default function ResourcesPage() {
                 className="group rounded-xl border border-neutral-200 border-t-4 border-t-brand-600 bg-white p-6 text-left transition-shadow hover:shadow-md dark:border-neutral-800 dark:bg-neutral-950"
               >
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-brand-50 dark:bg-brand-900/30">
-                  <span className="text-2xl">{category.icon}</span>
+                  <AtlasIcon
+                    name={category.icon as AtlasIconName}
+                    className="h-6 w-6 text-brand-800 dark:text-brand-300"
+                  />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {category.title}
@@ -205,7 +208,10 @@ export default function ResourcesPage() {
                 className="group rounded-xl border border-neutral-200 bg-white p-6 text-left transition-all hover:-translate-y-0.5 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-950"
               >
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 dark:bg-brand-900/40">
-                  <span className="text-xl">{article.icon}</span>
+                  <AtlasIcon
+                    name={article.icon as AtlasIconName}
+                    className="h-5 w-5 text-brand-800 dark:text-brand-300"
+                  />
                 </div>
                 <span className="inline-block rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
                   {article.category}
@@ -239,10 +245,13 @@ export default function ResourcesPage() {
                   "Comprehensive documentation",
                 ].map((point) => (
                   <li key={point} className="flex items-center gap-3">
-                    <svg className="h-5 w-5 text-success-600 dark:text-success-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span className="text-neutral-700 dark:text-neutral-300">{point}</span>
+                    <AtlasIcon
+                      name="check"
+                      className="h-5 w-5 text-success-600 dark:text-success-400"
+                    />
+                    <span className="text-neutral-700 dark:text-neutral-300">
+                      {point}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -253,8 +262,9 @@ export default function ResourcesPage() {
                       id: "api-docs",
                       title: "API Documentation",
                       category: "Developer",
-                      icon: "📄",
-                      content: "Full API reference and integration guides will appear here.",
+                      icon: "code",
+                      content:
+                        "Full API reference and integration guides will appear here.",
                     })
                   }
                   className="inline-flex items-center justify-center rounded-full bg-brand-800 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-900"
@@ -267,8 +277,9 @@ export default function ResourcesPage() {
                       id: "quickstart",
                       title: "Quickstart Guide",
                       category: "Developer",
-                      icon: "🚀",
-                      content: "Follow the quickstart guide to make your first API call.",
+                      icon: "zap",
+                      content:
+                        "Follow the quickstart guide to make your first API call.",
                     })
                   }
                   className="inline-flex items-center justify-center rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-medium text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-transparent dark:text-neutral-100 dark:hover:bg-neutral-800"
@@ -283,7 +294,9 @@ export default function ResourcesPage() {
                 <span className="h-3 w-3 rounded-full bg-red-400" />
                 <span className="h-3 w-3 rounded-full bg-yellow-400" />
                 <span className="h-3 w-3 rounded-full bg-green-400" />
-                <span className="ml-2 text-xs text-neutral-400">api.atlas.com</span>
+                <span className="ml-2 text-xs text-neutral-400">
+                  api.atlas.com
+                </span>
               </div>
               <pre className="overflow-x-auto">
                 <code>{`POST /v1/transactions
@@ -322,9 +335,18 @@ Content-Type: application/json
                 onClick={() => setSelectedItem(item)}
                 className="rounded-xl border border-neutral-200 bg-white p-6 text-center transition-shadow hover:shadow-md dark:border-neutral-800 dark:bg-neutral-950"
               >
-                <div className="mb-4 text-4xl">{item.icon}</div>
-                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{item.title}</h3>
-                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{item.content}</p>
+                <div className="mb-4 flex justify-center">
+                  <AtlasIcon
+                    name={item.icon as AtlasIconName}
+                    className="h-8 w-8 text-brand-800 dark:text-brand-300"
+                  />
+                </div>
+                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                  {item.title}
+                </h3>
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                  {item.content}
+                </p>
               </button>
             ))}
           </div>
@@ -362,7 +384,10 @@ Content-Type: application/json
       <AtlasFooter />
 
       {/* MODAL */}
-      <ResourceModal item={selectedItem} onClose={() => setSelectedItem(null)} />
+      <ResourceModal
+        item={selectedItem}
+        onClose={() => setSelectedItem(null)}
+      />
     </>
   );
 }

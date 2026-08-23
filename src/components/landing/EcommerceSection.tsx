@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { AtlasContainer } from "@/components/atlas/atlas-container";
+import { AtlasIcon } from "@/components/atlas/icons";
 
 const features = [
   "No Code Required",
@@ -44,19 +45,10 @@ export function EcommerceSection() {
               {features.map((feature) => (
                 <li key={feature} className="flex items-center gap-3">
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-500/15">
-                    <svg
+                    <AtlasIcon
+                      name="check"
                       className="h-4 w-4 text-accent-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
+                    />
                   </span>
                   <span className="text-base font-medium text-white">
                     {feature}
@@ -103,7 +95,6 @@ export function EcommerceSection() {
               {/* Store content */}
               <div className="rounded-b-xl bg-white dark:bg-neutral-900">
                 <div className="relative h-64 overflow-hidden rounded-b-xl bg-gradient-to-r from-brand-100 to-brand-50 dark:from-brand-900 dark:to-brand-950">
-                  {/* Placeholder for actual store hero image */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Image
                       src="/images/ecommerce/store-hero.jpg"

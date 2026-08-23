@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AtlasNavbar } from "@/components/landing/AtlasNavbar";
 import { AtlasContainer, AtlasSection } from "@/components/atlas";
 import { AtlasFooter } from "@/components/atlas/atlas-footer";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
 const trustBadges = [
   "No Setup Fee",
@@ -11,14 +12,17 @@ const trustBadges = [
   "24/7 Support",
 ];
 
-const features = [
-  { title: "Your Own Storefront", icon: "🏪" },
-  { title: "Multiple Digital Services", icon: "🧩" },
-  { title: "Reseller Wallet", icon: "👛" },
-  { title: "Customer Management", icon: "👥" },
-  { title: "Orders & Transactions", icon: "🧾" },
-  { title: "Business Dashboard", icon: "📊" },
-  { title: "Dedicated Support", icon: "🎧" },
+const features: {
+  title: string;
+  icon: AtlasIconName;
+}[] = [
+  { title: "Your Own Storefront", icon: "store" },
+  { title: "Multiple Digital Services", icon: "grid" },
+  { title: "Reseller Wallet", icon: "wallet" },
+  { title: "Customer Management", icon: "users" },
+  { title: "Orders & Transactions", icon: "receipt" },
+  { title: "Business Dashboard", icon: "bar-chart" },
+  { title: "Dedicated Support", icon: "headphones" },
 ];
 
 const steps = [
@@ -95,9 +99,7 @@ export default function ResellersPage() {
                   className="inline-flex items-center justify-center rounded-full bg-lime-400 px-7 py-3 text-base font-semibold text-neutral-950 transition-colors hover:bg-lime-300"
                 >
                   Start Your Atlas Storefront
-                  <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                  </svg>
+                  <AtlasIcon name="arrow-right" className="ml-2 h-4 w-4" />
                 </Link>
                 <Link
                   href="#how-it-works"
@@ -117,9 +119,7 @@ export default function ResellersPage() {
                     key={badge}
                     className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white"
                   >
-                    <svg className="h-4 w-4 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <AtlasIcon name="check" className="h-4 w-4 text-lime-400" />
                     {badge}
                   </span>
                 ))}
@@ -164,7 +164,10 @@ export default function ResellersPage() {
                 key={feature.title}
                 className="flex flex-col items-center rounded-xl border border-neutral-200 bg-neutral-50 p-5 text-center dark:border-neutral-800 dark:bg-neutral-900"
               >
-                <span className="mb-3 text-4xl">{feature.icon}</span>
+                <AtlasIcon
+                  name={feature.icon}
+                  className="mb-3 h-8 w-8 text-brand-800 dark:text-brand-300"
+                />
                 <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                   {feature.title}
                 </h3>
@@ -193,11 +196,11 @@ export default function ResellersPage() {
                 ].map((point) => (
                   <li key={point} className="flex items-start gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
+                      <AtlasIcon name="check" className="h-4 w-4" />
                     </span>
-                    <span className="text-neutral-700 dark:text-neutral-300">{point}</span>
+                    <span className="text-neutral-700 dark:text-neutral-300">
+                      {point}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -274,7 +277,7 @@ export default function ResellersPage() {
                 </p>
                 {index < steps.length - 1 && (
                   <div className="absolute -right-5 top-7 hidden text-neutral-300 dark:text-neutral-600 lg:block">
-                    →
+                    <AtlasIcon name="arrow-right" className="h-5 w-5" />
                   </div>
                 )}
               </div>
@@ -335,7 +338,9 @@ export default function ResellersPage() {
                       {i + 1}
                     </span>
                     <span className="text-neutral-700 dark:text-neutral-300">{step}</span>
-                    {i < 3 && <span className="text-neutral-300 dark:text-neutral-600">→</span>}
+                    {i < 3 && (
+                      <AtlasIcon name="arrow-right" className="h-4 w-4 text-neutral-300 dark:text-neutral-600" />
+                    )}
                   </div>
                 ))}
               </div>
@@ -389,9 +394,7 @@ export default function ResellersPage() {
                 className="mt-6 inline-flex items-center text-sm font-medium text-brand-800 hover:underline dark:text-brand-300"
               >
                 View all questions
-                <svg className="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                </svg>
+                <AtlasIcon name="arrow-right" className="ml-1 h-4 w-4" />
               </Link>
             </div>
 
@@ -413,15 +416,14 @@ export default function ResellersPage() {
                     className="inline-flex items-center justify-center rounded-full bg-lime-400 px-6 py-3 text-sm font-semibold text-neutral-950 hover:bg-lime-300"
                   >
                     Become a Reseller
-                    <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                    </svg>
+                    <AtlasIcon name="arrow-right" className="ml-2 h-4 w-4" />
                   </Link>
                   <Link
                     href="/contact-sales"
                     className="inline-flex items-center justify-center rounded-full border border-white/30 px-6 py-3 text-sm font-medium text-white hover:bg-white/10"
                   >
-                    Talk to Sales 📞
+                    <AtlasIcon name="phone" className="mr-2 h-4 w-4" />
+                    Talk to Sales
                   </Link>
                 </div>
               </div>

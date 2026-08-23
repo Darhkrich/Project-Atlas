@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useState } from "react";
@@ -8,25 +9,25 @@ const storeThemes = [
     id: "fashion",
     label: "Fashion",
     name: "Fashion Boutique",
-    description: "A clean, image-focused storefront for clothing and accessories.",
-    headerBg: "bg-neutral-100",
-    primary: "bg-neutral-900",
+    description:
+      "A clean, image-focused storefront for clothing and accessories.",
+    image: "/Ladies-wear-store.png",
   },
   {
     id: "electronics",
     label: "Electronics",
     name: "Electronics Store",
-    description: "A bold, product-forward layout for gadgets and tech.",
-    headerBg: "bg-blue-50",
-    primary: "bg-blue-600",
+    description:
+      "A bold, product-forward layout for gadgets and tech.",
+    image: "/images/ecommerce/store-electronics.jpg",
   },
   {
     id: "groceries",
     label: "Groceries",
     name: "Grocery Market",
-    description: "A fresh, colorful design for everyday essentials.",
-    headerBg: "bg-green-50",
-    primary: "bg-green-600",
+    description:
+      "A fresh, colorful design for everyday essentials.",
+    image: "/mtn4.jpg",
   },
 ];
 
@@ -56,37 +57,27 @@ export function StorePreviewTabs() {
 
       {/* Preview */}
       <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-        <div className={cn("p-4", active.headerBg)}>
-          <div className="text-sm font-semibold text-neutral-900">
-            {active.name}
+        <div className="p-4">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                {active.name}
+              </h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {active.description}
+              </p>
+            </div>
+            <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-800 dark:bg-brand-900 dark:text-brand-300">
+              Live Preview
+            </span>
           </div>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">
-            {active.description}
-          </p>
         </div>
-        <div className="grid gap-4 p-4 md:grid-cols-3">
-          <div className="md:col-span-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="h-32 rounded-lg bg-neutral-100 dark:bg-neutral-800" />
-              <div className="h-32 rounded-lg bg-neutral-100 dark:bg-neutral-800" />
-              <div className="h-32 rounded-lg bg-neutral-100 dark:bg-neutral-800" />
-              <div className="h-32 rounded-lg bg-neutral-100 dark:bg-neutral-800" />
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="rounded-lg bg-white p-3 shadow-sm dark:bg-neutral-900">
-              <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                Featured Product
-              </div>
-              <div className="mt-2 h-24 rounded bg-neutral-100 dark:bg-neutral-800" />
-              <div className="mt-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                $49.99
-              </div>
-              <button className="mt-2 w-full rounded-md bg-brand-800 px-3 py-2 text-xs font-medium text-white">
-                Add to Cart
-              </button>
-            </div>
-          </div>
+        <div className="border-t border-neutral-200 dark:border-neutral-800">
+          <img
+            src={active.image}
+            alt={`${active.name} preview`}
+            className="h-64 w-full object-cover md:h-96"
+          />
         </div>
       </div>
     </div>

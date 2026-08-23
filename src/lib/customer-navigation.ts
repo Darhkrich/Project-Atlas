@@ -1,10 +1,12 @@
+import type { AtlasIconName } from "@/components/atlas/icons";
+
 export type CustomerNavItem = {
   label: string;
   href: string;
   section: "primary" | "secondary";
   exact?: boolean;
   mobilePrimary?: boolean;
-  icon: string; // key for NavIcon mapping
+  icon: AtlasIconName;
 };
 
 export const customerNavItems: CustomerNavItem[] = [
@@ -14,59 +16,86 @@ export const customerNavItems: CustomerNavItem[] = [
     section: "primary",
     exact: true,
     mobilePrimary: true,
-    icon: "dashboard",
+    icon: "home",
   },
   {
     label: "Services",
-    href: "/services",
+    href: "/customer/services",
     section: "primary",
     exact: false,
     mobilePrimary: true,
-    icon: "services",
-  },
-  {
-    label: "Orders",
-    href: "/orders",
-    section: "primary",
-    exact: false,
-    mobilePrimary: true,
-    icon: "orders",
+    icon: "briefcase",
   },
   {
     label: "Wallet",
-    href: "/wallet",
+    href: "/customer/wallet",
     section: "primary",
     exact: true,
     mobilePrimary: true,
     icon: "wallet",
   },
   {
-    label: "Transactions",
-    href: "/transactions",
+    label: "Orders",
+    href: "/customer/orders",
     section: "primary",
     exact: false,
-    // Not in bottom bar; accessible from More menu.
-    icon: "transactions",
+    mobilePrimary: true,
+    icon: "receipt",
+  },
+  {
+    label: "Transactions",
+    href: "/customer/transactions",
+    section: "primary",
+    exact: false,
+    mobilePrimary: false,
+    icon: "repeat",
+  },
+  {
+    label: "Beneficiaries",
+    href: "/customer/beneficiaries",
+    section: "primary",
+    exact: false,
+    mobilePrimary: false,
+    icon: "list",
+  },
+  {
+    label: "Favorites",
+    href: "/customer/favorites",
+    section: "primary",
+    exact: false,
+    mobilePrimary: false,
+    icon: "star",
+  },
+  {
+    label: "Referrals",
+    href: "/customer/referrals",
+    section: "primary",
+    exact: false,
+    mobilePrimary: false,
+    icon: "link",
   },
   {
     label: "Notifications",
-    href: "/notifications",
+    href: "/customer/notifications",
     section: "secondary",
     exact: true,
-    icon: "notifications",
+    mobilePrimary: false,
+    icon: "bell",
   },
   {
     label: "Support",
-    href: "/support",
+    href: "/customer/support",
     section: "secondary",
     exact: false,
-    icon: "support",
+    mobilePrimary: false,
+    icon: "help-circle",
   },
   {
     label: "Settings",
-    href: "/settings",
+    href: "/customer/settings",
     section: "secondary",
     exact: false,
+    mobilePrimary: false,
     icon: "settings",
   },
 ];

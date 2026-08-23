@@ -4,6 +4,7 @@ import {
   AtlasSection,
   AtlasGrid,
 } from "@/components/atlas";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
 const journeySteps = [
   {
@@ -32,87 +33,101 @@ const journeySteps = [
   },
 ];
 
-const transactionStatuses = [
+const transactionStatuses: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+  textClass: string;
+  bgClass: string;
+}[] = [
   {
     title: "Successful",
     description: "The transaction has been completed successfully.",
-    icon: <SuccessIcon />,
+    icon: "check",
     textClass: "text-success-600 dark:text-success-400",
     bgClass: "bg-success-100 dark:bg-success-900/40",
   },
   {
     title: "Processing",
     description: "Atlas is currently processing the transaction.",
-    icon: <ProcessingIcon />,
+    icon: "clock",
     textClass: "text-info-600 dark:text-info-400",
     bgClass: "bg-info-100 dark:bg-info-900/40",
   },
   {
     title: "Pending",
     description: "The transaction has not completed yet and requires further processing.",
-    icon: <PendingIcon />,
+    icon: "help-circle",
     textClass: "text-warning-600 dark:text-warning-400",
     bgClass: "bg-warning-100 dark:bg-warning-900/40",
   },
   {
     title: "Failed",
     description: "The transaction could not be completed.",
-    icon: <FailedIcon />,
+    icon: "x-circle",
     textClass: "text-danger-600 dark:text-danger-400",
     bgClass: "bg-danger-100 dark:bg-danger-900/40",
   },
   {
     title: "Cancelled",
     description: "The transaction was cancelled and will not continue.",
-    icon: <CancelledIcon />,
+    icon: "disconnect",
     textClass: "text-neutral-600 dark:text-neutral-400",
     bgClass: "bg-neutral-100 dark:bg-neutral-800",
   },
 ];
 
-const accountFeatures = [
+const accountFeatures: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Transaction history",
     description: "See every transaction and its current status.",
-    icon: <HistoryIcon />,
+    icon: "record",
   },
   {
     title: "Order details",
     description: "Access the details behind each service order.",
-    icon: <OrderIcon />,
+    icon: "receipt",
   },
   {
     title: "Payment records",
     description: "Review payments and amounts clearly.",
-    icon: <PaymentIcon />,
+    icon: "wallet",
   },
   {
     title: "Service status",
     description: "Know whether a service has been fulfilled.",
-    icon: <ServiceStatusIcon />,
+    icon: "status",
   },
 ];
 
-const trustItems = [
+const trustItems: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Secure account access",
     description: "Customer information should be protected.",
-    icon: <LockIcon />,
+    icon: "lock",
   },
   {
     title: "Clear transactions",
     description: "Customers should always understand what they are paying for.",
-    icon: <EyeIcon />,
+    icon: "eye",
   },
   {
     title: "Transaction visibility",
     description: "Customers can see the state of their transactions.",
-    icon: <VisibilityIcon />,
+    icon: "status",
   },
   {
     title: "Responsible processing",
     description: "Atlas coordinates the transaction and fulfillment process behind the scenes.",
-    icon: <ShieldIcon />,
+    icon: "shield",
   },
 ];
 
@@ -301,7 +316,7 @@ export default function HowItWorksPage() {
                 <div
                   className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${status.bgClass} ${status.textClass}`}
                 >
-                  {status.icon}
+                  <AtlasIcon name={status.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {status.title}
@@ -386,7 +401,7 @@ export default function HowItWorksPage() {
             {accountFeatures.map((feature) => (
               <div key={feature.title} className="text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                  {feature.icon}
+                  <AtlasIcon name={feature.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {feature.title}
@@ -444,7 +459,7 @@ export default function HowItWorksPage() {
             {trustItems.map((item) => (
               <div key={item.title} className="text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-500/15 text-accent-600">
-                  {item.icon}
+                  <AtlasIcon name={item.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {item.title}
@@ -532,112 +547,5 @@ export default function HowItWorksPage() {
         </AtlasContainer>
       </AtlasSection>
     </>
-  );
-}
-
-/* ---------- Icons ---------- */
-function SuccessIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  );
-}
-
-function ProcessingIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function PendingIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v2m0 8v2m6-6h-2M8 12H6" />
-    </svg>
-  );
-}
-
-function FailedIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-    </svg>
-  );
-}
-
-function CancelledIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" />
-    </svg>
-  );
-}
-
-function LockIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-    </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-}
-
-function VisibilityIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M21 12c-1.5 4-5 7-9 7s-7.5-3-9-7c1.5-4 5-7 9-7s7.5 3 9 7z" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function OrderIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  );
-}
-
-function PaymentIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
-  );
-}
-
-function ServiceStatusIcon() {
-  return (
-    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
   );
 }

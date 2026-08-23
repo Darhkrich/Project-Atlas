@@ -1,8 +1,10 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import { AtlasNavbar } from "@/components/landing/AtlasNavbar";
 import { AtlasContainer, AtlasSection } from "@/components/atlas";
 import { AtlasFooter } from "@/components/atlas/atlas-footer";
 import { StorePreviewTabs } from "@/components/ecommerce/StorePreviewTabs";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
 const trustBadges = [
   "No Code Required",
@@ -12,30 +14,33 @@ const trustBadges = [
 ];
 
 const templates = [
-  { name: "Fashion", icon: "👗", preview: "bg-pink-50" },
-  { name: "Electronics", icon: "💻", preview: "bg-blue-50" },
-  { name: "Groceries", icon: "🛒", preview: "bg-green-50" },
-  { name: "Beauty", icon: "💄", preview: "bg-purple-50" },
+  { name: "Fashion", image: "/Ladies-wear-store.png" },
+  { name: "Electronics", image: "/men.png" },
+  { name: "Groceries", image: "/store.png" },
+  { name: "Beauty", image: "/images/ecommerce/beauty.jpg" },
 ];
 
 const features = [
   {
     title: "No-Code Store Builder",
-    description: "Drag, drop, and customize your storefront without writing a single line of code.",
-    icon: "🛠️",
-    visual: "builder",
+    description:
+      "Drag, drop, and customize your storefront without writing a single line of code.",
+    icon: "grid" as AtlasIconName,
+    visual: "/images/ecommerce/builder.jpg",
   },
   {
     title: "Custom Domain & Hosting",
-    description: "Use your own domain name and let Atlas handle hosting, security, and maintenance.",
-    icon: "🌐",
-    visual: "domain",
+    description:
+      "Use your own domain name and let Atlas handle hosting, security, and maintenance.",
+    icon: "globe" as AtlasIconName,
+    visual: "/images/ecommerce/domain.jpg",
   },
   {
     title: "Secure Payments & Orders",
-    description: "Accept payments securely and manage orders from a single dashboard.",
-    icon: "💳",
-    visual: "payments",
+    description:
+      "Accept payments securely and manage orders from a single dashboard.",
+    icon: "card" as AtlasIconName,
+    visual: "/images/ecommerce/payments.jpg",
   },
 ];
 
@@ -51,7 +56,8 @@ const steps = [
 const faqs = [
   {
     question: "Do I need technical skills to create a store?",
-    answer: "No. Atlas provides a no-code builder that lets you create and customize your store visually.",
+    answer:
+      "No. Atlas provides a no-code builder that lets you create and customize your store visually.",
   },
   {
     question: "Can I use my own domain name?",
@@ -59,15 +65,18 @@ const faqs = [
   },
   {
     question: "How do I receive payments from customers?",
-    answer: "Atlas integrates with secure payment methods so you can accept payments directly.",
+    answer:
+      "Atlas integrates with secure payment methods so you can accept payments directly.",
   },
   {
     question: "What products can I sell?",
-    answer: "You can sell physical or digital products, services, or any combination that suits your business.",
+    answer:
+      "You can sell physical or digital products, services, or any combination that suits your business.",
   },
   {
     question: "Is hosting and security included?",
-    answer: "Yes, hosting, SSL certificates, and security updates are included with your Atlas store.",
+    answer:
+      "Yes, hosting, SSL certificates, and security updates are included with your Atlas store.",
   },
 ];
 
@@ -78,7 +87,6 @@ export default function EcommercePage() {
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-neutral-50 py-20 md:py-24 lg:py-28 dark:bg-neutral-950">
-        {/* Subtle dot pattern */}
         <div className="absolute inset-0 opacity-[0.03]">
           <svg className="h-full w-full" viewBox="0 0 100 100" fill="none">
             <circle cx="10" cy="10" r="1" fill="currentColor" />
@@ -113,9 +121,7 @@ export default function EcommercePage() {
                   className="inline-flex items-center justify-center rounded-full bg-brand-800 px-7 py-3 text-base font-semibold text-white transition-colors hover:bg-brand-900"
                 >
                   Start Your Store
-                  <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                  </svg>
+                  <AtlasIcon name="arrow-right" className="ml-2 h-4 w-4" />
                 </Link>
                 <Link
                   href="#templates"
@@ -132,9 +138,7 @@ export default function EcommercePage() {
                     key={badge}
                     className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-800 shadow-sm dark:bg-neutral-900 dark:text-neutral-200"
                   >
-                    <svg className="h-4 w-4 text-brand-700 dark:text-brand-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <AtlasIcon name="check" className="h-4 w-4 text-brand-700 dark:text-brand-300" />
                     {badge}
                   </span>
                 ))}
@@ -143,7 +147,6 @@ export default function EcommercePage() {
 
             {/* Right: store builder mockup */}
             <div className="relative mx-auto w-full max-w-md lg:max-w-none">
-              {/* Browser window */}
               <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
                 <div className="flex items-center gap-2 border-b border-neutral-200 bg-neutral-100 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-800">
                   <div className="flex gap-1.5">
@@ -177,27 +180,34 @@ export default function EcommercePage() {
                     </div>
                     <div className="space-y-2">
                       <div className="rounded-lg bg-white p-2 shadow-sm dark:bg-neutral-900">
-                        <span className="text-xs">🎨 Color</span>
+                        <AtlasIcon name="settings" className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+                        <span className="ml-1 text-xs">Color</span>
                       </div>
                       <div className="rounded-lg bg-white p-2 shadow-sm dark:bg-neutral-900">
-                        <span className="text-xs">📱 Layout</span>
+                        <AtlasIcon name="mobile" className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+                        <span className="ml-1 text-xs">Layout</span>
                       </div>
                       <div className="rounded-lg bg-white p-2 shadow-sm dark:bg-neutral-900">
-                        <span className="text-xs">🖼️ Logo</span>
+                        <AtlasIcon name="user" className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+                        <span className="ml-1 text-xs">Logo</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Floating product card */}
+              {/* Floating product card with actual image */}
               <div className="absolute -bottom-4 -right-2 w-32 rounded-lg bg-white p-3 shadow-lg dark:bg-neutral-900">
-                <div className="h-16 rounded bg-neutral-100 dark:bg-neutral-800" />
+                <img
+                  src="/images/ecommerce/product-sample.jpg"
+                  alt="Product"
+                  className="h-16 w-full rounded object-cover"
+                />
                 <div className="mt-2 text-xs font-medium text-neutral-900 dark:text-neutral-100">
                   Product Name
                 </div>
                 <div className="text-xs font-semibold text-brand-800 dark:text-brand-300">
-                  $49.99
+                  GH₵ 49.99
                 </div>
               </div>
             </div>
@@ -222,11 +232,11 @@ export default function EcommercePage() {
                 key={template.name}
                 className="group overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-neutral-800 dark:bg-neutral-950"
               >
-                <div className={`h-40 ${template.preview}`}>
-                  <div className="flex h-full items-center justify-center text-6xl">
-                    {template.icon}
-                  </div>
-                </div>
+                <img
+                  src={template.image}
+                  alt={`${template.name} template`}
+                  className="h-40 w-full object-cover"
+                />
                 <div className="p-4">
                   <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                     {template.name}
@@ -254,7 +264,7 @@ export default function EcommercePage() {
               >
                 <div className={index % 2 === 1 ? "lg:order-2" : ""}>
                   <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                    <span className="text-2xl">{feature.icon}</span>
+                    <AtlasIcon name={feature.icon} className="h-6 w-6" />
                   </div>
                   <h3 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
                     {feature.title}
@@ -264,9 +274,12 @@ export default function EcommercePage() {
                   </p>
                 </div>
                 <div className={index % 2 === 1 ? "lg:order-1" : ""}>
-                  {/* Visual placeholder for feature */}
-                  <div className="rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-                    <div className="h-48 rounded-lg bg-neutral-100 dark:bg-neutral-800" />
+                  <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+                    <img
+                      src={feature.visual}
+                      alt={`${feature.title} visual`}
+                      className="h-48 w-full rounded-lg object-cover"
+                    />
                   </div>
                 </div>
               </div>
@@ -286,11 +299,9 @@ export default function EcommercePage() {
           <div className="mx-auto max-w-3xl">
             {steps.map((step, index) => (
               <div key={step.title} className="relative flex gap-6 pb-10">
-                {/* Vertical line */}
                 {index < steps.length - 1 && (
                   <div className="absolute left-6 top-14 h-full w-px border-l-2 border-dashed border-neutral-200 dark:border-neutral-700" />
                 )}
-                {/* Step number */}
                 <div className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xl font-bold text-brand-800 dark:bg-brand-900 dark:text-brand-300">
                   {index + 1}
                 </div>
@@ -327,7 +338,6 @@ export default function EcommercePage() {
       <AtlasSection size="lg" className="bg-white dark:bg-neutral-950">
         <AtlasContainer>
           <div className="grid gap-8 md:grid-cols-2">
-            {/* Customer flow */}
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-6 dark:border-neutral-800 dark:bg-neutral-900">
               <h2 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
                 Built for your customers
@@ -346,7 +356,6 @@ export default function EcommercePage() {
                 ))}
               </div>
             </div>
-            {/* Store owner flow */}
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-6 dark:border-neutral-800 dark:bg-neutral-900">
               <h2 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
                 Built for your business
@@ -417,14 +426,16 @@ export default function EcommercePage() {
                   href="/contact-sales"
                   className="inline-flex items-center justify-center rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-medium text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-transparent dark:text-neutral-100 dark:hover:bg-neutral-800"
                 >
-                  Talk to Sales 📞
+                  Talk to Sales
                 </Link>
               </div>
             </div>
             <div className="rounded-xl bg-white p-4 shadow-sm dark:bg-neutral-950">
-              <div className="h-48 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
-                <span className="text-neutral-400">Store screenshot</span>
-              </div>
+              <img
+                src="/images/ecommerce/store-screenshot.jpg"
+                alt="Store screenshot"
+                className="h-48 w-full rounded-lg object-cover"
+              />
             </div>
           </div>
         </AtlasContainer>

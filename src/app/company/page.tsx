@@ -2,74 +2,67 @@ import Link from "next/link";
 import { AtlasNavbar } from "@/components/landing/AtlasNavbar";
 import { AtlasContainer, AtlasSection, AtlasGrid } from "@/components/atlas";
 import { AtlasFooter } from "@/components/atlas/atlas-footer";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
-const values = [
+const values: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Trust",
     description:
       "We build products that customers, resellers, and businesses can depend on.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      </svg>
-    ),
+    icon: "shield",
   },
   {
     title: "Simplicity",
     description:
       "We remove complexity so people can focus on the services they need.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
-      </svg>
-    ),
+    icon: "check",
   },
   {
     title: "Reliability",
     description:
       "Our platform is designed for everyday use, with clear transaction states.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
+    icon: "clock",
   },
   {
     title: "Accessibility",
     description:
       "Essential digital services should be easier for everyone to discover and use.",
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-      </svg>
-    ),
+    icon: "accessibility",
   },
 ];
 
-const pillars = [
+const pillars: {
+  title: string;
+  description: string;
+  icon: AtlasIconName;
+}[] = [
   {
     title: "Customer Platform",
     description:
       "A simple, secure way for customers to buy airtime, data, electricity, and more.",
-    icon: "👤",
+    icon: "user",
   },
   {
     title: "Reseller Infrastructure",
     description:
       "Tools for entrepreneurs to start their own digital services business.",
-    icon: "🏪",
+    icon: "store",
   },
   {
     title: "White-Label Stores",
     description:
       "No-code e-commerce websites for businesses and individuals.",
-    icon: "🛍️",
+    icon: "bag",
   },
   {
     title: "Developer API",
     description:
       "Powerful APIs that let developers integrate Atlas services.",
-    icon: "💻",
+    icon: "code",
   },
 ];
 
@@ -147,7 +140,7 @@ export default function CompanyPage() {
                   key={pillar.title}
                   className="rounded-xl border border-neutral-200 bg-neutral-50 p-5 dark:border-neutral-800 dark:bg-neutral-900"
                 >
-                  <span className="text-3xl">{pillar.icon}</span>
+                  <AtlasIcon name={pillar.icon} className="h-8 w-8 text-brand-800 dark:text-brand-300" />
                   <h3 className="mt-3 text-base font-semibold text-neutral-900 dark:text-neutral-100">
                     {pillar.title}
                   </h3>
@@ -193,7 +186,7 @@ export default function CompanyPage() {
                 className="rounded-xl border border-neutral-200 bg-neutral-50 p-6 text-center dark:border-neutral-800 dark:bg-neutral-900"
               >
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-800 dark:bg-brand-900 dark:text-brand-300">
-                  {value.icon}
+                  <AtlasIcon name={value.icon} className="h-6 w-6" />
                 </div>
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {value.title}
@@ -224,7 +217,7 @@ export default function CompanyPage() {
                 key={pillar.title}
                 className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-950"
               >
-                <span className="text-3xl">{pillar.icon}</span>
+                <AtlasIcon name={pillar.icon} className="h-8 w-8 text-brand-800 dark:text-brand-300" />
                 <h3 className="mt-3 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {pillar.title}
                 </h3>

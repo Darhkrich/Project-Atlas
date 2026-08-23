@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AtlasContainer } from "@/components/atlas/atlas-container";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 
 const checklist = [
   "High Commission Rates",
@@ -36,19 +37,10 @@ export function ResellerSection() {
               {checklist.map((item) => (
                 <li key={item} className="flex items-center gap-3">
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/15">
-                    <svg
+                    <AtlasIcon
+                      name="check"
                       className="h-4 w-4 text-accent-500"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
+                    />
                   </span>
                   <span className="text-sm font-medium text-white">{item}</span>
                 </li>
@@ -93,9 +85,10 @@ export function ResellerSection() {
                   ₵ 215,450.00
                 </p>
                 <div className="mt-2 flex items-center gap-1">
-                  <svg className="h-4 w-4 text-success-600 dark:text-success-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7 7 7M12 3v18" />
-                  </svg>
+                  <AtlasIcon
+                    name="trending-up"
+                    className="h-4 w-4 text-success-600 dark:text-success-400"
+                  />
                   <span className="text-xs md:text-sm text-success-600 dark:text-success-400">
                     ↑ 7%
                   </span>
@@ -129,7 +122,10 @@ export function ResellerSection() {
                       key={service}
                       className="flex flex-col items-center gap-1 rounded-lg border border-neutral-200 p-1.5 dark:border-neutral-700"
                     >
-                      <span className="text-base">{getServiceEmoji(service)}</span>
+                      <AtlasIcon
+                        name={getServiceIconName(service)}
+                        className="h-4 w-4 text-brand-800 dark:text-brand-300"
+                      />
                       <span className="text-[10px] text-neutral-700 dark:text-neutral-300">
                         {service}
                       </span>
@@ -172,17 +168,17 @@ export function ResellerSection() {
   );
 }
 
-function getServiceEmoji(service: string) {
+function getServiceIconName(service: string): AtlasIconName {
   switch (service) {
     case "Airtime":
-      return "📱";
+      return "phone";
     case "Data":
-      return "🌐";
+      return "globe";
     case "Electricity":
-      return "⚡";
+      return "zap";
     case "TV":
-      return "📺";
+      return "tv";
     default:
-      return "🔹";
+      return "grid";
   }
 }

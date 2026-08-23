@@ -1,9 +1,21 @@
 /* eslint-disable @next/next/no-html-link-for-pages */
 import { AtlasContainer } from "@/components/atlas/atlas-container";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { HeroPhone } from "./HeroPhone";
 import { HeroDashboardCard } from "./HeroDashboardCard";
 import { HeroResellerCard } from "./HeroResellerCard";
 import { HeroApiCard } from "./HeroApiCard";
+
+const trustFeatures: {
+  icon: AtlasIconName;
+  title: string;
+  subtitle: string;
+}[] = [
+  { icon: "shield", title: "Secure", subtitle: "& Reliable" },
+  { icon: "zap", title: "Instant", subtitle: "Delivery" },
+  { icon: "headphones", title: "24/7", subtitle: "Support" },
+  { icon: "tag", title: "Best", subtitle: "Rates" },
+];
 
 export function AtlasHero() {
   return (
@@ -28,7 +40,9 @@ export function AtlasHero() {
 
             <h1 className="text-[44px] leading-[1.05] tracking-[-0.04em] font-bold text-neutral-900 md:text-[52px] lg:text-[56px] dark:text-neutral-100">
               One Platform.
-              <span className="block text-[#003D2E] dark:text-brand-300">Every Service.</span>
+              <span className="block text-[#003D2E] dark:text-brand-300">
+                Every Service.
+              </span>
               Endless Possibilities.
             </h1>
 
@@ -43,9 +57,7 @@ export function AtlasHero() {
                 className="inline-flex items-center justify-center rounded-lg bg-[#003D2E] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[#004B3B] dark:bg-brand-800 dark:hover:bg-brand-700"
               >
                 Get started
-                <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5-5 5M6 12h12" />
-                </svg>
+                <AtlasIcon name="arrow-right" className="ml-2 h-4 w-4" />
               </a>
               <a
                 href="/services"
@@ -57,18 +69,17 @@ export function AtlasHero() {
 
             {/* Trust features */}
             <div className="mt-10 grid grid-cols-4 gap-x-8 gap-y-6 sm:grid-cols-4">
-              {[
-                { icon: "shield", title: "Secure", subtitle: "& Reliable" },
-                { icon: "zap", title: "Instant", subtitle: "Delivery" },
-                { icon: "headphones", title: "24/7", subtitle: "Support" },
-                { icon: "tag", title: "Best", subtitle: "Rates" },
-              ].map((item) => (
+              {trustFeatures.map((item) => (
                 <div key={item.icon} className="flex flex-col items-start">
                   <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF3EF] text-[#003D2E] dark:bg-brand-900/40 dark:text-brand-300">
-                    <FeatureIcon name={item.icon} className="h-4 w-4" />
+                    <AtlasIcon name={item.icon} className="h-4 w-4" />
                   </div>
-                  <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{item.title}</div>
-                  <div className="text-xs text-neutral-500 dark:text-neutral-400">{item.subtitle}</div>
+                  <div className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    {item.title}
+                  </div>
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {item.subtitle}
+                  </div>
                 </div>
               ))}
             </div>
@@ -86,41 +97,20 @@ export function AtlasHero() {
 
       {/* Bottom curves */}
       <div className="absolute bottom-0 left-0 right-0 h-16 overflow-hidden">
-        <svg className="w-full" viewBox="0 0 1440 100" fill="none" preserveAspectRatio="none">
-          <path d="M0,100 L0,80 Q360,0 720,60 T1440,60 L1440,100 Z" fill="#FCFCFB" opacity="0.5" className="dark:fill-neutral-950" />
+        <svg
+          className="w-full"
+          viewBox="0 0 1440 100"
+          fill="none"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M0,100 L0,80 Q360,0 720,60 T1440,60 L1440,100 Z"
+            fill="#FCFCFB"
+            opacity="0.5"
+            className="dark:fill-neutral-950"
+          />
         </svg>
       </div>
     </section>
   );
-}
-
-function FeatureIcon({ name, className }: { name: string; className?: string }) {
-  switch (name) {
-    case "shield":
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-        </svg>
-      );
-    case "zap":
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-      );
-    case "headphones":
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 18v-6a9 9 0 0118 0v6m0 0h-2a2 2 0 01-2-2v-2a2 2 0 012-2h2m-16 0h2a2 2 0 012 2v2a2 2 0 01-2 2H3" />
-        </svg>
-      );
-    case "tag":
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.83zM7 7h.01" />
-        </svg>
-      );
-    default:
-      return null;
-  }
 }

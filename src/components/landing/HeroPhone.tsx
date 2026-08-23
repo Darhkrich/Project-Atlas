@@ -1,79 +1,442 @@
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+
+const serviceItems: {
+  label: string;
+  icon: AtlasIconName;
+  iconBg: string;
+  iconColor: string;
+}[] = [
+  {
+    label: "Airtime",
+    icon: "phone",
+    iconBg: "bg-amber-50",
+    iconColor: "text-amber-500",
+  },
+  {
+    label: "Data",
+    icon: "globe",
+    iconBg: "bg-emerald-50",
+    iconColor: "text-emerald-600",
+  },
+  {
+    label: "ECG",
+    icon: "zap",
+    iconBg: "bg-orange-50",
+    iconColor: "text-orange-500",
+  },
+  {
+    label: "Results Checker",
+    icon: "graduation",
+    iconBg: "bg-sky-50",
+    iconColor: "text-sky-700",
+  },
+];
+
+const transactions: {
+  name: string;
+  amount: string;
+  status: string;
+  time: string;
+  positive: boolean;
+  icon: AtlasIconName;
+  iconBg: string;
+  iconColor: string;
+}[] = [
+  {
+    name: "MTN Airtime",
+    amount: "+₵50.00",
+    status: "Successful",
+    time: "Today, 8:42 AM",
+    positive: true,
+    icon: "phone",
+    iconBg: "bg-amber-50",
+    iconColor: "text-amber-500",
+  },
+  {
+    name: "Data Bundle 5GB",
+    amount: "-₵40.00",
+    status: "Successful",
+    time: "Today, 8:41 AM",
+    positive: false,
+    icon: "globe",
+    iconBg: "bg-indigo-50",
+    iconColor: "text-indigo-600",
+  },
+  {
+    name: "ECG Payment",
+    amount: "-₵100.00",
+    status: "Successful",
+    time: "May 12, 2024",
+    positive: false,
+    icon: "zap",
+    iconBg: "bg-sky-50",
+    iconColor: "text-sky-600",
+  },
+];
+
 export function HeroPhone() {
   return (
-    <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-      <div className="relative w-[210px] h-[435px] rounded-[36px] bg-neutral-900 p-[6px] shadow-[0_20px_50px_rgba(0,0,0,0.15)]">
-        <div className="relative h-full w-full overflow-hidden rounded-[30px] bg-[#003D2E]">
-          {/* Dynamic island */}
-          <div className="absolute top-0 left-1/2 h-5 w-20 -translate-x-1/2 rounded-b-xl bg-neutral-900" />
-          {/* Status bar */}
-          <div className="flex items-center justify-between px-4 pt-2 text-[8px] text-white">
-            <span>9:31</span>
-            <span className="flex items-center gap-1">
-              <svg className="h-2 w-2" fill="currentColor" viewBox="0 0 24 24"><path d="M2 22h20v2H2z"/></svg>
-              <svg className="h-2 w-2" fill="currentColor" viewBox="0 0 24 24"><path d="M2 16h20v6H2z"/></svg>
-              <svg className="h-2 w-2" fill="currentColor" viewBox="0 0 24 24"><path d="M2 10h20v6H2z"/></svg>
-              <svg className="h-2 w-2" fill="currentColor" viewBox="0 0 24 24"><path d="M2 4h20v6H2z"/></svg>
-            </span>
+    <div className="absolute left-1/3 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+      {/* iPhone outer frame */}
+      <div
+        className="
+          relative
+          h-[435px]
+          w-[210px]
+          rounded-[40px]
+          bg-[#111111]
+          p-[4px]
+          shadow-[0_24px_55px_rgba(0,0,0,0.30)]
+        "
+      >
+        {/* Subtle outer frame highlight */}
+        <div className="pointer-events-none absolute inset-[1px] rounded-[39px] border border-white/20" />
+
+        {/* Phone screen */}
+        <div
+          className="
+            relative
+            h-full
+            w-full
+            overflow-hidden
+            rounded-[36px]
+            bg-white
+          "
+        >
+          {/* =========================================================
+              GREEN TOP SECTION
+              ========================================================= */}
+          <div
+            className="
+              absolute
+              inset-x-0
+              top-0
+              h-[166px]
+              bg-gradient-to-br
+              from-[#07503a]
+              via-[#06432f]
+              to-[#022d21]
+            "
+          />
+
+          {/* Soft green glow behind wallet */}
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -right-8
+              top-[80px]
+              h-[95px]
+              w-[95px]
+              rounded-full
+              bg-emerald-400/10
+              blur-2xl
+            "
+          />
+
+          {/* =========================================================
+              DYNAMIC ISLAND / NOTCH
+              ========================================================= */}
+          <div
+            className="
+              absolute
+              left-1/2
+              top-0
+              z-30
+              h-[20px]
+              w-[76px]
+              -translate-x-1/2
+              rounded-b-[15px]
+              bg-black
+            "
+          >
+            <div className="absolute right-[14px] top-[6px] h-[5px] w-[5px] rounded-full bg-[#101b1b]" />
           </div>
 
-          {/* App header */}
-          <div className="flex items-center justify-between px-4 mt-3">
-            <span className="text-[10px] font-semibold text-white">ATLAS</span>
-            <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </div>
+          {/* =========================================================
+              STATUS BAR
+              ========================================================= */}
+          <div className="relative z-10 flex items-center justify-between px-[18px] pt-[10px] text-[7px] font-semibold text-white/95">
+            <span>13.51</span>
 
-          {/* Greeting */}
-          <div className="px-4 mt-3">
-            <div className="text-[9px] text-white/80">Good morning,</div>
-            <div className="text-[13px] font-semibold text-white">Emmanuel 👋</div>
-          </div>
+            <div className="flex items-center gap-[4px]">
+              {/* Signal */}
+              <div className="flex h-[7px] items-end gap-[1px]">
+                <span className="h-[2px] w-[1.5px] rounded-full bg-white" />
+                <span className="h-[3.5px] w-[1.5px] rounded-full bg-white" />
+                <span className="h-[5px] w-[1.5px] rounded-full bg-white" />
+                <span className="h-[6.5px] w-[1.5px] rounded-full bg-white" />
+              </div>
 
-          {/* Wallet card */}
-          <div className="mx-3 mt-3 rounded-lg bg-[#005542] p-3">
-            <div className="text-[8px] text-white/70">Wallet Balance</div>
-            <div className="flex items-center justify-between">
-              <span className="text-[16px] font-bold text-white">₵ 1,250.50</span>
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20 text-white text-[10px]">+</span>
+              {/* WiFi */}
+              <svg
+                className="h-[7px] w-[7px]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+              >
+                <path d="M3 8.5C8.2 4.2 15.8 4.2 21 8.5" />
+                <path d="M6.5 12C10 9.2 14 9.2 17.5 12" />
+                <path d="M10 15.5C11.2 14.5 12.8 14.5 14 15.5" />
+              </svg>
+
+              {/* Battery */}
+              <div className="relative h-[6px] w-[11px] rounded-[1.5px] border border-white/80 p-[1px]">
+                <div className="h-full w-full rounded-[0.5px] bg-white" />
+                <span className="absolute -right-[2px] top-[1.5px] h-[2px] w-[1px] rounded-r bg-white/80" />
+              </div>
             </div>
           </div>
 
-          {/* Service grid */}
-          <div className="grid grid-cols-2 gap-2 px-3 mt-3">
-            {[
-              { label: "Airtime", icon: "📱", color: "bg-yellow-100" },
-              { label: "Data", icon: "🌐", color: "bg-green-100" },
-              { label: "ECG", icon: "⚡", color: "bg-orange-100" },
-              { label: "Results", icon: "🎓", color: "bg-purple-100" },
-            ].map((service) => (
-              <div key={service.label} className={`rounded-lg ${service.color} p-2`}>
-                <span className="text-[10px]">{service.icon}</span>
-                <div className="text-[8px] font-medium text-neutral-800 mt-1">{service.label}</div>
+          {/* =========================================================
+              APP HEADER
+              ========================================================= */}
+          <div className="relative z-10 mt-[14px] flex items-center justify-between px-[15px]">
+            {/* Atlas logo */}
+            <div className="flex items-center gap-[5px]">
+              <div className="flex items-center justify-center">
+                <span
+                  className="
+                    text-[18px]
+                    font-medium
+                    leading-none
+                    tracking-[-1.5px]
+                    text-white
+                  "
+                >
+                  A
+                </span>
+              </div>
+
+              <span className="text-[10px] font-semibold tracking-[0.8px] text-white">
+                ATLAS
+              </span>
+            </div>
+
+            {/* Menu + notification */}
+            <div className="flex items-center gap-[12px]">
+              <AtlasIcon
+                name="menu"
+                className="h-[13px] w-[13px] text-white"
+              />
+
+              <div className="relative">
+                <AtlasIcon
+                  name="bell"
+                  className="h-[13px] w-[13px] text-white"
+                />
+
+                <span
+                  className="
+                    absolute
+                    -right-[2px]
+                    -top-[2px]
+                    h-[5px]
+                    w-[5px]
+                    rounded-full
+                    bg-orange-400
+                    ring-[1px]
+                    ring-[#07503a]
+                  "
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* =========================================================
+              GREETING
+              ========================================================= */}
+          <div className="relative z-10 mt-[17px] px-[15px]">
+            <p className="text-[8px] font-normal leading-none text-white/75">
+              Good morning,
+            </p>
+
+            <p className="mt-[3px] flex items-center gap-[3px] text-[12px] font-bold leading-none text-white">
+              Emmanuel
+              <span className="text-[9px]">👋</span>
+            </p>
+          </div>
+
+          {/* =========================================================
+              WALLET BALANCE
+              ========================================================= */}
+          <div
+            className="
+              relative
+              z-20
+              mx-[11px]
+              mt-[12px]
+              rounded-[14px]
+              border
+              border-white/10
+              bg-gradient-to-br
+              from-[#10533d]
+              to-[#063726]
+              px-[12px]
+              py-[10px]
+              shadow-[0_8px_20px_rgba(0,0,0,0.16)]
+            "
+          >
+            <p className="text-[7px] font-medium text-white/65">
+              Wallet Balance
+            </p>
+
+            <div className="mt-[2px] flex items-center justify-between">
+              <span className="text-[15px] font-semibold tracking-[-0.4px] text-white">
+                ₵ 1,250.50
+              </span>
+
+              <button
+                type="button"
+                aria-label="Add money"
+                className="
+                  flex
+                  h-[24px]
+                  w-[24px]
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-white
+                  text-[17px]
+                  font-normal
+                  leading-none
+                  text-[#174738]
+                  shadow-sm
+                "
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {/* =========================================================
+              MAIN WHITE DASHBOARD AREA
+              ========================================================= */}
+          <div className="absolute inset-x-0 bottom-0 top-[159px] rounded-t-[18px] bg-[#fafafa]" />
+
+          {/* =========================================================
+              SERVICE GRID
+              ========================================================= */}
+          <div className="relative z-10 mt-[10px] grid grid-cols-2 gap-[8px] px-[11px]">
+            {serviceItems.map((service) => (
+              <div
+                key={service.label}
+                className="
+                  flex
+                  min-h-[49px]
+                  items-center
+                  gap-[8px]
+                  rounded-[11px]
+                  border
+                  border-black/[0.025]
+                  bg-white
+                  px-[10px]
+                  shadow-[0_2px_8px_rgba(0,0,0,0.035)]
+                "
+              >
+                <div
+                  className={`
+                    flex
+                    h-[27px]
+                    w-[27px]
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    ${service.iconBg}
+                    ${service.iconColor}
+                  `}
+                >
+                  <AtlasIcon
+                    name={service.icon}
+                    className="h-[13px] w-[13px]"
+                  />
+                </div>
+
+                <span className="text-[8px] font-semibold leading-[1.15] text-[#242424]">
+                  {service.label}
+                </span>
               </div>
             ))}
           </div>
 
-          {/* Transactions */}
-          <div className="px-3 mt-3">
+          {/* =========================================================
+              RECENT TRANSACTIONS
+              ========================================================= */}
+          <div className="relative z-10 mt-[14px] px-[14px]">
+            {/* Section header */}
             <div className="flex items-center justify-between">
-              <span className="text-[8px] font-semibold text-white">Recent Transactions</span>
-              <span className="text-[7px] text-white/60">View all</span>
+              <span className="text-[8px] font-bold text-[#252525]">
+                Recent Transactions
+              </span>
+
+              <span className="text-[7px] font-medium text-[#52645d]">
+                View all
+              </span>
             </div>
-            <div className="mt-2 space-y-1.5">
-              {[
-                { name: "MTN Airtime", amount: "+₵50.00", status: "Successful", time: "Today, 8:42 AM", positive: true },
-                { name: "Data Bundle 5GB", amount: "-₵40.00", status: "Successful", time: "Today, 8:41 AM", positive: false },
-                { name: "ECG Payment", amount: "-₵100.00", status: "Successful", time: "May 12, 2024", positive: false },
-              ].map((tx) => (
-                <div key={tx.name} className="flex items-center justify-between rounded-md bg-white/10 px-2 py-1">
-                  <div>
-                    <div className="text-[7px] font-medium text-white">{tx.name}</div>
-                    <div className="text-[6px] text-white/60">{tx.time}</div>
+
+            {/* Transaction list */}
+            <div className="mt-[7px] divide-y divide-[#eeeeee]">
+              {transactions.map((tx) => (
+                <div
+                  key={tx.name}
+                  className="
+                    flex
+                    min-h-[46px]
+                    items-center
+                    justify-between
+                    bg-white
+                    py-[6px]
+                  "
+                >
+                  {/* Left side */}
+                  <div className="flex min-w-0 items-center gap-[8px]">
+                    <div
+                      className={`
+                        flex
+                        h-[24px]
+                        w-[24px]
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        ${tx.iconBg}
+                        ${tx.iconColor}
+                      `}
+                    >
+                      <AtlasIcon
+                        name={tx.icon}
+                        className="h-[11px] w-[11px]"
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-[7.5px] font-semibold text-[#303030]">
+                        {tx.name}
+                      </p>
+
+                      <p className="mt-[2px] text-[6px] font-normal text-[#a1a1a1]">
+                        {tx.status}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-[7px] font-semibold ${tx.positive ? "text-green-300" : "text-white"}`}>{tx.amount}</div>
-                    <div className="text-[6px] text-white/60">{tx.status}</div>
+
+                  {/* Right side */}
+                  <div className="ml-2 shrink-0 text-right">
+                    <p
+                      className={`
+                        text-[7.5px]
+                        font-bold
+                        ${tx.positive ? "text-[#398a65]" : "text-[#303030]"}
+                      `}
+                    >
+                      {tx.amount}
+                    </p>
+
+                    <p className="mt-[2px] text-[6px] font-normal text-[#a1a1a1]">
+                      {tx.time}
+                    </p>
                   </div>
                 </div>
               ))}

@@ -2,14 +2,15 @@ import Image from "next/image";
 import { AtlasContainer } from "@/components/atlas/atlas-container";
 
 const partners = [
-  { name: "Airtel", color: "#ED1C24", initials: "A", src: "/images/partners/airtel.png" },
-  { name: "MTN", color: "#FFCB05", initials: "M", src: "/images/partners/mtn.png" },
-  { name: "Glo", color: "#00A651", initials: "G", src: "/images/partners/glo.png" },
-  { name: "9mobile", color: "#00713D", initials: "9", src: "/images/partners/9mobile.png" },
-  { name: "AEDC", color: "#0072BC", initials: "A", src: "/images/partners/aedc.png" },
-  { name: "DSTV", color: "#001E60", initials: "D", src: "/images/partners/dstv.png" },
-  { name: "GOtv", color: "#E30613", initials: "G", src: "/images/partners/gotv.png" },
-  { name: "StarTimes", color: "#005BAC", initials: "S", src: "/images/partners/startimes.png" },
+  { name: "Airtel", color: "#ED1C24", initials: "A", src: "/airteltigo2.jpg" },
+  { name: "MTN", color: "#FFCB05", initials: "M", src: "/mtn4.jpg" },
+  { name: "Telecel", color: "#00A651", initials: "T", src: "/telecel3.jpg" },
+  { name: "DSTV", color: "#001E60", initials: "D", src: "/dstv1.jpg" },
+  { name: "GOtv", color: "#E30613", initials: "G", src: "/gotv4.jpeg" },
+  { name: "StarTimes", color: "#005BAC", initials: "S", src: "/startimes3.jpg" },
+  { name: "ECG", color: "#0072BC", initials: "E", src: "/ECG1.webp" },
+  { name: "WAEC", color: "#00713D", initials: "W", src: "/waec3.jpg" },
+ 
 ];
 
 export function TrustMockupSection() {

@@ -87,7 +87,7 @@ export const serviceDetails: Record<string, AtlasServiceDetails> = {
     options: [
       {
         title: "Supported networks",
-        items: ["MTN", "Vodafone", "AirtelTigo"],
+        items: ["MTN", "Telecel", "AirtelTigo"],
       },
       {
         title: "Popular amounts",
@@ -149,7 +149,7 @@ export const serviceDetails: Record<string, AtlasServiceDetails> = {
     options: [
       {
         title: "Supported networks",
-        items: ["MTN", "Vodafone", "AirtelTigo"],
+        items: ["MTN", "Telecel", "AirtelTigo"],
       },
       {
         title: "Bundle categories",
