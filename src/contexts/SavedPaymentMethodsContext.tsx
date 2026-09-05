@@ -1,134 +1,89 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useAuth } from "@/contexts/auth-context";
 
-export type SavedPaymentMethod = {
+type SavedPaymentMethod = {
+  isDefault?: import("react").JSX.Element;
   id: string;
   methodId: string;
   label: string;
   details: Record<string, string>;
-  dateAdded: string;
-  isDefault: boolean;
 };
 
-type SavedPaymentMethodsContextType = {
+interface SavedPaymentMethodsContextType {
   savedMethods: SavedPaymentMethod[];
   addSavedMethod: (
     methodId: string,
     label: string,
-    details: Record<string, string>,
+    details: Record<string, string>
   ) => void;
-  updateSavedMethod: (
-    id: string,
-    label: string,
-    details: Record<string, string>,
-  ) => void;
-  deleteSavedMethod: (id: string) => void;
-  setDefaultMethod: (id: string) => void;
-  isMethodSaved: (methodId: string, details: Record<string, string>) => boolean;
-};
-
-const SavedPaymentMethodsContext = createContext<SavedPaymentMethodsContextType>({
-  savedMethods: [],
-  addSavedMethod: () => {},
-  updateSavedMethod: () => {},
-  deleteSavedMethod: () => {},
-  setDefaultMethod: () => {},
-  isMethodSaved: () => false,
-});
-
-export function useSavedPaymentMethods() {
-  return useContext(SavedPaymentMethodsContext);
+  isMethodSaved: (methodId: string) => boolean;
 }
 
-const STORAGE_KEY = "atlas-saved-payment-methods";
+const SavedPaymentMethodsContext = createContext<
+  SavedPaymentMethodsContextType | undefined
+>(undefined);
+
+const STORAGE_KEY = "atlas-saved-payment-methods"; // will be scoped per user
 
 export function SavedPaymentMethodsProvider({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [savedMethods, setSavedMethods] = useState<SavedPaymentMethod[]>([]);
+  const { user } = useAuth();
+  const [allMethods, setAllMethods] = useState<Record<string, SavedPaymentMethod[]>>({});
+  const [loaded, setLoaded] = useState(false);
 
+  // Load all methods from storage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        setSavedMethods(JSON.parse(stored));
-      } catch {
-        // ignore
-      }
+        setAllMethods(JSON.parse(stored));
+      } catch {}
     }
+    setLoaded(true);
   }, []);
 
-  const persist = (methods: SavedPaymentMethod[]) => {
-    setSavedMethods(methods);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(methods));
-  };
+  // Persist whenever allMethods changes
+  useEffect(() => {
+    if (loaded) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allMethods));
+    }
+  }, [allMethods, loaded]);
+
+  const userKey = user?.email || "guest";
+
+  const savedMethods = allMethods[userKey] || [];
 
   const addSavedMethod = (
     methodId: string,
     label: string,
-    details: Record<string, string>,
+    details: Record<string, string>
   ) => {
-    const newMethod: SavedPaymentMethod = {
-      id: `spm-${Date.now()}`,
-      methodId,
-      label,
-      details,
-      dateAdded: new Date().toISOString(),
-      isDefault: savedMethods.length === 0, // first is default
-    };
-    persist([newMethod, ...savedMethods]);
+    setAllMethods((prev) => {
+      const existingUserMethods = prev[userKey] || [];
+      // Avoid duplicate methods (same methodId)
+      const filtered = existingUserMethods.filter((m) => m.methodId !== methodId);
+      const newMethod: SavedPaymentMethod = {
+        id: `spm-${Date.now()}`,
+        methodId,
+        label,
+        details,
+        isDefault: undefined
+      };
+      return {
+        ...prev,
+        [userKey]: [...filtered, newMethod],
+      };
+    });
   };
 
-  const updateSavedMethod = (
-    id: string,
-    label: string,
-    details: Record<string, string>,
-  ) => {
-    persist(
-      savedMethods.map((m) =>
-        m.id === id ? { ...m, label, details } : m,
-      ),
-    );
-  };
-
-  const deleteSavedMethod = (id: string) => {
-    const remaining = savedMethods.filter((m) => m.id !== id);
-    if (
-      remaining.length > 0 &&
-      !remaining.some((m) => m.isDefault)
-    ) {
-      remaining[0] = { ...remaining[0], isDefault: true };
-    }
-    persist(remaining);
-  };
-
-  const setDefaultMethod = (id: string) => {
-    persist(
-      savedMethods.map((m) => ({
-        ...m,
-        isDefault: m.id === id,
-      })),
-    );
-  };
-
-  const isMethodSaved = (methodId: string, details: Record<string, string>) => {
-    return savedMethods.some(
-      (m) =>
-        m.methodId === methodId &&
-        Object.keys(details).every(
-          (key) => m.details[key] === details[key],
-        ),
-    );
+  const isMethodSaved = (methodId: string) => {
+    return savedMethods.some((m) => m.methodId === methodId);
   };
 
   return (
@@ -136,13 +91,20 @@ export function SavedPaymentMethodsProvider({
       value={{
         savedMethods,
         addSavedMethod,
-        updateSavedMethod,
-        deleteSavedMethod,
-        setDefaultMethod,
         isMethodSaved,
       }}
     >
       {children}
     </SavedPaymentMethodsContext.Provider>
   );
+}
+
+export function useSavedPaymentMethods() {
+  const context = useContext(SavedPaymentMethodsContext);
+  if (!context) {
+    throw new Error(
+      "useSavedPaymentMethods must be used within SavedPaymentMethodsProvider"
+    );
+  }
+  return context;
 }

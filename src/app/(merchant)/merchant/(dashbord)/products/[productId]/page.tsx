@@ -1,12 +1,16 @@
-/* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { AtlasIcon } from "@/components/atlas/icons";
+import { Button } from "@/components/atlas/button";
+import { useStorefrontConfig } from "@/contexts/storefront-config-context";
+import { useStoreProducts } from "@/contexts/store-products-context";
 import { cn } from "@/lib/utils";
-import { mockMerchantProducts } from "@/lib/mock-merchant-products";
 
 const categories = [
   "Skincare",
@@ -21,39 +25,46 @@ export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
   const productId = params.productId as string;
-
-  const product = mockMerchantProducts.find((p) => p.id === productId);
+  const { storefrontConfig } = useStorefrontConfig();
+  const { getProductsForStore, updateProduct } = useStoreProducts();
+  const storeSlug = storefrontConfig.slug || "my-store";
+  const product = getProductsForStore(storeSlug).find((p) => p.id === productId);
 
   const [formData, setFormData] = useState({
-    name: product?.name || "",
-    description: "", // mock data doesn't include description, so default empty
-    category: product?.category || "",
-    price: product?.price.replace("GH₵ ", "") || "",
+    name: "",
+    description: "",
+    category: "",
+    price: "",
     salePrice: "",
-    sku: product?.sku || "",
-    stock: product?.stock?.toString() || "",
-    status: product?.status || "Active",
+    sku: "",
+    stock: "",
+    status: "Active",
+    image: "",
   });
-
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name: product.name,
+        description: product.description,
+        category: product.categoryId,
+        price: product.price.toString(),
+        salePrice: product.salePrice?.toString() || "",
+        sku: product.sku || "",
+        stock: product.inStock ? "1" : "0",
+        status: product.status || "Active",
+        image: product.images?.[0] || "",
+      });
+    }
+  }, [product]);
 
   if (!product) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
-          <AtlasIcon name="alert" className="h-8 w-8 text-neutral-500" />
-        </div>
-        <h1 className="mt-4 text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-          Product not found
-        </h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          The product you're looking for doesn't exist or has been removed.
-        </p>
-        <Link
-          href="/merchant/products"
-          className="mt-4 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
+        <h1 className="text-xl font-semibold text-neutral-900">Product not found</h1>
+        <Link href="/merchant/products" className="mt-4 text-brand-600">
           Back to Products
         </Link>
       </div>
@@ -65,8 +76,17 @@ export default function EditProductPage() {
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({ ...prev, image: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -84,23 +104,30 @@ export default function EditProductPage() {
     e.preventDefault();
     if (!validate()) return;
     setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      router.push("/merchant/products");
-    }, 1000);
+    updateProduct(storeSlug, productId, {
+      name: formData.name,
+      description: formData.description,
+      price: parseFloat(formData.price),
+      salePrice: formData.salePrice ? parseFloat(formData.salePrice) : undefined,
+      images: formData.image ? [formData.image] : ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&h=800&fit=crop"],
+      categoryId: formData.category,
+      inStock: parseInt(formData.stock) > 0,
+      status: formData.status as "Active" | "Draft" | "Archived",
+      sku: formData.sku,
+    });
+    setIsSubmitting(false);
+    router.push("/merchant/products");
   };
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
             Edit Product
           </h1>
           <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Update product details for your store.
+            Update product details.
           </p>
         </div>
         <Link
@@ -114,7 +141,6 @@ export default function EditProductPage() {
 
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main form area */}
           <div className="lg:col-span-2 space-y-6">
             <div className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
               <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -122,41 +148,65 @@ export default function EditProductPage() {
               </h2>
               <div className="mt-4 space-y-5">
                 <div>
-                  <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                     Product name <span className="text-danger-500">*</span>
                   </label>
                   <input
-                    id="name"
                     name="name"
-                    type="text"
                     value={formData.name}
                     onChange={handleChange}
                     placeholder="e.g., Vitamin C Face Serum"
                     className={cn(
-                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder-neutral-500",
-                      errors.name
-                        ? "border-danger-500 focus:border-danger-500 focus:ring-danger-200"
-                        : "border-neutral-300 focus:border-brand-500 focus:ring-brand-200 dark:border-neutral-700 dark:focus:border-brand-500 dark:focus:ring-brand-900"
+                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100",
+                      errors.name ? "border-danger-500" : "border-neutral-300"
                     )}
                   />
-                  {errors.name && (
-                    <p className="mt-1 text-xs text-danger-600">{errors.name}</p>
-                  )}
+                  {errors.name && <p className="mt-1 text-xs text-danger-600">{errors.name}</p>}
                 </div>
-
                 <div>
-                  <label htmlFor="description" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                     Description
                   </label>
                   <textarea
-                    id="description"
                     name="description"
                     value={formData.description}
                     onChange={handleChange}
                     rows={4}
                     placeholder="Describe the product..."
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder-neutral-500 dark:focus:ring-brand-900 resize-none"
+                    className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
                   />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Product Image
+                  </label>
+                  <div className="mt-1 flex items-center gap-3">
+                    {formData.image && (
+                      <img
+                        src={formData.image}
+                        alt="Preview"
+                        className="h-20 w-20 rounded-lg object-cover"
+                      />
+                    )}
+                    <label className="cursor-pointer rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-800">
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                    {formData.image && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, image: "" }))}
+                        className="text-xs text-danger-600 hover:text-danger-700"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -167,61 +217,53 @@ export default function EditProductPage() {
               </h2>
               <div className="mt-4 grid gap-5 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="price" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Price <span className="text-danger-500">*</span>
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Price (GH₵) <span className="text-danger-500">*</span>
                   </label>
                   <input
-                    id="price"
                     name="price"
-                    type="text"
+                    type="number"
+                    step="0.01"
                     value={formData.price}
                     onChange={handleChange}
-                    placeholder="GH₵ 0.00"
+                    placeholder="0.00"
                     className={cn(
-                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder-neutral-500",
-                      errors.price
-                        ? "border-danger-500 focus:border-danger-500 focus:ring-danger-200"
-                        : "border-neutral-300 focus:border-brand-500 focus:ring-brand-200 dark:border-neutral-700 dark:focus:border-brand-500 dark:focus:ring-brand-900"
+                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100",
+                      errors.price ? "border-danger-500" : "border-neutral-300"
                     )}
                   />
                   {errors.price && <p className="mt-1 text-xs text-danger-600">{errors.price}</p>}
                 </div>
                 <div>
-                  <label htmlFor="salePrice" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Sale price (optional)
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Sale Price (optional)
                   </label>
                   <input
-                    id="salePrice"
                     name="salePrice"
-                    type="text"
+                    type="number"
+                    step="0.01"
                     value={formData.salePrice}
                     onChange={handleChange}
-                    placeholder="GH₵ 0.00"
-                    className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder-neutral-500 dark:focus:ring-brand-900"
+                    placeholder="0.00"
+                    className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
                   />
                 </div>
                 <div>
-                  <label htmlFor="sku" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
                     SKU
                   </label>
                   <input
-                    id="sku"
                     name="sku"
-                    type="text"
                     value={formData.sku}
                     readOnly
                     className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400 cursor-not-allowed"
                   />
-                  <p className="mt-1 text-xs text-neutral-500">
-                    SKU cannot be changed.
-                  </p>
                 </div>
                 <div>
-                  <label htmlFor="stock" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Stock quantity <span className="text-danger-500">*</span>
+                  <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Stock Quantity <span className="text-danger-500">*</span>
                   </label>
                   <input
-                    id="stock"
                     name="stock"
                     type="number"
                     min="0"
@@ -229,10 +271,8 @@ export default function EditProductPage() {
                     onChange={handleChange}
                     placeholder="0"
                     className={cn(
-                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100 dark:placeholder-neutral-500",
-                      errors.stock
-                        ? "border-danger-500 focus:border-danger-500 focus:ring-danger-200"
-                        : "border-neutral-300 focus:border-brand-500 focus:ring-brand-200 dark:border-neutral-700 dark:focus:border-brand-500 dark:focus:ring-brand-900"
+                      "w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100",
+                      errors.stock ? "border-danger-500" : "border-neutral-300"
                     )}
                   />
                   {errors.stock && <p className="mt-1 text-xs text-danger-600">{errors.stock}</p>}
@@ -241,7 +281,6 @@ export default function EditProductPage() {
             </div>
           </div>
 
-          {/* Sidebar area */}
           <div className="space-y-6">
             <div className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
               <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -253,9 +292,7 @@ export default function EditProductPage() {
                 onChange={handleChange}
                 className={cn(
                   "mt-3 w-full rounded-lg border bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:ring-2 dark:bg-neutral-950 dark:text-neutral-100",
-                  errors.category
-                    ? "border-danger-500 focus:border-danger-500 focus:ring-danger-200"
-                    : "border-neutral-300 focus:border-brand-500 focus:ring-brand-200 dark:border-neutral-700 dark:focus:border-brand-500 dark:focus:ring-brand-900"
+                  errors.category ? "border-danger-500" : "border-neutral-300"
                 )}
               >
                 <option value="">Select category</option>
@@ -297,30 +334,9 @@ export default function EditProductPage() {
                 </button>
               </div>
             </div>
-
-            <div className="rounded-xl border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
-              <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                Product Images
-              </h2>
-              <div className="mt-3">
-                <div className="flex items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 p-6 dark:border-neutral-700 dark:bg-neutral-950">
-                  <div className="text-center">
-                    <AtlasIcon name="image" className="mx-auto h-8 w-8 text-neutral-400" />
-                    <p className="mt-2 text-sm text-neutral-500">Drag & drop images here</p>
-                    <button
-                      type="button"
-                      className="mt-3 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                    >
-                      Upload
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Sticky action bar */}
         <div className="sticky bottom-0 mt-6 rounded-xl border border-neutral-200 bg-white p-4 shadow-md dark:border-neutral-800 dark:bg-neutral-900 lg:static lg:shadow-none lg:border-0 lg:bg-transparent lg:p-0 lg:mt-8 flex items-center justify-end gap-3">
           <Link
             href="/merchant/products"

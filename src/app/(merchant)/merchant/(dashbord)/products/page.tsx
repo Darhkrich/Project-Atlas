@@ -1,40 +1,56 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { AtlasIcon } from "@/components/atlas/icons";
-import { mockMerchantProducts } from "@/lib/mock-merchant-products";
+import { useStorefrontConfig } from "@/contexts/storefront-config-context";
+import { useStoreProducts } from "@/contexts/store-products-context";
+import { getProductsForStore as getStaticProducts } from "@/lib/store-products";
 import { cn } from "@/lib/utils";
 
 export default function MerchantProductsPage() {
-  const [products, setProducts] = useState(mockMerchantProducts);
+  const { storefrontConfig } = useStorefrontConfig();
+  const { getProductsForStore, seedProducts, deleteProduct } = useStoreProducts();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  const storeSlug = storefrontConfig.slug || "my-store";
+  const products = getProductsForStore(storeSlug);
+
+  useEffect(() => {
+    if (products.length === 0) {
+      const defaults = getStaticProducts(storefrontConfig.templateCategory);
+      if (defaults.length > 0) {
+        seedProducts(storeSlug, defaults);
+      }
+    }
+  }, [storeSlug, products.length, storefrontConfig.templateCategory, seedProducts]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch =
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus =
-        statusFilter === "All" || product.status === statusFilter;
+        statusFilter === "All" || (product.status || "Active") === statusFilter;
       const matchesCategory =
-        categoryFilter === "All" || product.category === categoryFilter;
+        categoryFilter === "All" || product.categoryId === categoryFilter;
       return matchesSearch && matchesStatus && matchesCategory;
     });
   }, [products, searchTerm, statusFilter, categoryFilter]);
 
   const categories = useMemo(() => {
-    const cats = new Set(products.map((p) => p.category));
+    const cats = new Set(products.map((p) => p.categoryId));
     return ["All", ...Array.from(cats)];
   }, [products]);
 
   const handleDelete = () => {
     if (deleteTarget) {
-      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget));
+      deleteProduct(storeSlug, deleteTarget);
       setDeleteTarget(null);
       setShowDeleteModal(false);
     }
@@ -71,19 +87,10 @@ export default function MerchantProductsPage() {
             placeholder="Search products..."
             className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-2 pl-10 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder-neutral-500"
           />
-          <svg
+          <AtlasIcon
+            name="search"
             className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
+          />
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -153,45 +160,51 @@ export default function MerchantProductsPage() {
                 >
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-lg dark:bg-neutral-800">
-                        {product.image}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 overflow-hidden dark:bg-neutral-800">
+                        <img
+                          src={product.images[0]}
+                          alt={product.name}
+                          className="h-full w-full object-cover"
+                        />
                       </div>
                       <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                         {product.name}
                       </span>
                     </div>
                   </td>
-                  <td className="px-5 py-4 text-sm text-neutral-500">{product.sku}</td>
-                  <td className="px-5 py-4 text-sm text-neutral-500">{product.category}</td>
+                  <td className="px-5 py-4 text-sm text-neutral-500">
+                    {product.sku || "—"}
+                  </td>
+                  <td className="px-5 py-4 text-sm text-neutral-500">
+                    {product.categoryId}
+                  </td>
                   <td className="px-5 py-4 text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                    {product.price}
+                    GH₵ {(product.salePrice || product.price).toFixed(2)}
                   </td>
                   <td className="px-5 py-4">
                     <span
                       className={cn(
                         "text-sm font-medium",
-                        product.stock === 0
+                        !product.inStock
                           ? "text-danger-600"
-                          : product.stock < 10
-                          ? "text-warning-600"
                           : "text-neutral-700 dark:text-neutral-300"
                       )}
                     >
-                      {product.stock === 0 ? "Out of stock" : `${product.stock} in stock`}
+                      {product.inStock ? "In Stock" : "Out of Stock"}
                     </span>
                   </td>
                   <td className="px-5 py-4">
                     <span
                       className={cn(
                         "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1",
-                        product.status === "Active"
+                        (product.status || "Active") === "Active"
                           ? "bg-success-50 text-success-700 ring-success-200 dark:bg-success-900/30 dark:text-success-200 dark:ring-success-800"
-                          : product.status === "Draft"
+                          : (product.status || "Active") === "Draft"
                           ? "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/30 dark:text-warning-200 dark:ring-warning-800"
                           : "bg-neutral-100 text-neutral-600 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700"
                       )}
                     >
-                      {product.status}
+                      {product.status || "Active"}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-right">
@@ -236,47 +249,49 @@ export default function MerchantProductsPage() {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-2xl dark:bg-neutral-800">
-                    {product.image}
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral-100 overflow-hidden dark:bg-neutral-800">
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                    />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                       {product.name}
                     </p>
-                    <p className="text-xs text-neutral-500">{product.sku}</p>
+                    <p className="text-xs text-neutral-500">{product.sku || "—"}</p>
                   </div>
                 </div>
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1",
-                    product.status === "Active"
+                    (product.status || "Active") === "Active"
                       ? "bg-success-50 text-success-700 ring-success-200 dark:bg-success-900/30 dark:text-success-200 dark:ring-success-800"
-                      : product.status === "Draft"
+                      : (product.status || "Active") === "Draft"
                       ? "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/30 dark:text-warning-200 dark:ring-warning-800"
                       : "bg-neutral-100 text-neutral-600 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700"
                   )}
                 >
-                  {product.status}
+                  {product.status || "Active"}
                 </span>
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                    {product.price}
+                    GH₵ {(product.salePrice || product.price).toFixed(2)}
                   </p>
-                  <p className="text-xs text-neutral-500">{product.category}</p>
+                  <p className="text-xs text-neutral-500">{product.categoryId}</p>
                 </div>
                 <p
                   className={cn(
                     "text-sm font-medium",
-                    product.stock === 0
+                    !product.inStock
                       ? "text-danger-600"
-                      : product.stock < 10
-                      ? "text-warning-600"
                       : "text-neutral-700 dark:text-neutral-300"
                   )}
                 >
-                  {product.stock === 0 ? "Out of stock" : `${product.stock} left`}
+                  {product.inStock ? "In Stock" : "Out of Stock"}
                 </p>
               </div>
               <div className="mt-3 flex gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
@@ -318,7 +333,7 @@ export default function MerchantProductsPage() {
                   Delete product?
                 </h3>
                 <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  This action cannot be undone. The product will be permanently removed from your store.
+                  This action cannot be undone.
                 </p>
               </div>
             </div>

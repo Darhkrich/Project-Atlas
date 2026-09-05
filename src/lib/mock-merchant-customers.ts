@@ -1,5 +1,6 @@
 export type MerchantCustomer = {
   id: string;
+  storeSlug: string;
   name: string;
   email: string;
   phone: string;
@@ -9,7 +10,7 @@ export type MerchantCustomer = {
   status: "Active" | "Inactive";
 };
 
-export const mockMerchantCustomers: MerchantCustomer[] = [
+const baseCustomers: Omit<MerchantCustomer, "storeSlug">[] = [
   {
     id: "cust1",
     name: "Abena Owusu",
@@ -60,34 +61,8 @@ export const mockMerchantCustomers: MerchantCustomer[] = [
     lastActivity: "2 weeks ago",
     status: "Inactive",
   },
-  {
-    id: "cust6",
-    name: "Efua Owusua",
-    email: "efua@example.com",
-    phone: "026 555 9876",
-    totalOrders: 7,
-    totalSpent: "GH₵ 1,120.00",
-    lastActivity: "Aug 20, 2025",
-    status: "Active",
-  },
-  {
-    id: "cust7",
-    name: "Nana Yaa",
-    email: "nana@example.com",
-    phone: "054 555 4321",
-    totalOrders: 1,
-    totalSpent: "GH₵ 60.00",
-    lastActivity: "Aug 20, 2025",
-    status: "Inactive",
-  },
-  {
-    id: "cust8",
-    name: "Akosua Manu",
-    email: "akosua@example.com",
-    phone: "023 555 8765",
-    totalOrders: 9,
-    totalSpent: "GH₵ 1,800.00",
-    lastActivity: "Aug 19, 2025",
-    status: "Active",
-  },
 ];
+
+export function getMockMerchantCustomers(storeSlug: string): MerchantCustomer[] {
+  return baseCustomers.map((customer) => ({ ...customer, storeSlug }));
+}

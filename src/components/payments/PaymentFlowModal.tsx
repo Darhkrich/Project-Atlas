@@ -18,7 +18,7 @@ export type PaymentFlowStep =
 
 export type PaymentFlowResult = {
   status: "success" | "failed";
-  message: string;
+  message: string;  
 };
 
 interface PaymentFlowModalProps {

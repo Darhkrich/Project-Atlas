@@ -23,7 +23,7 @@ import {
 } from "@/lib/payment-methods";
 
 import { useSavedPaymentMethods } from "@/contexts/SavedPaymentMethodsContext";
-import { useReseller } from "@/contexts/ResellerContext";
+import { useResellerData } from "@/contexts/reseller-data-context";
 
 import {
   mockFundingHistory,
@@ -55,41 +55,6 @@ const paymentMethodIcons: PaymentMethodIconMap = {
   bank: "bank",
   momo: "mobile",
 };
-
-const walletStats: WalletStat[] = [
-  {
-    label: "Total Deposits",
-    value: "GHS 2,500.00",
-    description: "Total amount added to your wallet",
-    icon: "wallet",
-    iconClass:
-      "bg-brand-100 text-brand-800 dark:bg-brand-900/30 dark:text-brand-300",
-  },
-  {
-    label: "Total Spend",
-    value: "GHS 1,650.25",
-    description: "Amount used for reseller purchases",
-    icon: "repeat",
-    iconClass:
-      "bg-accent-500/10 text-accent-700 dark:text-accent-300",
-  },
-  {
-    label: "Total Withdrawals",
-    value: "GHS 1,000.00",
-    description: "Amount withdrawn to bank or mobile money",
-    icon: "bank",
-    iconClass:
-      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  },
-  {
-    label: "Successful Funding",
-    value: "32",
-    description: "Completed wallet funding transactions",
-    icon: "check",
-    iconClass:
-      "bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-300",
-  },
-];
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -234,8 +199,7 @@ function WalletHero({
 /* -------------------------------------------------------------------------- */
 
 export function ResellerWalletOverview() {
-  const { walletBalance } = useReseller();
-
+  const { orders } = useResellerData();
   const {
     savedMethods,
     deleteSavedMethod,
@@ -295,6 +259,59 @@ export function ResellerWalletOverview() {
       mounted = false;
     };
   }, []);
+
+  // Compute wallet balance from commissions of successful orders
+  const walletBalance = useMemo(() => {
+    const commissionTotal = orders.reduce((sum, order) => {
+      const commission = parseFloat(order.commission.replace(/[^0-9.]/g, ""));
+      return sum + (isNaN(commission) ? 0 : commission);
+    }, 0);
+    return commissionTotal;
+  }, [orders]);
+
+  const walletStats: WalletStat[] = useMemo(() => {
+    const totalOrders = orders.length;
+    const successfulOrders = orders.filter(order => order.status === "Successful").length;
+    const totalSpend = orders.reduce((sum, order) => {
+      const amount = parseFloat(order.amount.replace(/[^0-9.]/g, ""));
+      return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
+    const totalWithdrawals = mockWithdrawalHistory.reduce((sum, tx) => {
+      const amount = parseFloat(tx.amount.replace(/[^0-9.]/g, ""));
+      return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
+
+    return [
+      {
+        label: "Total Deposits",
+        value: `GHS ${(walletBalance + totalWithdrawals).toFixed(2)}`,
+        description: "Total amount added to your wallet",
+        icon: "wallet",
+        iconClass: "bg-brand-100 text-brand-800 dark:bg-brand-900/30 dark:text-brand-300",
+      },
+      {
+        label: "Total Spend",
+        value: `GHS ${totalSpend.toFixed(2)}`,
+        description: "Amount used for reseller purchases",
+        icon: "repeat",
+        iconClass: "bg-accent-500/10 text-accent-700 dark:text-accent-300",
+      },
+      {
+        label: "Total Withdrawals",
+        value: `GHS ${totalWithdrawals.toFixed(2)}`,
+        description: "Amount withdrawn to bank or mobile money",
+        icon: "bank",
+        iconClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+      },
+      {
+        label: "Successful Funding",
+        value: successfulOrders.toString(),
+        description: "Completed wallet funding transactions",
+        icon: "check",
+        iconClass: "bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-300",
+      },
+    ];
+  }, [orders, walletBalance]);
 
   const openFundModal = useCallback((method?: PaymentMethod) => {
     setPaymentMode("fund");

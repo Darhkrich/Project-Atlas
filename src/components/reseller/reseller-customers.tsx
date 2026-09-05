@@ -1,15 +1,13 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AtlasCard } from "@/components/atlas/card";
 import { Button } from "@/components/atlas/button";
-import { AtlasSkeleton } from "@/components/atlas/skeleton";
-import { AtlasErrorState } from "@/components/atlas/error-state";
 import { AtlasEmptyState } from "@/components/atlas/empty-state";
 import { AtlasBadge } from "@/components/atlas/badge";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+import { useResellerData } from "@/contexts/reseller-data-context";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -37,79 +35,6 @@ type CustomerStats = {
 };
 
 /* -------------------------------------------------------------------------- */
-/* Mock Data                                                                  */
-/* -------------------------------------------------------------------------- */
-
-const mockCustomers: ResellerCustomer[] = [
-  {
-    id: "CUS-001",
-    name: "Kwame Mensah",
-    phone: "024 123 4567",
-    email: "kwame@example.com",
-    orders: 18,
-    totalSpent: "GHS 845.00",
-    lastOrder: "Today, 10:42 AM",
-    status: "Active",
-    initials: "KM",
-  },
-  {
-    id: "CUS-002",
-    name: "Ama Owusu",
-    phone: "055 234 7890",
-    email: "ama@example.com",
-    orders: 12,
-    totalSpent: "GHS 520.00",
-    lastOrder: "Yesterday, 4:18 PM",
-    status: "Active",
-    initials: "AO",
-  },
-  {
-    id: "CUS-003",
-    name: "Daniel Asare",
-    phone: "020 456 7812",
-    email: "daniel@example.com",
-    orders: 9,
-    totalSpent: "GHS 310.50",
-    lastOrder: "Aug 6, 2026",
-    status: "Active",
-    initials: "DA",
-  },
-  {
-    id: "CUS-004",
-    name: "Akosua Boateng",
-    phone: "054 876 1234",
-    email: "akosua@example.com",
-    orders: 7,
-    totalSpent: "GHS 275.00",
-    lastOrder: "Aug 4, 2026",
-    status: "Active",
-    initials: "AB",
-  },
-  {
-    id: "CUS-005",
-    name: "Michael Addo",
-    phone: "027 345 6789",
-    email: "michael@example.com",
-    orders: 4,
-    totalSpent: "GHS 125.00",
-    lastOrder: "Jul 29, 2026",
-    status: "Inactive",
-    initials: "MA",
-  },
-  {
-    id: "CUS-006",
-    name: "Esi Asante",
-    phone: "050 987 6543",
-    email: "esi@example.com",
-    orders: 15,
-    totalSpent: "GHS 690.00",
-    lastOrder: "Jul 28, 2026",
-    status: "Active",
-    initials: "EA",
-  },
-];
-
-/* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -127,36 +52,7 @@ function getInitialsColor(index: number) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Loading State                                                              */
-/* -------------------------------------------------------------------------- */
-
-function ResellerCustomersSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="space-y-2">
-        <AtlasSkeleton className="h-7 w-48" />
-        <AtlasSkeleton className="h-4 w-80" />
-      </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <AtlasSkeleton key={index} className="h-28 w-full" />
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <AtlasSkeleton className="h-16 w-full" />
-
-      {/* Customer table */}
-      <AtlasSkeleton className="h-[500px] w-full" />
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Customer Details                                                           */
+/* Customer Details Modal                                                     */
 /* -------------------------------------------------------------------------- */
 
 function CustomerDetailsModal({
@@ -211,9 +107,7 @@ function CustomerDetailsModal({
                 </h3>
 
                 <AtlasBadge
-                  variant={
-                    customer.status === "Active" ? "success" : "neutral"
-                  }
+                  variant={customer.status === "Active" ? "success" : "neutral"}
                 >
                   {customer.status}
                 </AtlasBadge>
@@ -270,9 +164,7 @@ function CustomerDetailsModal({
           {/* Actions */}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link
-              href={`/reseller/orders?customer=${encodeURIComponent(
-                customer.name
-              )}`}
+              href={`/reseller/orders?customer=${encodeURIComponent(customer.name)}`}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-800 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-900"
             >
               <AtlasIcon name="receipt" className="h-4 w-4" />
@@ -294,105 +186,26 @@ function CustomerDetailsModal({
 /* -------------------------------------------------------------------------- */
 
 export function ResellerCustomersList() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  const [customers, setCustomers] =
-    useState<ResellerCustomer[]>([]);
-
+  const { customers } = useResellerData();
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<
-    "all" | "active" | "inactive"
-  >("all");
-
-  const [selectedCustomer, setSelectedCustomer] =
-    useState<ResellerCustomer | null>(null);
-
-  /* ------------------------------------------------------------------------ */
-  /* Load Data                                                                */
-  /* ------------------------------------------------------------------------ */
-
-  useEffect(() => {
-    let mounted = true;
-
-    const loadCustomers = async () => {
-      setLoading(true);
-      setError(false);
-
-      try {
-        /*
-         * Temporary mock loading.
-         *
-         * Replace this block with the reseller customers API request
-         * when the backend endpoint is available.
-         */
-        await new Promise((resolve) => setTimeout(resolve, 600));
-
-        if (!mounted) return;
-
-        setCustomers(mockCustomers);
-      } catch {
-        if (!mounted) return;
-        setError(true);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadCustomers();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  /* ------------------------------------------------------------------------ */
-  /* Retry                                                                    */
-  /* ------------------------------------------------------------------------ */
-
-  const handleRetry = () => {
-    setLoading(true);
-    setError(false);
-
-    setTimeout(() => {
-      setCustomers(mockCustomers);
-      setLoading(false);
-    }, 600);
-  };
-
-  /* ------------------------------------------------------------------------ */
-  /* Statistics                                                               */
-  /* ------------------------------------------------------------------------ */
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [selectedCustomer, setSelectedCustomer] = useState<ResellerCustomer | null>(null);
 
   const stats = useMemo<CustomerStats>(() => {
     return {
       total: customers.length,
-      active: customers.filter(
-        (customer) => customer.status === "Active"
-      ).length,
-      inactive: customers.filter(
-        (customer) => customer.status === "Inactive"
-      ).length,
-      totalOrders: customers.reduce(
-        (total, customer) => total + customer.orders,
-        0
-      ),
+      active: customers.filter((customer) => customer.status === "Active").length,
+      inactive: customers.filter((customer) => customer.status === "Inactive").length,
+      totalOrders: customers.reduce((total, customer) => total + customer.orders, 0),
     };
   }, [customers]);
-
-  /* ------------------------------------------------------------------------ */
-  /* Filtering                                                                */
-  /* ------------------------------------------------------------------------ */
 
   const filteredCustomers = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     return customers.filter((customer) => {
       const matchesFilter =
-        activeFilter === "all" ||
-        customer.status.toLowerCase() === activeFilter;
+        activeFilter === "all" || customer.status.toLowerCase() === activeFilter;
 
       const matchesSearch =
         !normalizedSearch ||
@@ -404,28 +217,9 @@ export function ResellerCustomersList() {
     });
   }, [customers, activeFilter, searchQuery]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Loading / Error                                                          */
-  /* ------------------------------------------------------------------------ */
-
-  if (loading) {
-    return <ResellerCustomersSkeleton />;
-  }
-
-  if (error) {
-    return <AtlasErrorState onRetry={handleRetry} />;
-  }
-
-  /* ------------------------------------------------------------------------ */
-  /* Render                                                                   */
-  /* ------------------------------------------------------------------------ */
-
   return (
     <div className="space-y-6">
-      {/* ------------------------------------------------------------------ */}
-      {/* Header                                                             */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-medium text-brand-700 dark:text-brand-300">
@@ -437,8 +231,7 @@ export function ResellerCustomersList() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            View your customers, track their activity and see how they
-            interact with your reseller storefront.
+            View your customers, track their activity and see how they interact with your reseller storefront.
           </p>
         </div>
 
@@ -451,25 +244,16 @@ export function ResellerCustomersList() {
         </Link>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Customer Snapshot                                                  */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Customer Snapshot */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <AtlasCard>
           <div className="flex items-center gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-300">
               <AtlasIcon name="users" className="h-5 w-5" />
             </div>
-
             <div>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Total Customers
-              </p>
-
-              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">
-                {stats.total}
-              </p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Total Customers</p>
+              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">{stats.total}</p>
             </div>
           </div>
         </AtlasCard>
@@ -479,15 +263,9 @@ export function ResellerCustomersList() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-success-50 text-success-700 dark:bg-success-900/30 dark:text-success-300">
               <AtlasIcon name="check" className="h-5 w-5" />
             </div>
-
             <div>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Active Customers
-              </p>
-
-              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">
-                {stats.active}
-              </p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Active Customers</p>
+              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">{stats.active}</p>
             </div>
           </div>
         </AtlasCard>
@@ -497,15 +275,9 @@ export function ResellerCustomersList() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
               <AtlasIcon name="clock" className="h-5 w-5" />
             </div>
-
             <div>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Inactive Customers
-              </p>
-
-              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">
-                {stats.inactive}
-              </p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Inactive Customers</p>
+              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">{stats.inactive}</p>
             </div>
           </div>
         </AtlasCard>
@@ -515,49 +287,27 @@ export function ResellerCustomersList() {
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
               <AtlasIcon name="receipt" className="h-5 w-5" />
             </div>
-
             <div>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Customer Orders
-              </p>
-
-              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">
-                {stats.totalOrders}
-              </p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Customer Orders</p>
+              <p className="mt-1 text-xl font-bold text-neutral-950 dark:text-white">{stats.totalOrders}</p>
             </div>
           </div>
         </AtlasCard>
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Search + Filters                                                   */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Search + Filters */}
       <AtlasCard padding="none" className="overflow-hidden">
         <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
             {[
-              {
-                id: "all",
-                label: "All Customers",
-              },
-              {
-                id: "active",
-                label: "Active",
-              },
-              {
-                id: "inactive",
-                label: "Inactive",
-              },
+              { id: "all", label: "All Customers" },
+              { id: "active", label: "Active" },
+              { id: "inactive", label: "Inactive" },
             ].map((filter) => (
               <button
                 key={filter.id}
                 type="button"
-                onClick={() =>
-                  setActiveFilter(
-                    filter.id as "all" | "active" | "inactive"
-                  )
-                }
+                onClick={() => setActiveFilter(filter.id as "all" | "active" | "inactive")}
                 className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
                   activeFilter === filter.id
                     ? "bg-brand-800 text-white"
@@ -574,13 +324,10 @@ export function ResellerCustomersList() {
               name="search"
               className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
             />
-
             <input
               type="search"
               value={searchQuery}
-              onChange={(event) =>
-                setSearchQuery(event.target.value)
-              }
+              onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search customers..."
               className="w-full rounded-lg border border-neutral-200 bg-white py-2.5 pl-10 pr-4 text-sm text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-100"
             />
@@ -588,20 +335,13 @@ export function ResellerCustomersList() {
         </div>
       </AtlasCard>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Customer List                                                       */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Customer List */}
       <AtlasCard padding="none" className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4 sm:px-6 dark:border-neutral-800">
           <div>
-            <h2 className="text-base font-semibold text-neutral-950 dark:text-white">
-              Your Customers
-            </h2>
-
+            <h2 className="text-base font-semibold text-neutral-950 dark:text-white">Your Customers</h2>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-              {filteredCustomers.length} customer
-              {filteredCustomers.length === 1 ? "" : "s"} found
+              {filteredCustomers.length} customer{filteredCustomers.length === 1 ? "" : "s"} found
             </p>
           </div>
         </div>
@@ -627,30 +367,18 @@ export function ResellerCustomersList() {
                   {/* Customer */}
                   <div className="flex min-w-0 items-center gap-3">
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${getInitialsColor(
-                        index
-                      )}`}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold ${getInitialsColor(index)}`}
                     >
                       {customer.initials}
                     </div>
 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-neutral-950 dark:text-white">
-                          {customer.name}
-                        </p>
-
-                        <AtlasBadge
-                          variant={
-                            customer.status === "Active"
-                              ? "success"
-                              : "neutral"
-                          }
-                        >
+                        <p className="truncate text-sm font-semibold text-neutral-950 dark:text-white">{customer.name}</p>
+                        <AtlasBadge variant={customer.status === "Active" ? "success" : "neutral"}>
                           {customer.status}
                         </AtlasBadge>
                       </div>
-
                       <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                         {customer.email || customer.id}
                       </p>
@@ -664,24 +392,14 @@ export function ResellerCustomersList() {
 
                   {/* Orders */}
                   <div>
-                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                      {customer.orders}
-                    </p>
-
-                    <p className="text-xs text-neutral-500 md:hidden dark:text-neutral-400">
-                      orders
-                    </p>
+                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{customer.orders}</p>
+                    <p className="text-xs text-neutral-500 md:hidden dark:text-neutral-400">orders</p>
                   </div>
 
                   {/* Total */}
                   <div>
-                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                      {customer.totalSpent}
-                    </p>
-
-                    <p className="text-xs text-neutral-500 md:hidden dark:text-neutral-400">
-                      total spent
-                    </p>
+                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{customer.totalSpent}</p>
+                    <p className="text-xs text-neutral-500 md:hidden dark:text-neutral-400">total spent</p>
                   </div>
 
                   {/* Last order */}
@@ -697,10 +415,7 @@ export function ResellerCustomersList() {
                       className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-700 opacity-100 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800 dark:border-neutral-800 dark:text-neutral-300 dark:hover:border-brand-800 dark:hover:bg-brand-950/30 dark:hover:text-brand-300"
                     >
                       View
-                      <AtlasIcon
-                        name="arrow-right"
-                        className="h-3.5 w-3.5"
-                      />
+                      <AtlasIcon name="arrow-right" className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
@@ -709,11 +424,7 @@ export function ResellerCustomersList() {
           </>
         ) : (
           <AtlasEmptyState
-            title={
-              searchQuery
-                ? "No customers found"
-                : "No customers yet"
-            }
+            title={searchQuery ? "No customers found" : "No customers yet"}
             description={
               searchQuery
                 ? "Try a different name, phone number or email address."
@@ -721,10 +432,7 @@ export function ResellerCustomersList() {
             }
             action={
               searchQuery ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setSearchQuery("")}
-                >
+                <Button variant="outline" onClick={() => setSearchQuery("")}>
                   Clear Search
                 </Button>
               ) : (
@@ -740,39 +448,24 @@ export function ResellerCustomersList() {
         )}
       </AtlasCard>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Customer Insight                                                    */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Customer Insight */}
       <AtlasCard className="border-brand-100 bg-brand-50/50 dark:border-brand-900/40 dark:bg-brand-950/20">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-300">
             <AtlasIcon name="trending-up" className="h-5 w-5" />
           </div>
-
           <div>
-            <h2 className="text-base font-semibold text-neutral-950 dark:text-white">
-              Build repeat customers
-            </h2>
-
+            <h2 className="text-base font-semibold text-neutral-950 dark:text-white">Build repeat customers</h2>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-              Your customers are the foundation of your reseller business.
-              Keep your storefront easy to use, offer the services customers
-              actually need and make repeat purchases simple.
+              Your customers are the foundation of your reseller business. Keep your storefront easy to use, offer the services customers actually need and make repeat purchases simple.
             </p>
           </div>
         </div>
       </AtlasCard>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Customer Details Modal                                             */}
-      {/* ------------------------------------------------------------------ */}
-
+      {/* Customer Details Modal */}
       {selectedCustomer && (
-        <CustomerDetailsModal
-          customer={selectedCustomer}
-          onClose={() => setSelectedCustomer(null)}
-        />
+        <CustomerDetailsModal customer={selectedCustomer} onClose={() => setSelectedCustomer(null)} />
       )}
     </div>
   );

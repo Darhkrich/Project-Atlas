@@ -24,7 +24,7 @@ export const resellerNavItems: ResellerNavItem[] = [
     group: "business",
     exact: false,
     mobilePrimary: false,
-    icon: "trending-up",
+    icon: "trending-up",  
   },
   {
     label: "Orders",
@@ -59,22 +59,7 @@ export const resellerNavItems: ResellerNavItem[] = [
     icon: "grid",
   },
 
-  {
-  label: "Buy for Customer",
-  href: "/reseller/buy-for-customer",
-  group: "store",
-  exact: false,
-  mobilePrimary: true,
-  icon: "cart",
-},
-  {
-    label: "Customize Store",
-    href: "/reseller/storefront/customize",
-    group: "store",
-    exact: false,
-    mobilePrimary: false,
-    icon: "settings",
-  },
+ 
   {
     label: "Balance",
     href: "/reseller/wallet",
@@ -83,14 +68,7 @@ export const resellerNavItems: ResellerNavItem[] = [
     mobilePrimary: false,
     icon: "wallet",
   },
-  {
-    label: "Fund Wallet",
-    href: "/reseller/wallet/fund",
-    group: "wallet",
-    exact: false,
-    mobilePrimary: false,
-    icon: "plus",
-  },
+ 
   {
     label: "Transactions",
     href: "/reseller/transactions",

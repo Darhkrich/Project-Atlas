@@ -27,6 +27,32 @@ import {
   type SavedDetailType,
 } from "@/contexts/SavedDetailsContext";
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 type OrderSummary = {
   service: string;
   details: Record<string, string>;
@@ -38,6 +64,7 @@ type ModalStep = "purchase" | "confirmation" | "processing" | "success";
 
 interface ServicesClientProps {
   resellerMode?: boolean;
+  initialService?: string;
   onResellerOrderComplete?: (order: {
     service: string;
     plan: string;
@@ -45,6 +72,15 @@ interface ServicesClientProps {
     amount: number;
     customerName?: string;
   }) => void;
+  onStorefrontOrderComplete?: (order: {
+    service: string;
+    plan: string;
+    recipient: string;
+    amount: number;
+    customerName?: string;
+  }) => void;
+  embedded?: boolean;
+  primaryColor?: string;
 }
 
 const filterTabs = [
@@ -86,7 +122,11 @@ const resellerPaymentMethods: PaymentMethod[] = [
 
 export function ServicesClient({
   resellerMode = false,
+  initialService,
   onResellerOrderComplete,
+  onStorefrontOrderComplete,
+  embedded = false,
+  primaryColor = "#064E3B",
 }: ServicesClientProps = {}) {
   const searchParams = useSearchParams();
 
@@ -114,15 +154,20 @@ export function ServicesClient({
 
   useEffect(() => {
     const serviceParam = searchParams.get("service");
-    if (serviceParam) {
-      const category = servicesCategories.find(
-        (c) => c.id === serviceParam && c.available,
-      );
-      if (category) {
-        handleCategorySelect(serviceParam);
-      }
+    const requestedService = initialService || serviceParam;
+
+    if (!requestedService) {
+      return;
     }
-  }, [searchParams]);
+
+    const category = servicesCategories.find(
+      (c) => c.id === requestedService && c.available,
+    );
+
+    if (category) {
+      handleCategorySelect(requestedService);
+    }
+  }, [searchParams, initialService]);
 
   const filteredCategories = useMemo(() => {
     let cats = servicesCategories;
@@ -314,6 +359,26 @@ export function ServicesClient({
     setModalStep("purchase");
   };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
   const handleSubmitPurchase = () => setModalStep("confirmation");
 
   const handleConfirmPurchase = () => {
@@ -351,6 +416,18 @@ export function ServicesClient({
         recipient,
         amount: orderSummary.total,
         customerName: customerName || undefined,
+      });
+    }
+
+    if (!resellerMode && onStorefrontOrderComplete && orderSummary) {
+      const plan = orderSummary.plan?.name || "Custom";
+      const recipient = Object.values(orderSummary.details).find((v) => v !== "—") || "N/A";
+      onStorefrontOrderComplete({
+        service: orderSummary.service,
+        plan,
+        recipient,
+        amount: orderSummary.total,
+        customerName: "Online Customer",
       });
     }
 
@@ -427,13 +504,12 @@ export function ServicesClient({
     : allPaymentMethods;
 
   return (
-    <>
+    <div style={{ "--store-primary": primaryColor } as React.CSSProperties}>
       <AtlasSection
         size="lg"
         className="relative overflow-hidden bg-gradient-to-b from-brand-50 via-white to-white dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-950"
       >
         <AtlasContainer>
-          {/* Reseller banner */}
           {resellerMode && (
             <div className="mb-6 rounded-xl bg-brand-50 p-4 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-300">
               <strong>Reseller Purchase:</strong> Pay for a customer using your
@@ -443,58 +519,59 @@ export function ServicesClient({
 
           {!selectedCategory ? (
             <>
-              {/* Top Section with primary brand background */}
-              <div className="mb-8 rounded-xl bg-brand-800 p-6 shadow-sm dark:bg-brand-900">
-                <div className="mb-6 flex items-center">
-                  <button
-                    onClick={() => window.history.back()}
-                    className="mr-4 rounded-md p-2 text-white/80 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    aria-label="Go back"
-                  >
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <div>
-                    <h1 className="text-xl font-bold text-white">All Services</h1>
-                    <p className="mt-1 text-sm text-brand-100">
-                      Everything you need, in one place. Choose a service to get started.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <div className="relative">
-                    <AtlasIcon
-                      name="search"
-                      className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400"
-                    />
-                    <input
-                      type="search"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search services..."
-                      className="w-full rounded-full bg-white/95 py-3 pl-12 pr-4 text-base text-neutral-900 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:bg-neutral-900/95 dark:text-neutral-100 dark:placeholder-neutral-400"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-x-6 gap-y-2">
-                  {filterTabs.map((tab) => (
+              {!embedded && (
+                <div className="mb-8 rounded-xl bg-brand-800 p-6 shadow-sm dark:bg-brand-900">
+                  <div className="mb-6 flex items-center">
                     <button
-                      key={tab.id}
-                      onClick={() => handleFilterTabClick(tab.id)}
-                      className={`pb-1 text-sm font-medium transition-colors ${
-                        activeFilter === tab.id
-                          ? "border-b-2 border-white text-white"
-                          : "text-brand-100 hover:text-white"
-                      }`}
+                      onClick={() => window.history.back()}
+                      className="mr-4 rounded-md p-2 text-white/80 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                      aria-label="Go back"
                     >
-                      {tab.label}
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                      </svg>
                     </button>
-                  ))}
+                    <div>
+                      <h1 className="text-xl font-bold text-white">All Services</h1>
+                      <p className="mt-1 text-sm text-brand-100">
+                        Everything you need, in one place. Choose a service to get started.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <div className="relative">
+                      <AtlasIcon
+                        name="search"
+                        className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400"
+                      />
+                      <input
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Search services..."
+                        className="w-full rounded-full bg-white/95 py-3 pl-12 pr-4 text-base text-neutral-900 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-brand-300 dark:bg-neutral-900/95 dark:text-neutral-100 dark:placeholder-neutral-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-6 gap-y-2">
+                    {filterTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => handleFilterTabClick(tab.id)}
+                        className={`pb-1 text-sm font-medium transition-colors ${
+                          activeFilter === tab.id
+                            ? "border-b-2 border-white text-white"
+                            : "text-brand-100 hover:text-white"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredCategories.map((category) => (
@@ -1171,7 +1248,7 @@ export function ServicesClient({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

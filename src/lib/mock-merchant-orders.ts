@@ -1,7 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { AtlasIconName } from "@/components/atlas/icons";
 
+export type MerchantOrderItem = {
+  name: string;
+  quantity: number;
+  price: number;
+  image?: string;
+};
+
 export type MerchantOrderStatus =
+  | "New"
   | "Paid"
   | "Pending"
   | "Processing"
@@ -12,6 +20,7 @@ export type MerchantOrderStatus =
 
 export type MerchantOrder = {
   id: string;
+  storeSlug: string;
   orderNumber: string;
   customerName: string;
   customerEmail: string;
@@ -20,9 +29,12 @@ export type MerchantOrder = {
   items: number;
   status: MerchantOrderStatus;
   paymentMethod: string;
+  paymentStatus?: "Paid" | "Pending";
+  itemsDetail?: MerchantOrderItem[];
+  updatedAt?: number;
 };
 
-export const mockMerchantOrders: MerchantOrder[] = [
+const baseOrders: Omit<MerchantOrder, "storeSlug" | "updatedAt">[] = [
   {
     id: "ord1",
     orderNumber: "ATL-ORD-1001",
@@ -30,9 +42,14 @@ export const mockMerchantOrders: MerchantOrder[] = [
     customerEmail: "abena@example.com",
     date: "Today, 10:30 AM",
     total: "GH₵ 320.00",
-    items: 3,
-    status: "Paid",
+    items: 2,
+    status: "New",
     paymentMethod: "Mobile Money",
+    paymentStatus: "Paid",
+    itemsDetail: [
+      { name: "Vitamin C Face Serum", quantity: 2, price: 120, image: "https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=100&h=100&fit=crop" },
+      { name: "Shea Butter Body Cream", quantity: 1, price: 80, image: "https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=100&h=100&fit=crop" },
+    ],
   },
   {
     id: "ord2",
@@ -44,6 +61,10 @@ export const mockMerchantOrders: MerchantOrder[] = [
     items: 1,
     status: "Processing",
     paymentMethod: "Card",
+    paymentStatus: "Paid",
+    itemsDetail: [
+      { name: "Aloe Vera Soothing Gel", quantity: 1, price: 150, image: "https://images.unsplash.com/photo-1601049676869-702ea24cfd58?w=100&h=100&fit=crop" },
+    ],
   },
   {
     id: "ord3",
@@ -55,6 +76,11 @@ export const mockMerchantOrders: MerchantOrder[] = [
     items: 2,
     status: "Pending",
     paymentMethod: "Bank Transfer",
+    paymentStatus: "Pending",
+    itemsDetail: [
+      { name: "Lip Glow Kit", quantity: 1, price: 65, image: "https://images.unsplash.com/photo-1586495777744-4413f21062fa?w=100&h=100&fit=crop" },
+      { name: "Charcoal Face Mask", quantity: 1, price: 30, image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=100&h=100&fit=crop" },
+    ],
   },
   {
     id: "ord4",
@@ -66,6 +92,10 @@ export const mockMerchantOrders: MerchantOrder[] = [
     items: 1,
     status: "Delivered",
     paymentMethod: "Mobile Money",
+    paymentStatus: "Paid",
+    itemsDetail: [
+      { name: "Coconut Oil Hair Food", quantity: 3, price: 70, image: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=100&h=100&fit=crop" },
+    ],
   },
   {
     id: "ord5",
@@ -74,63 +104,21 @@ export const mockMerchantOrders: MerchantOrder[] = [
     customerEmail: "kofi@example.com",
     date: "Yesterday, 9:30 PM",
     total: "GH₵ 75.00",
-    items: 2,
+    items: 1,
     status: "Failed",
     paymentMethod: "Mobile Money",
-  },
-  {
-    id: "ord6",
-    orderNumber: "ATL-ORD-1006",
-    customerName: "Efua Owusua",
-    customerEmail: "efua@example.com",
-    date: "Aug 20, 2025",
-    total: "GH₵ 420.00",
-    items: 4,
-    status: "Shipped",
-    paymentMethod: "Card",
-  },
-  {
-    id: "ord7",
-    orderNumber: "ATL-ORD-1007",
-    customerName: "Nana Yaa",
-    customerEmail: "nana@example.com",
-    date: "Aug 20, 2025",
-    total: "GH₵ 60.00",
-    items: 1,
-    status: "Refunded",
-    paymentMethod: "Mobile Money",
-  },
-  {
-    id: "ord8",
-    orderNumber: "ATL-ORD-1008",
-    customerName: "Akosua Manu",
-    customerEmail: "akosua@example.com",
-    date: "Aug 19, 2025",
-    total: "GH₵ 185.00",
-    items: 3,
-    status: "Delivered",
-    paymentMethod: "Bank Transfer",
-  },
-  {
-    id: "ord9",
-    orderNumber: "ATL-ORD-1009",
-    customerName: "Yaw Darko",
-    customerEmail: "yaw@example.com",
-    date: "Aug 19, 2025",
-    total: "GH₵ 300.00",
-    items: 2,
-    status: "Processing",
-    paymentMethod: "Card",
-  },
-  {
-    id: "ord10",
-    orderNumber: "ATL-ORD-1010",
-    customerName: "Adwoa Poku",
-    customerEmail: "adwoa@example.com",
-    date: "Aug 18, 2025",
-    total: "GH₵ 50.00",
-    items: 1,
-    status: "Paid",
-    paymentMethod: "Mobile Money",
+    paymentStatus: "Paid",
+    itemsDetail: [
+      { name: "Rosewater Toner", quantity: 1, price: 75, image: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=100&h=100&fit=crop" },
+    ],
   },
 ];
+
+export function getMockMerchantOrders(storeSlug: string): MerchantOrder[] {
+  // Assign updatedAt timestamps for sorting (newer mock orders should appear below real ones but sorted among themselves)
+  return baseOrders.map((order, index) => ({
+    ...order,
+    storeSlug,
+    updatedAt: Date.now() - (baseOrders.length - index) * 3600000, // mock orders get decreasing timestamps
+  }));
+}

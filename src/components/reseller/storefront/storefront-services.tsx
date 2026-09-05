@@ -1,123 +1,88 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import type { ComponentProps, Dispatch, SetStateAction } from "react";
-import { AtlasIcon } from "@/components/atlas/icons";
+import { useState } from "react";
+import type { StorefrontConfig } from "@/lib/storefront/types";
+import { resolveFeaturedServices, getBrandingStyle, getThemeClasses } from "@/lib/storefront/utils";
+import { StorefrontServiceCard } from "./storefront-service-card";
+import { StorefrontPartnerLogos } from "./storefront-partner-logos";
 
-type AtlasIconName = ComponentProps<typeof AtlasIcon>["name"];
+import { StorefrontQuickBuy } from "./storefront-quick-buy";
+import { StorefrontPurchaseFlow } from "./storefront-purchase-flow";
 
-type ResellerStorefront = {
-  services: Array<{
-    id: string;
-    name: string;
-    description: string;
-    icon: AtlasIconName;
-    enabled: boolean;
-  }>;
-};
+interface StorefrontServicesProps {
+  config: StorefrontConfig;
+  mode: "preview" | "public";
+}
 
-type StorefrontServicesProps = {
-  storefront: ResellerStorefront;
-  setStorefront: Dispatch<SetStateAction<ResellerStorefront>>;
-};
+export function StorefrontServices({ config, mode }: StorefrontServicesProps) {
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [selectedNetwork, setSelectedNetwork] = useState<string | undefined>(undefined);
+  const [selectedPlanId, setSelectedPlanId] = useState<string | undefined>(undefined);
+  const [showPurchase, setShowPurchase] = useState(false);
 
-export function StorefrontServices({
-  storefront,
-  setStorefront,
-}: StorefrontServicesProps) {
-  const enabledCount = storefront.services.filter(
-    (service) => service.enabled,
-  ).length;
+  const featuredServices = resolveFeaturedServices(config);
+  const theme = getThemeClasses(config.appearance.themeId);
 
-  const toggleService = (serviceId: string) => {
-    setStorefront((current) => ({
-      ...current,
-      services: current.services.map((service) =>
-        service.id === serviceId
-          ? {
-              ...service,
-              enabled: !service.enabled,
-            }
-          : service,
-      ),
-    }));
+  const handleServiceClick = (serviceId: string, network?: string) => {
+    setSelectedServiceId(serviceId);
+    setSelectedNetwork(network);
+    setSelectedPlanId(undefined);
+    setShowPurchase(true);
   };
 
+  const handleQuickBuySelect = (network: string, planId: string) => {
+    setSelectedServiceId("data");
+    setSelectedNetwork(network);
+    setSelectedPlanId(planId);
+    setShowPurchase(true);
+  };
+
+  const handleClosePurchase = () => {
+    setShowPurchase(false);
+    setSelectedServiceId(null);
+    setSelectedNetwork(undefined);
+    setSelectedPlanId(undefined);
+  };
+
+  if (!config.services.enabled) return null;
+
   return (
-    <section>
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-neutral-950 dark:text-white">
-            Store Services
-          </h2>
+    <div id="services">
+      <StorefrontPartnerLogos config={config} onServiceClick={handleServiceClick} />
+      <StorefrontQuickBuy config={config} onSelectPlan={handleQuickBuySelect} />
 
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            Choose which services customers can purchase from your storefront.
-          </p>
-        </div>
-
-        <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-          {enabledCount} of {storefront.services.length} enabled
-        </span>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {storefront.services.map((service) => (
-          <button
-            key={service.id}
-            type="button"
-            onClick={() => toggleService(service.id)}
-            className={`group flex items-start gap-3 rounded-2xl border p-4 text-left transition-all ${
-              service.enabled
-                ? "border-brand-200 bg-brand-50/40 shadow-sm dark:border-brand-900/50 dark:bg-brand-950/20"
-                : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:border-neutral-700"
-            }`}
-          >
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                service.enabled
-                  ? "bg-brand-100 text-brand-800 dark:bg-brand-900/40 dark:text-brand-300"
-                  : "bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400"
-              }`}
-            >
-              <AtlasIcon name={service.icon} className="h-5 w-5" />
+      {featuredServices.length > 0 && (
+        <section className={`py-12 ${theme.sectionBg}`}>
+          <div className={`${theme.container} mx-auto px-4`}>
+            <div className="text-center mb-10">
+              <h2 className="text-3xl font-bold text-neutral-900">Popular Services</h2>
+              <p className="mt-2 text-neutral-600">Select a service to get started</p>
             </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-                  {service.name}
-                </p>
-
-                <span
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-                    service.enabled
-                      ? "border-brand-700 bg-brand-700 text-white"
-                      : "border-neutral-300 dark:border-neutral-700"
-                  }`}
-                >
-                  {service.enabled && (
-                    <AtlasIcon name="check" className="h-3 w-3" />
-                  )}
-                </span>
-              </div>
-
-              <p className="mt-1 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
-                {service.description}
-              </p>
-
-              <p
-                className={`mt-2 text-[11px] font-semibold ${
-                  service.enabled
-                    ? "text-brand-700 dark:text-brand-300"
-                    : "text-neutral-400"
-                }`}
-              >
-                {service.enabled ? "Visible in storefront" : "Hidden from storefront"}
-              </p>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {featuredServices.map((service) => (
+                <StorefrontServiceCard
+                  key={service.id}
+                  service={service}
+                  config={config}
+                  onClick={() => handleServiceClick(service.id)}
+                />
+              ))}
             </div>
-          </button>
-        ))}
-      </div>
-    </section>
+          </div>
+        </section>
+      )}
+
+      {showPurchase && selectedServiceId && (
+        <StorefrontPurchaseFlow
+          serviceId={selectedServiceId}
+          initialNetwork={selectedNetwork}
+          initialPlanId={selectedPlanId}
+          config={config}
+          onClose={handleClosePurchase}
+          onComplete={(order) => console.log("Storefront order:", order)}
+        />
+      )}
+    </div>
   );
 }

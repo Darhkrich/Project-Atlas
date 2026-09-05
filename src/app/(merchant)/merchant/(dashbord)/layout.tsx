@@ -7,3 +7,4 @@ export default function MerchantDashboardLayout({
 }) {
   return <MerchantLayout>{children}</MerchantLayout>;
 }
+

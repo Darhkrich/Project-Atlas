@@ -8,22 +8,30 @@ export type MerchantNavItem = {
 };
 
 export const merchantNavItems: MerchantNavItem[] = [
+  // Overview
   {
     label: "Dashboard",
     href: "/merchant/dashboard",
-    icon: "grid",
+    icon: "dashboard",
     group: "overview",
   },
   {
+    label: "Notifications",
+    href: "/merchant/notifications",
+    icon: "bell",
+    group: "overview",
+  },
+  // Business
+  {
     label: "Products",
     href: "/merchant/products",
-    icon: "briefcase",
+    icon: "package",
     group: "business",
   },
   {
     label: "Orders",
     href: "/merchant/orders",
-    icon: "briefcase",
+    icon: "orders",
     group: "business",
   },
   {
@@ -33,17 +41,38 @@ export const merchantNavItems: MerchantNavItem[] = [
     group: "business",
   },
   {
+    label: "Analytics",
+    href: "/merchant/analytics",
+    icon: "bar-chart",
+    group: "business",
+  },
+  // Store
+  {
     label: "Storefront",
     href: "/merchant/storefront",
     icon: "store",
     group: "store",
   },
+  // Billing & Payments
   {
-    label: "Billing",
-    href: "/merchant/billing",
+    label: "Wallet",
+    href: "/merchant/wallet",
     icon: "wallet",
     group: "billing",
   },
+  {
+    label: "Billing",
+    href: "/merchant/billing",
+    icon: "billing",
+    group: "billing",
+  },
+  {
+    label: "Transactions",
+    href: "/merchant/transactions",
+    icon: "receipt",
+    group: "billing",
+  },
+  // Support & Settings
   {
     label: "Settings",
     href: "/merchant/settings",
@@ -53,7 +82,7 @@ export const merchantNavItems: MerchantNavItem[] = [
   {
     label: "Support",
     href: "/merchant/support",
-    icon: "headphones",
+    icon: "support",
     group: "support",
   },
 ];

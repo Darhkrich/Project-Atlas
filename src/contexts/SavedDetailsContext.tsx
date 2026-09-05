@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useAuth } from "@/contexts/auth-context";
 
 export type SavedDetailType = "phone" | "meter" | "smartcard" | "bank";
 
@@ -37,50 +38,42 @@ export function useSavedDetails() {
   return useContext(SavedDetailsContext);
 }
 
-const STORAGE_KEY = "atlas-saved-details";
+const STORAGE_KEY = "atlas-saved-details"; // scoped per user
 
 export function SavedDetailsProvider({ children }: { children: ReactNode }) {
-  const [savedDetails, setSavedDetails] = useState<SavedDetail[]>([]);
+  const { user } = useAuth();
+  const [allDetails, setAllDetails] = useState<Record<string, SavedDetail[]>>({});
+  const [loaded, setLoaded] = useState(false);
 
+  // Load all details from storage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
-        setSavedDetails(JSON.parse(stored));
+        setAllDetails(JSON.parse(stored));
       } catch {
         // ignore
       }
-    } else {
-      // initial mock data
-      setSavedDetails([
-        {
-          id: "sd1",
-          name: "Emmanuel Phone",
-          type: "phone",
-          value: "024 123 4567",
-          service: "Airtime / Data",
-        },
-        {
-          id: "sd2",
-          name: "ECG Meter",
-          type: "meter",
-          value: "1234567890",
-          service: "Electricity",
-        },
-        {
-          id: "sd3",
-          name: "DSTV Decoder",
-          type: "smartcard",
-          value: "1234567890",
-          service: "Cable TV",
-        },
-      ]);
     }
+    setLoaded(true);
   }, []);
 
+  // Persist whenever allDetails changes
+  useEffect(() => {
+    if (loaded) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(allDetails));
+    }
+  }, [allDetails, loaded]);
+
+  const userKey = user?.email || "guest";
+
+  const savedDetails = allDetails[userKey] || [];
+
   const persist = (details: SavedDetail[]) => {
-    setSavedDetails(details);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(details));
+    setAllDetails((prev) => ({
+      ...prev,
+      [userKey]: details,
+    }));
   };
 
   const addSavedDetail = (detail: Omit<SavedDetail, "id">) => {
