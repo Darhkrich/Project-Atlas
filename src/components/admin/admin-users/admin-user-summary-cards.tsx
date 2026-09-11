@@ -1,37 +1,102 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
-import { AtlasIcon } from "@/components/atlas/icons";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import { AdminUser } from "@/lib/admin/types/admin-user";
 
-interface AdminUserSummaryData {
-  totalAdmins: number;
-  activeAdmins: number;
-  suspendedAdmins: number;
-  rolesCount: number;
-  lastLogin: string;
+interface AdminUserSummaryCardsProps {
+  users: AdminUser[];
+  onFilterAll?: () => void;
+  onFilterActive?: () => void;
+  onFilterSuspended?: () => void;
+  onFilterSuperAdmin?: () => void;
 }
 
-export function AdminUserSummaryCards({ data }: { data: AdminUserSummaryData }) {
-  const cards = [
-    { label: "Total Admins", value: data.totalAdmins, icon: "shield", color: "text-brand-600", bg: "bg-brand-50 dark:bg-brand-900/20" },
-    { label: "Active", value: data.activeAdmins, icon: "check", color: "text-success-600", bg: "bg-success-50 dark:bg-success-900/20" },
-    { label: "Suspended", value: data.suspendedAdmins, icon: "x-circle", color: "text-danger-600", bg: "bg-danger-50 dark:bg-danger-900/20" },
-    { label: "Roles", value: data.rolesCount, icon: "users", color: "text-info-600", bg: "bg-info-50 dark:bg-info-900/20" },
-    { label: "Last Login", value: data.lastLogin, icon: "clock", color: "text-warning-600", bg: "bg-warning-50 dark:bg-warning-900/20" },
+export function AdminUserSummaryCards({
+  users,
+  onFilterAll,
+  onFilterActive,
+  onFilterSuspended,
+  onFilterSuperAdmin,
+}: AdminUserSummaryCardsProps) {
+  const total = users.length;
+  const active = users.filter((u) => u.status === "active").length;
+  const suspended = users.filter((u) => u.status === "suspended").length;
+  const superAdmins = users.filter((u) => u.role === "super_admin").length;
+  const rolesCount = new Set(users.map((u) => u.role)).size;
+
+  const cards: {
+    label: string;
+    value: number;
+    sub: string;
+    icon: AtlasIconName;
+    color: string;
+    bg: string;
+    highlight?: boolean;
+    onClick?: () => void;
+  }[] = [
+    {
+      label: "Total Admins",
+      value: total,
+      sub: `${rolesCount} roles`,
+      icon: "shield",
+      color: "text-brand-600",
+      bg: "bg-brand-50 dark:bg-brand-900/20",
+      onClick: onFilterAll,
+    },
+    {
+      label: "Active",
+      value: active,
+      sub: "Currently active",
+      icon: "check",
+      color: "text-success-600",
+      bg: "bg-success-50 dark:bg-success-900/20",
+      onClick: onFilterActive,
+    },
+    {
+      label: "Suspended",
+      value: suspended,
+      sub: "Restricted access",
+      icon: "x-circle",
+      color: "text-danger-600",
+      bg: "bg-danger-50 dark:bg-danger-900/20",
+      highlight: suspended > 0,
+      onClick: onFilterSuspended,
+    },
+    {
+      label: "Super Admins",
+      value: superAdmins,
+      sub: "Full access",
+      icon: "star",
+      color: "text-warning-600",
+      bg: "bg-warning-50 dark:bg-warning-900/20",
+      onClick: onFilterSuperAdmin,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
-        <Card key={card.label} className={cn("border-0 shadow-sm", card.bg)}>
+        <Card
+          key={card.label}
+          onClick={card.onClick}
+          className={cn(
+            "border-0 shadow-sm transition-all hover:shadow-md",
+            card.bg,
+            card.highlight && "ring-1 ring-danger-300 dark:ring-danger-800",
+            card.onClick && "cursor-pointer"
+          )}
+        >
           <div className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{card.label}</p>
-              <AtlasIcon name={card.icon as any} className={cn("h-5 w-5", card.color)} />
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                {card.label}
+              </p>
+              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
             </div>
             <p className="mt-2 text-2xl font-bold">{card.value}</p>
+            <p className="text-xs text-neutral-500">{card.sub}</p>
           </div>
         </Card>
       ))}

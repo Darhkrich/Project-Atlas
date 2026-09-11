@@ -3,44 +3,63 @@
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
 } from "recharts";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
 import { formatCurrency } from "@/lib/admin/formatters";
 
 export function WalletBalanceCard() {
-  const data = mockDashboardData.walletBalance.series;
-  const total = mockDashboardData.walletBalance.total;
+  const walletBalance = mockDashboardData.walletBalance as {
+    series: Array<{
+      month: string;
+      total: number;
+      reseller: number;
+      customer: number;
+      merchant: number;
+    }>;
+    total: number;
+    resellerWallets: number;
+    customerWallets: number;
+    merchantWallets: number;
+  };
+  const data = walletBalance.series;
+  const total = walletBalance.total;
 
   return (
     <DashboardCard
       title="Wallet Balance"
       value={formatCurrency(total)}
       icon="wallet"
-      href="/admin/wallets"
       mainChart={
-        <ResponsiveContainer width="100%" height={120}>
+        <ResponsiveContainer width="100%" height={180}>
           <AreaChart data={data}>
             <defs>
-              <linearGradient id="walletGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#166e59" stopOpacity={0.6}/>
-                <stop offset="95%" stopColor="#166e59" stopOpacity={0}/>
+              <linearGradient id="walletTotalGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#166e59" stopOpacity={0.6} />
+                <stop offset="95%" stopColor="#166e59" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
             <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
             <YAxis tickLine={false} axisLine={false} fontSize={10} />
-            <Tooltip formatter={(value) => formatCurrency(Number(value ?? 0))} />
-            <Area type="monotone" dataKey="total" stroke="#166e59" fill="url(#walletGrad)" strokeWidth={2} />
+            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+            <Area type="monotone" dataKey="total" stroke="#166e59" fill="url(#walletTotalGrad)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       }
       subCards={
         <>
           <SubCardWithChart
-            label="Reseller"
-            value={formatCurrency(mockDashboardData.walletBalance.resellerWallets)}
+            label="Reseller Wallets"
+            value={formatCurrency(walletBalance.resellerWallets)}
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <LineChart data={data}>
@@ -50,8 +69,8 @@ export function WalletBalanceCard() {
             }
           />
           <SubCardWithChart
-            label="Customer"
-            value={formatCurrency(mockDashboardData.walletBalance.customerWallets)}
+            label="Customer Wallets"
+            value={formatCurrency(walletBalance.customerWallets)}
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <LineChart data={data}>
@@ -61,8 +80,8 @@ export function WalletBalanceCard() {
             }
           />
           <SubCardWithChart
-            label="Merchant"
-            value={formatCurrency(mockDashboardData.walletBalance.merchantWallets)}
+            label="Merchant Wallets"
+            value={formatCurrency(walletBalance.merchantWallets)}
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <LineChart data={data}>

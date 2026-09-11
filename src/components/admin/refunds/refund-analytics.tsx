@@ -1,9 +1,20 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
-import { REFUND_REASONS } from "@/lib/admin/types/refund";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 
 const reasonData = [
   { name: "Service not delivered", value: 35, color: "#f59e0b" },
@@ -33,13 +44,23 @@ export function RefundAnalytics() {
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie data={reasonData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>
+              <Pie
+                data={reasonData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={2}
+                stroke="none"
+              >
                 {reasonData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip />
-              <Legend />
+              <Tooltip formatter={(value: any) => `${value}%`} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
         </CardContent>
@@ -53,7 +74,7 @@ export function RefundAnalytics() {
           <ResponsiveContainer width="100%" height={250}>
             <AreaChart data={trendData}>
               <defs>
-                <linearGradient id="refundGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="refundTrendGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.6} />
                   <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                 </linearGradient>
@@ -62,7 +83,12 @@ export function RefundAnalytics() {
               <XAxis dataKey="day" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} />
               <Tooltip />
-              <Area type="monotone" dataKey="refunds" stroke="#f59e0b" fill="url(#refundGrad)" />
+              <Area
+                type="monotone"
+                dataKey="refunds"
+                stroke="#f59e0b"
+                fill="url(#refundTrendGrad)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>

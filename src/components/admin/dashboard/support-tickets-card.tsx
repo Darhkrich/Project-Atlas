@@ -3,8 +3,17 @@
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, AreaChart, Area
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
 } from "recharts";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
 
@@ -17,15 +26,14 @@ export function SupportTicketsCard() {
       title="Total Support Tickets"
       value={totalOpen}
       icon="support"
-      href="/admin/support"
       mainChart={
-        <ResponsiveContainer width="100%" height={120}>
-          <BarChart data={breakdown}>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={breakdown} layout="vertical" margin={{ left: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={10} />
-            <YAxis tickLine={false} axisLine={false} fontSize={10} />
+            <XAxis type="number" tickLine={false} axisLine={false} fontSize={10} />
+            <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} fontSize={10} width={70} />
             <Tooltip />
-            <Bar dataKey="value" fill="#166e59" radius={[2,2,0,0]} />
+            <Bar dataKey="value" fill="#166e59" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       }
@@ -36,8 +44,8 @@ export function SupportTicketsCard() {
             value={mockDashboardData.supportTickets.open}
             chart={
               <ResponsiveContainer width="100%" height={30}>
-                <LineChart data={[{ value: mockDashboardData.supportTickets.open }]}>
-                  <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={1} />
+                <LineChart data={breakdown}>
+                  <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={1} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             }
@@ -47,8 +55,8 @@ export function SupportTicketsCard() {
             value={mockDashboardData.supportTickets.pending}
             chart={
               <ResponsiveContainer width="100%" height={30}>
-                <LineChart data={[{ value: mockDashboardData.supportTickets.pending }]}>
-                  <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={1} />
+                <LineChart data={breakdown}>
+                  <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={1} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             }
@@ -58,14 +66,14 @@ export function SupportTicketsCard() {
             value={mockDashboardData.supportTickets.urgent}
             chart={
               <ResponsiveContainer width="100%" height={30}>
-                <AreaChart data={[{ value: mockDashboardData.supportTickets.urgent }]}>
+                <AreaChart data={breakdown}>
                   <defs>
-                    <linearGradient id="urgentGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    <linearGradient id="urgentSupportGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <Area type="monotone" dataKey="value" stroke="#ef4444" fill="url(#urgentGrad)" strokeWidth={1} />
+                  <Area type="monotone" dataKey="value" stroke="#ef4444" fill="url(#urgentSupportGrad)" strokeWidth={1} />
                 </AreaChart>
               </ResponsiveContainer>
             }

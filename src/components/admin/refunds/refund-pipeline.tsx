@@ -31,8 +31,8 @@ export function RefundPipeline({ stages, activeStage, onStageClick }: RefundPipe
             className={cn(
               "rounded-xl border p-4 text-left transition-all",
               isActive
-                ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20 shadow-md"
-                : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600"
+                ? "border-brand-500 bg-brand-50 shadow-md dark:bg-brand-900/20"
+                : "border-neutral-200 bg-white hover:-translate-y-0.5 hover:border-neutral-300 hover:shadow-sm dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600"
             )}
           >
             <div className="flex items-center justify-between">
@@ -41,7 +41,7 @@ export function RefundPipeline({ stages, activeStage, onStageClick }: RefundPipe
             </div>
             <p className="mt-2 text-sm font-semibold">{REFUND_STATUS_LABELS[stage.status]}</p>
             <p className="text-xs text-neutral-500">{stage.count} refunds</p>
-            <p className="text-sm font-medium">{formatCurrency(stage.amount)}</p>
+            <p className="mt-1 text-sm font-medium">{formatCurrency(stage.amount)}</p>
           </button>
         );
       })}

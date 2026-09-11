@@ -4,6 +4,7 @@ import { Customer } from "@/lib/admin/types/customer";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { Badge } from "@/components/admin/ui/badge";
 import { cn } from "@/lib/utils";
+import { AtlasIcon } from "@/components/atlas/icons";
 
 interface CustomerListItemProps {
   customer: Customer;
@@ -27,12 +28,27 @@ function timeAgo(date: string) {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function CustomerListItem({ customer, isSelected, onClick }: CustomerListItemProps) {
-  const statusVariant = customer.status === "active" ? "success" : customer.status === "suspended" ? "danger" : "neutral";
+export function CustomerListItem({
+  customer,
+  isSelected,
+  onClick,
+}: CustomerListItemProps) {
+  const statusVariant =
+    customer.status === "active"
+      ? "success"
+      : customer.status === "suspended"
+      ? "danger"
+      : "neutral";
+
+  const riskVariant =
+    customer.riskLevel === "high"
+      ? "danger"
+      : customer.riskLevel === "medium"
+      ? "warning"
+      : "success";
 
   return (
     <button
@@ -40,33 +56,54 @@ export function CustomerListItem({ customer, isSelected, onClick }: CustomerList
       className={cn(
         "w-full rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
         isSelected
-          ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20"
+          ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/20"
           : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900"
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+        {/* Avatar */}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
           {getInitials(customer.name)}
         </div>
+
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold">{customer.name}</p>
-            <div className="flex gap-1">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{customer.name}</p>
+              {customer.storefrontId && (
+                <p className="text-xs text-neutral-500">
+                  {customer.storefrontType} · {customer.storefrontId}
+                </p>
+              )}
+            </div>
+            <div className="flex shrink-0 gap-1">
               <Badge variant={statusVariant}>{customer.status}</Badge>
+              <Badge variant={riskVariant}>{customer.riskLevel}</Badge>
             </div>
           </div>
-          {/* No email/phone display */}
+
+          {/* Tags */}
           {customer.tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {customer.tags.map(tag => (
-                <span key={tag} className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">{tag}</span>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {customer.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                >
+                  {tag}
+                </span>
               ))}
             </div>
           )}
-          <div className="mt-2 flex items-center justify-between text-sm">
+
+          {/* Metrics row */}
+          <div className="mt-3 grid grid-cols-4 gap-2 text-sm">
             <div>
-              <p className="text-xs text-neutral-500">Total Spent</p>
-              <p className="font-semibold">{formatCurrency(customer.totalSpent)}</p>
+              <p className="text-xs text-neutral-500">Spent</p>
+              <p className="font-semibold">
+                {formatCurrency(customer.totalSpent)}
+              </p>
             </div>
             <div>
               <p className="text-xs text-neutral-500">Orders</p>
@@ -74,13 +111,25 @@ export function CustomerListItem({ customer, isSelected, onClick }: CustomerList
             </div>
             <div>
               <p className="text-xs text-neutral-500">Wallet</p>
-              <p className="font-semibold">{formatCurrency(customer.walletBalance)}</p>
+              <p className="font-semibold">
+                {formatCurrency(customer.walletBalance)}
+              </p>
             </div>
             <div>
               <p className="text-xs text-neutral-500">Last Active</p>
-              <p className="text-sm">{timeAgo(customer.lastActive)}</p>
+              <p className="text-xs font-medium">
+                {timeAgo(customer.lastActive)}
+              </p>
             </div>
           </div>
+
+          {/* Footer: last order */}
+          {customer.lastOrderDate && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
+              <AtlasIcon name="clock" className="h-3 w-3" />
+              Last order {timeAgo(customer.lastOrderDate)}
+            </div>
+          )}
         </div>
       </div>
     </button>

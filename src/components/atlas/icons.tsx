@@ -96,7 +96,14 @@ export type AtlasIconName =
   | "facebook"
   | "instagram"
   | "tiktok"
-  | "twitter";
+  | "twitter"
+  | "rocket"
+  | "chat"
+  | "chevron-down"
+  | "chevron-up"
+  | "chevron-left"
+  | "chevron-right"
+
 
 interface AtlasIconProps extends SVGProps<SVGSVGElement> {
   name: AtlasIconName;
@@ -772,8 +779,38 @@ case "percent":
       <polyline points="6 9 12 15 18 9" />
     </svg>
   );
+  case "chevron-right":
+  return (
+    <svg {...common} {...props}>
+      <polyline points="9 6 15 12 9 18" />
+    </svg>
+  );
+  case "chevron-left":
+  return (
+    <svg {...common} {...props}>
+      <polyline points="15 6 9 12 15 18" />
+    </svg>
+  );
 
-case "percent":
+  case "rocket":
+  return (
+    <svg {...common} {...props}>
+      <path d="M12 2L13.09 8.26 22 9.27 14.5 14.14 16.5 20.07 12 18.17z" />
+    </svg>
+  );
+  case "chat":
+  return (
+    <svg {...common} {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+  case "chevron-up":
+  return (
+    <svg {...common} {...props}>
+      <polyline points="6 15 12 9 18 15" />
+    </svg>
+  );
+  case "percent":
   return (
     <svg {...common} {...props}>
       <line x1="19" y1="5" x2="5" y2="19" />

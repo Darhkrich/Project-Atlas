@@ -32,9 +32,8 @@ export interface HourlyRevenue {
 }
 
 export interface DashboardData {
-  [x: string]: any;
-  [x: string]: any;
-  servicePerformance: any;
+  [x: string]: unknown;
+  servicePerformance: unknown;
   totalRevenue: { total: number; breakdown: RevenueBreakdown; trend: number };
   todayRevenue: { total: number; breakdown: RevenueBreakdown; trend: number };
   activeUsers: { total: number; resellers: number; customers: number; merchants: number };

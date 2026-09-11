@@ -3,6 +3,7 @@ export type VerificationStatus = "verified" | "pending" | "rejected" | "not_subm
 export type CommissionStatus = "pending" | "paid" | "cancelled";
 
 export interface Reseller {
+  tierName: string;
   id: string;
   businessName: string;
   storeName?: string;

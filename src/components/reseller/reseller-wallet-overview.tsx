@@ -270,6 +270,7 @@ export function ResellerWalletOverview() {
   }, [orders]);
 
   const walletStats: WalletStat[] = useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const totalOrders = orders.length;
     const successfulOrders = orders.filter(order => order.status === "Successful").length;
     const totalSpend = orders.reduce((sum, order) => {

@@ -322,7 +322,7 @@ export const servicesCategories: ServiceCategory[] = [
       },
     },
   },
-  {
+  {   
     id: "exampins",
     name: "Exam Pins",
     description: "WAEC, JAMB, NECO etc.",

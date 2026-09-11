@@ -13,37 +13,18 @@ import { PaymentDetailDrawer } from "@/components/admin/payments/payment-detail-
 import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
 import { Button } from "@/components/admin/ui/button";
 import { Badge } from "@/components/admin/ui/badge";
+import { Input } from "@/components/admin/ui/input";
+import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
 import { mockPayments } from "@/lib/admin/mock/payments";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { Payment } from "@/lib/admin/types/payment";
-import { Input } from "@/components/admin/ui/input";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
+import { cn } from "@/lib/utils";
 
 const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
   successful: "success",
   failed: "danger",
   refunded: "neutral",
 };
-
-const allColumns = [
-  { key: "id", header: "Payment ID", cell: (payment: Payment) => <span className="font-medium">{payment.id}</span> },
-  { key: "reference", header: "Reference", cell: (payment: Payment) => payment.reference },
-  { key: "user", header: "User", cell: (payment: Payment) => payment.user.name },
-  { key: "method", header: "Method", cell: (payment: Payment) => payment.methodId },
-  { key: "amount", header: "Amount", cell: (payment: Payment) => formatCurrency(payment.amount) },
-  { key: "fee", header: "Fee", cell: (payment: Payment) => formatCurrency(payment.fee) },
-  { key: "net", header: "Net Amount", cell: (payment: Payment) => formatCurrency(payment.netAmount) },
-  { key: "status", header: "Status", cell: (payment: Payment) => <Badge variant={statusVariantMap[payment.status]}>{payment.status}</Badge> },
-  { key: "created", header: "Created", cell: (payment: Payment) => new Date(payment.createdAt).toLocaleDateString() },
-  { key: "actions", header: "", cell: (payment: Payment) => (
-    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedPayment(payment); }}>View</Button>
-  ) },
-];
-
-interface SavedView {
-  name: string;
-  filters: any;
-}
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -52,16 +33,59 @@ export default function PaymentsPage() {
   const [filters, setFilters] = useState<any>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(allColumns.map((col) => col.key));
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
-  const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
-  const [newViewName, setNewViewName] = useState("");
   const [bulkAction, setBulkAction] = useState<"retry" | "refund" | "export" | null>(null);
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+
+  // Define columns inside component so setSelectedPayment is in scope
+  const allColumns = [
+    {
+      key: "id",
+      header: "Payment ID",
+      cell: (p: Payment) => <span className="font-medium">{p.id}</span>,
+    },
+    { key: "reference", header: "Reference", cell: (p: Payment) => p.reference },
+    { key: "user", header: "User", cell: (p: Payment) => p.user.name },
+    { key: "method", header: "Method", cell: (p: Payment) => p.methodId },
+    { key: "amount", header: "Amount", cell: (p: Payment) => formatCurrency(p.amount) },
+    { key: "fee", header: "Fee", cell: (p: Payment) => formatCurrency(p.fee) },
+    { key: "net", header: "Net", cell: (p: Payment) => formatCurrency(p.netAmount) },
+    {
+      key: "status",
+      header: "Status",
+      cell: (p: Payment) => <Badge variant={statusVariantMap[p.status]}>{p.status}</Badge>,
+    },
+    {
+      key: "created",
+      header: "Created",
+      cell: (p: Payment) => new Date(p.createdAt).toLocaleDateString(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (p: Payment) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedPayment(p);
+          }}
+        >
+          View
+        </Button>
+      ),
+    },
+  ];
+
+  // Initialize visible columns once allColumns is defined
+  useEffect(() => {
+    setVisibleColumns(allColumns.map((c) => c.key));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setTimeout(() => {
@@ -82,17 +106,6 @@ export default function PaymentsPage() {
     return () => clearInterval(interval);
   }, [autoRefresh, refreshInterval]);
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("atlas-payment-views");
-      if (stored) setSavedViews(JSON.parse(stored));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("atlas-payment-views", JSON.stringify(savedViews));
-  }, [savedViews]);
-
   const livePayments = payments.filter((p) => p.status === "pending" || p.status === "processing");
   const todayFailedPayments = payments.filter((p) => {
     const today = new Date();
@@ -105,61 +118,23 @@ export default function PaymentsPage() {
     );
   });
 
-  const historyPayments = payments.filter((p) => ["successful", "failed", "refunded"].includes(p.status));
+  const historyPayments = payments.filter((p) =>
+    ["successful", "failed", "refunded"].includes(p.status)
+  );
 
   const filteredPayments = historyPayments.filter((payment) => {
-    if (filters.search && !payment.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !payment.reference.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    if (
+      filters.search &&
+      !payment.id.toLowerCase().includes(filters.search.toLowerCase()) &&
+      !payment.reference.toLowerCase().includes(filters.search.toLowerCase())
+    )
+      return false;
     if (filters.method && payment.methodId !== filters.method) return false;
     if (filters.status && payment.status !== filters.status) return false;
-    if (filters.dateFrom) {
-      const from = new Date(filters.dateFrom);
-      if (new Date(payment.createdAt) < from) return false;
-    }
-    if (filters.dateTo) {
-      const to = new Date(filters.dateTo);
-      to.setHours(23, 59, 59, 999);
-      if (new Date(payment.createdAt) > to) return false;
-    }
     return true;
   });
 
-  const columns = allColumns.filter((col) => visibleColumns.includes(col.key));
-
-  const selectColumn = {
-    key: "__select__",
-    header: (
-      <input
-        type="checkbox"
-        checked={selectedRowKeys.length === filteredPayments.length && filteredPayments.length > 0}
-        onChange={(e) => {
-          if (e.target.checked) {
-            setSelectedRowKeys(filteredPayments.map((p) => p.id));
-          } else {
-            setSelectedRowKeys([]);
-          }
-        }}
-        className="h-4 w-4"
-      />
-    ),
-    cell: (payment: Payment) => (
-      <input
-        type="checkbox"
-        checked={selectedRowKeys.includes(payment.id)}
-        onChange={(e) => {
-          if (e.target.checked) {
-            setSelectedRowKeys((prev) => [...prev, payment.id]);
-          } else {
-            setSelectedRowKeys((prev) => prev.filter((id) => id !== payment.id));
-          }
-        }}
-        className="h-4 w-4"
-        onClick={(e) => e.stopPropagation()}
-      />
-    ),
-  };
-
-  const allColumnsWithSelect = [selectColumn, ...columns];
+  const columns = allColumns.filter((c) => visibleColumns.includes(c.key));
 
   const summaryData = {
     totalVolume: 1055000,
@@ -169,30 +144,39 @@ export default function PaymentsPage() {
     refundedAmount: 5000,
   };
 
-  const handleSaveView = () => {
-    if (!newViewName.trim()) return;
-    setSavedViews((prev) => [...prev, { name: newViewName.trim(), filters }]);
-    setNewViewName("");
-    setShowSaveViewDialog(false);
+  const handleRetry = (id: string) => {
+    setPayments((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, status: "processing" as const } : p))
+    );
   };
 
-  const loadSavedView = (view: SavedView) => {
-    setFilters(view.filters);
-  };
-
-  const deleteSavedView = (name: string) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== name));
-  };
-
-  const exportPayments = (format: string) => {
-    console.log(`Exporting ${format}`);
-    setExportMenuOpen(false);
+  const handleRefund = (id: string, amount: number) => {
+    setPayments((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              refundStatus: "completed" as const,
+              refundHistory: [
+                ...(p.refundHistory || []),
+                {
+                  timestamp: new Date().toISOString(),
+                  amount,
+                  status: "refunded" as const,
+                  admin: "current_admin@atlas.com",
+                },
+              ],
+            }
+          : p
+      )
+    );
   };
 
   const handleBulkAction = () => {
-    console.log(`${bulkAction} confirmed for`, selectedRowKeys);
+    console.log(`${bulkAction} for`, selectedRowKeys);
     setShowBulkConfirm(false);
     setBulkAction(null);
+    setSelectedRowKeys([]);
   };
 
   return (
@@ -202,7 +186,14 @@ export default function PaymentsPage() {
         description="Payment Operations Hub for all transaction methods."
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setAutoRefresh(!autoRefresh)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={cn(
+                autoRefresh && "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              )}
+            >
               Auto Refresh {autoRefresh ? "On" : "Off"}
             </Button>
             {autoRefresh && (
@@ -216,26 +207,6 @@ export default function PaymentsPage() {
                 <option value={300}>5m</option>
               </select>
             )}
-            <div className="relative">
-              <Button variant="outline" size="sm" onClick={() => setExportMenuOpen(!exportMenuOpen)}>
-                Export
-              </Button>
-              {exportMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-md border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-                  <ul className="py-1">
-                    <li>
-                      <button className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => exportPayments("csv")}>CSV</button>
-                    </li>
-                    <li>
-                      <button className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => exportPayments("excel")}>Excel</button>
-                    </li>
-                    <li>
-                      <button className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800" onClick={() => exportPayments("pdf")}>PDF</button>
-                    </li>
-                  </ul>
-                </div>
-              )}
-            </div>
           </>
         }
       />
@@ -249,33 +220,22 @@ export default function PaymentsPage() {
           payments={livePayments}
           onViewAll={() => setFilters({ ...filters, status: "pending" })}
           onPaymentClick={setSelectedPayment}
+          onRetry={handleRetry}
         />
         <FailedPaymentsCard
           payments={todayFailedPayments}
           onViewAll={() => setFilters({ ...filters, status: "failed" })}
           onPaymentClick={setSelectedPayment}
+          onRetry={handleRetry}
+          onRefund={(id) => {
+            setSelectedPayment(payments.find((p) => p.id === id) || null);
+          }}
         />
         <PaymentProviderHealth />
       </div>
 
-      {/* Saved Views */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-neutral-500">Saved Views:</span>
-        {savedViews.map((view) => (
-          <div key={view.name} className="flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 dark:bg-neutral-800">
-            <button className="text-xs font-medium text-neutral-700 dark:text-neutral-200" onClick={() => loadSavedView(view)}>
-              {view.name}
-            </button>
-            <button className="text-xs text-neutral-400 hover:text-danger-600" onClick={() => deleteSavedView(view.name)}>×</button>
-          </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={() => setShowSaveViewDialog(true)}>
-          Save Current Filters
-        </Button>
-      </div>
-
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap gap-2">
         <Input
           placeholder="Search payments..."
           className="max-w-xs"
@@ -305,19 +265,17 @@ export default function PaymentsPage() {
           <option value="failed">Failed</option>
           <option value="refunded">Refunded</option>
         </select>
-        <div className="flex items-center gap-2">
-          <label className="text-xs">From</label>
-          <Input type="date" className="w-40" value={filters.dateFrom || ""} onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} />
-          <label className="text-xs">To</label>
-          <Input type="date" className="w-40" value={filters.dateTo || ""} onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })} />
-        </div>
       </div>
 
       {/* Column visibility & page size */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-xs">Rows per page:</span>
-          <select className="h-8 rounded-md border border-neutral-300 px-2 text-xs" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+          <select
+            className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
+            value={pageSize}
+            onChange={(e) => setPageSize(Number(e.target.value))}
+          >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
@@ -326,18 +284,22 @@ export default function PaymentsPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs">Columns:</span>
-          {allColumns.filter(col => col.key !== "__select__").map(col => (
-            <label key={col.key} className="flex items-center gap-1 text-xs">
-              <input type="checkbox" checked={visibleColumns.includes(col.key)} onChange={(e) => {
-                if (e.target.checked) {
-                  setVisibleColumns(prev => [...prev, col.key]);
-                } else {
-                  setVisibleColumns(prev => prev.filter(k => k !== col.key));
-                }
-              }} className="h-3 w-3" />
-              {col.header}
-            </label>
-          ))}
+          {allColumns
+            .filter((c) => c.key !== "actions")
+            .map((col) => (
+              <label key={col.key} className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.includes(col.key)}
+                  onChange={(e) => {
+                    if (e.target.checked) setVisibleColumns((prev) => [...prev, col.key]);
+                    else setVisibleColumns((prev) => prev.filter((k) => k !== col.key));
+                  }}
+                  className="h-3 w-3"
+                />
+                {col.header}
+              </label>
+            ))}
         </div>
       </div>
 
@@ -345,55 +307,64 @@ export default function PaymentsPage() {
       {selectedRowKeys.length > 0 && (
         <div className="flex items-center gap-2 rounded-md bg-neutral-50 p-2 dark:bg-neutral-900">
           <span className="text-sm">{selectedRowKeys.length} selected</span>
-          <Button variant="outline" size="sm" onClick={() => { setBulkAction("retry"); setShowBulkConfirm(true); }}>Retry</Button>
-          <Button variant="outline" size="sm" onClick={() => { setBulkAction("refund"); setShowBulkConfirm(true); }}>Refund</Button>
-          <Button variant="outline" size="sm" onClick={() => { setBulkAction("export"); setShowBulkConfirm(true); }}>Export</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setBulkAction("retry");
+              setShowBulkConfirm(true);
+            }}
+          >
+            Retry
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setBulkAction("refund");
+              setShowBulkConfirm(true);
+            }}
+          >
+            Refund
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setBulkAction("export");
+              setShowBulkConfirm(true);
+            }}
+          >
+            Export
+          </Button>
         </div>
       )}
 
       <AdminDataTable
-        columns={allColumnsWithSelect}
+        columns={columns}
         data={filteredPayments}
         isLoading={loading}
-        rowKey={(payment) => payment.id}
-        onRowClick={(payment) => setSelectedPayment(payment)}
+        rowKey={(p) => p.id}
+        onRowClick={(p) => setSelectedPayment(p)}
         pageSize={pageSize}
         currentPage={page}
         onPageChange={setPage}
         emptyMessage="No payments found."
       />
 
-      <PaymentDetailDrawer payment={selectedPayment} onClose={() => setSelectedPayment(null)} />
+      <PaymentDetailDrawer
+        payment={selectedPayment}
+        onClose={() => setSelectedPayment(null)}
+        onRetry={handleRetry}
+        onRefund={handleRefund}
+      />
 
-      {/* Save View Dialog */}
-      {showSaveViewDialog && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowSaveViewDialog(false)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Save Current Filters</h3>
-            <p className="mt-2 text-sm text-neutral-500">Give this view a name.</p>
-            <Input className="mt-4" placeholder="e.g., Failed MoMo Today" value={newViewName} onChange={(e) => setNewViewName(e.target.value)} />
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowSaveViewDialog(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleSaveView}>Save</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Action Confirmation */}
       <ConfirmDialog
         open={showBulkConfirm}
-        title={`Confirm ${bulkAction ? bulkAction.charAt(0).toUpperCase() + bulkAction.slice(1) : ''}`}
-        description={
-          bulkAction === "export"
-            ? `Export ${selectedRowKeys.length} selected payments?`
-            : `Are you sure you want to ${bulkAction} ${selectedRowKeys.length} payments? Total amount: ${formatCurrency(
-                payments.filter(p => selectedRowKeys.includes(p.id)).reduce((sum, p) => sum + p.amount, 0)
-              )}.`
-        }
-        confirmLabel={bulkAction === "export" ? "Export" : bulkAction === "retry" ? "Retry" : "Refund"}
-        danger={bulkAction !== "export"}
+        title={`Confirm ${bulkAction ?? ""}`}
+        description={`Are you sure you want to ${bulkAction} ${selectedRowKeys.length} payments?`}
+        confirmLabel="Confirm"
+        danger={bulkAction === "refund"}
         onConfirm={handleBulkAction}
         onCancel={() => {
           setShowBulkConfirm(false);

@@ -1,26 +1,65 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
+import { Badge } from "@/components/admin/ui/badge";
+import { Button } from "@/components/admin/ui/button";
 
 export function ReconciliationCard() {
+  const total = 100;
+  const matched = 98;
+  const matchRate = (matched / total) * 100;
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Reconciliation</CardTitle>
+        <Badge variant="success">Healthy</Badge>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span>Matched Transactions</span><span>98</span></div>
-          <div className="flex justify-between"><span>Unmatched Transactions</span><span>2</span></div>
-          <div className="flex justify-between"><span>Amount Mismatches</span><span>1</span></div>
-          <div className="flex justify-between"><span>Missing Settlements</span><span>0</span></div>
-          <div className="flex justify-between"><span>Settlement Failures</span><span>0</span></div>
-          <div className="flex justify-between"><span>Last Run</span><span>2 mins ago</span></div>
-          <div className="flex justify-between"><span>Status</span><span className="text-success-600">Healthy</span></div>
+      <CardContent className="space-y-4">
+        {/* Match rate */}
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-neutral-500">Match Rate</span>
+            <span className="font-semibold">{matchRate}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-neutral-200 dark:bg-neutral-700">
+            <div
+              className="h-2 rounded-full bg-success-500"
+              style={{ width: `${matchRate}%` }}
+            />
+          </div>
         </div>
-        <button className="mt-3 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800">
+
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-neutral-500">Matched</p>
+            <p className="font-semibold text-success-600">{matched}</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500">Unmatched</p>
+            <p className="font-semibold text-danger-600">{total - matched}</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500">Mismatches</p>
+            <p className="font-semibold">1</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500">Missing Settlements</p>
+            <p className="font-semibold">0</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500">Settlement Failures</p>
+            <p className="font-semibold">0</p>
+          </div>
+          <div>
+            <p className="text-xs text-neutral-500">Last Run</p>
+            <p className="font-semibold">2 mins ago</p>
+          </div>
+        </div>
+
+        <Button variant="outline" size="sm" className="w-full">
           View Reconciliation
-        </button>
+        </Button>
       </CardContent>
     </Card>
   );

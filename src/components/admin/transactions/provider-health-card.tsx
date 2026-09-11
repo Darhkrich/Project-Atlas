@@ -2,61 +2,81 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
 import { Badge } from "@/components/admin/ui/badge";
-import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 
-const providers = [
-  { name: "MTN MoMo", successRate: 98, status: "operational" },
-  { name: "Telecel", successRate: 91, status: "degraded" },
-  { name: "Visa", successRate: 99, status: "operational" },
-  { name: "Atlas Wallet", successRate: 100, status: "operational" },
+interface Provider {
+  name: string;
+  status: "operational" | "degraded" | "down";
+  successRate: number;
+  latency: string;
+  latencyMs: number;
+}
+
+const providers: Provider[] = [
+  { name: "MTN MoMo", status: "operational", successRate: 98, latency: "120ms", latencyMs: 120 },
+  { name: "Telecel", status: "degraded", successRate: 91, latency: "250ms", latencyMs: 250 },
+  { name: "Visa", status: "operational", successRate: 99, latency: "80ms", latencyMs: 80 },
+  { name: "Atlas Wallet", status: "operational", successRate: 100, latency: "30ms", latencyMs: 30 },
 ];
 
 const statusConfig = {
-  operational: { label: "Operational", variant: "success" as const, color: "#22c55e" },
-  degraded: { label: "Degraded", variant: "warning" as const, color: "#f59e0b" },
-  down: { label: "Down", variant: "danger" as const, color: "#ef4444" },
+  operational: { label: "Operational", variant: "success" as const, dot: "bg-success-500", bar: "bg-success-500" },
+  degraded: { label: "Degraded", variant: "warning" as const, dot: "bg-warning-500", bar: "bg-warning-500" },
+  down: { label: "Down", variant: "danger" as const, dot: "bg-danger-500", bar: "bg-danger-500" },
 };
 
 export function ProviderHealthCard() {
+  const maxLatency = Math.max(...providers.map((p) => p.latencyMs));
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Payment Provider Health</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          {providers.map((provider) => {
-            const config = statusConfig[provider.status];
-            const gaugeData = [{ value: provider.successRate }];
-            return (
-              <div key={provider.name} className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-                <div className="flex items-center justify-between">
+      <CardContent className="space-y-4">
+        {providers.map((provider) => {
+          const config = statusConfig[provider.status];
+          return (
+            <div key={provider.name} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", config.dot)} />
                   <span className="text-sm font-medium">{provider.name}</span>
-                  <Badge variant={config.variant}>{config.label}</Badge>
                 </div>
-                <div className="relative h-24">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart
-                      innerRadius="80%"
-                      outerRadius="100%"
-                      data={gaugeData}
-                      startAngle={180}
-                      endAngle={0}
-                    >
-                      <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                      <RadialBar dataKey="value" fill={config.color} cornerRadius={10} />
-                    </RadialBarChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-lg font-bold">{provider.successRate}%</span>
+                <Badge variant={config.variant}>{config.label}</Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <p className="text-neutral-500">Success Rate</p>
+                  <p className="font-semibold">{provider.successRate}%</p>
+                  <div className="mt-1 h-1 rounded-full bg-neutral-200 dark:bg-neutral-700">
+                    <div
+                      className={cn("h-1 rounded-full", config.bar)}
+                      style={{ width: `${provider.successRate}%` }}
+                    />
                   </div>
                 </div>
-                <p className="text-center text-xs text-neutral-500">Success Rate</p>
+                <div>
+                  <p className="text-neutral-500">Latency</p>
+                  <p className="font-semibold">{provider.latency}</p>
+                  <div className="mt-1 h-1 rounded-full bg-neutral-200 dark:bg-neutral-700">
+                    <div
+                      className={cn(
+                        "h-1 rounded-full",
+                        provider.latencyMs < 150
+                          ? "bg-success-500"
+                          : provider.latencyMs < 300
+                          ? "bg-warning-500"
+                          : "bg-danger-500"
+                      )}
+                      style={{ width: `${(provider.latencyMs / maxLatency) * 100}%` }}
+                    />
+                  </div>
+                </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );

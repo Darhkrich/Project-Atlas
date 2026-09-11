@@ -13,8 +13,9 @@ export interface SubscriptionPlan {
   customDomain: boolean;
   subdomain: boolean;
   advancedFeatures: boolean;
+  aiAssistant?: boolean;
   allowedTemplates: string[];
-  domainOptions: string[]; // "subdomain" | "atlas-domain" | "custom-domain"
+  domainOptions: string[];
 }
 
 export const subscriptionPlans: SubscriptionPlan[] = [
@@ -49,6 +50,7 @@ export const subscriptionPlans: SubscriptionPlan[] = [
     advancedFeatures: false,
     allowedTemplates: ["tpl-general-store", "tpl-cosmetics-luxe"],
     domainOptions: ["subdomain", "atlas-domain"],
+    aiAssistant: true,
   },
   {
     code: "pro",
@@ -69,6 +71,7 @@ export const subscriptionPlans: SubscriptionPlan[] = [
       "tpl-fashion-modern",
     ],
     domainOptions: ["subdomain", "atlas-domain", "custom-domain"],
+    aiAssistant: true,
   },
   {
     code: "enterprise",
@@ -89,6 +92,7 @@ export const subscriptionPlans: SubscriptionPlan[] = [
       "tpl-fashion-modern",
     ],
     domainOptions: ["subdomain", "atlas-domain", "custom-domain"],
+    aiAssistant: true,
   },
 ];
 

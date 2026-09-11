@@ -1,6 +1,8 @@
 export type CustomerStatus = "active" | "inactive" | "suspended";
 export type RiskLevel = "low" | "medium" | "high";
 export type Tag = string;
+export type StorefrontType = "reseller" | "merchant";
+export type ReportStatus = "pending" | "action_taken" | "dismissed";
 
 export interface AtlasPointsTransaction {
   id: string;
@@ -35,6 +37,20 @@ export interface DataUsageStat {
   airtimeUsedGHS: number;
 }
 
+export interface CustomerReport {
+  id: string;
+  reporterType: "merchant" | "reseller";
+  reporterId: string;
+  reporterName: string;
+  reason: string;
+  details?: string;
+  timestamp: string;
+  status: ReportStatus;
+  actionTaken?: string;
+  actionTimestamp?: string;
+  adminNote?: string;
+}
+
 export interface Customer {
   id: string;
   name: string;
@@ -67,4 +83,10 @@ export interface Customer {
 
   activityLog: { id: string; timestamp: string; action: string }[];
   securityEvents: { id: string; timestamp: string; event: string; ip?: string }[];
+
+  storefrontId?: string | null;
+  storefrontType?: StorefrontType | null;
+  accountType?: "registered" | "guest";
+
+  reports?: CustomerReport[];
 }

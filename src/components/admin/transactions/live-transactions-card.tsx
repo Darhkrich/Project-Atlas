@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
@@ -6,16 +7,23 @@ import { Button } from "@/components/admin/ui/button";
 import { Transaction } from "@/lib/admin/types/transaction";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface LiveTransactionsCardProps {
   transactions: Transaction[];
   onViewAll: () => void;
   onTransactionClick: (txn: Transaction) => void;
+  onRetry?: (id: string) => void;
 }
 
 const MAX_DISPLAY = 5;
 
-export function LiveTransactionsCard({ transactions, onViewAll, onTransactionClick }: LiveTransactionsCardProps) {
+export function LiveTransactionsCard({
+  transactions,
+  onViewAll,
+  onTransactionClick,
+  onRetry,
+}: LiveTransactionsCardProps) {
   const displayTxns = transactions.slice(0, MAX_DISPLAY);
   const remaining = Math.max(0, transactions.length - MAX_DISPLAY);
 
@@ -32,7 +40,9 @@ export function LiveTransactionsCard({ transactions, onViewAll, onTransactionCli
             {transactions.length}
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={onViewAll}>View All</Button>
+        <Button variant="ghost" size="sm" onClick={onViewAll}>
+          View All
+        </Button>
       </CardHeader>
       <CardContent>
         {transactions.length === 0 ? (
@@ -43,23 +53,45 @@ export function LiveTransactionsCard({ transactions, onViewAll, onTransactionCli
               {displayTxns.map((txn) => (
                 <li
                   key={txn.id}
-                  className="flex items-center justify-between rounded-lg bg-warning-50/50 p-3 dark:bg-warning-900/10 cursor-pointer hover:bg-warning-50 dark:hover:bg-warning-900/20 transition-colors"
-                  onClick={() => onTransactionClick(txn)}
+                  className="flex items-center justify-between rounded-lg bg-warning-50/50 p-3 transition-colors hover:bg-warning-50 dark:bg-warning-900/10 dark:hover:bg-warning-900/20"
                 >
-                  <div>
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => onTransactionClick(txn)}
+                  >
                     <p className="font-mono text-xs font-semibold">{txn.id}</p>
                     <p className="text-xs text-neutral-500">{txn.user.name}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-semibold">{formatCurrency(txn.amount)}</p>
-                    <p className="text-xs text-neutral-500">{txn.type}</p>
+                    <p className="text-xs capitalize text-neutral-500">{txn.type}</p>
                   </div>
-                  <Badge variant={txn.status === "pending" ? "warning" : "info"}>{txn.status}</Badge>
+                  <Badge variant={txn.status === "pending" ? "warning" : "info"} className="ml-2">
+                    {txn.status}
+                  </Badge>
+                  {onRetry && txn.status === "processing" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRetry(txn.id);
+                      }}
+                    >
+                      Retry
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
             {remaining > 0 && (
-              <p className="mt-2 text-center text-xs text-neutral-500">+{remaining} more live</p>
+              <p className="mt-2 text-center text-xs text-neutral-500">
+                +{remaining} more live ·{" "}
+                <Link href="/admin/transactions?status=pending" className="text-brand-600 hover:underline">
+                  view all
+                </Link>
+              </p>
             )}
           </>
         )}

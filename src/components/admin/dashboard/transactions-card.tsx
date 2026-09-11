@@ -3,8 +3,17 @@
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
 
@@ -22,17 +31,17 @@ export function TransactionsCard() {
       title="Transactions"
       value={total}
       icon="transactions"
-      href="/admin/transactions"
       mainChart={
-        <ResponsiveContainer width="100%" height={120}>
+        <ResponsiveContainer width="100%" height={180}>
           <BarChart data={statusData}>
             <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
             <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={10} />
             <YAxis tickLine={false} axisLine={false} fontSize={10} />
             <Tooltip />
-            <Bar dataKey="ecommerce" stackId="a" fill="#3b82f6" />
-            <Bar dataKey="reseller" stackId="a" fill="#22c55e" />
-            <Bar dataKey="digitalServices" stackId="a" fill="#f59e0b" />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Bar dataKey="ecommerce" stackId="a" fill="#3b82f6" name="E-commerce" />
+            <Bar dataKey="reseller" stackId="a" fill="#22c55e" name="Resellers" />
+            <Bar dataKey="digitalServices" stackId="a" fill="#f59e0b" name="Digital Services" />
           </BarChart>
         </ResponsiveContainer>
       }
@@ -41,9 +50,8 @@ export function TransactionsCard() {
           <SubCardWithChart
             label="Pending"
             value={pendingTotal}
-            breakdown={`Ecom ${mockDashboardData.transactions.pending.breakdown.ecommerce} · Reseller ${mockDashboardData.transactions.pending.breakdown.reseller} · Services ${mockDashboardData.transactions.pending.breakdown.digitalServices}`}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
+              <ResponsiveContainer width="100%" height={50}>
                 <PieChart>
                   <Pie
                     data={[
@@ -52,9 +60,10 @@ export function TransactionsCard() {
                       { name: "Services", value: mockDashboardData.transactions.pending.breakdown.digitalServices },
                     ]}
                     dataKey="value"
-                    innerRadius={10}
-                    outerRadius={15}
+                    innerRadius={15}
+                    outerRadius={25}
                     paddingAngle={2}
+                    stroke="none"
                   >
                     {COLORS_PENDING.map((color, index) => (
                       <Cell key={`pending-${index}`} fill={color} />
@@ -68,9 +77,8 @@ export function TransactionsCard() {
           <SubCardWithChart
             label="Failed"
             value={failedTotal}
-            breakdown={`Ecom ${mockDashboardData.transactions.failed.breakdown.ecommerce} · Reseller ${mockDashboardData.transactions.failed.breakdown.reseller} · Services ${mockDashboardData.transactions.failed.breakdown.digitalServices}`}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
+              <ResponsiveContainer width="100%" height={50}>
                 <PieChart>
                   <Pie
                     data={[
@@ -79,9 +87,10 @@ export function TransactionsCard() {
                       { name: "Services", value: mockDashboardData.transactions.failed.breakdown.digitalServices },
                     ]}
                     dataKey="value"
-                    innerRadius={10}
-                    outerRadius={15}
+                    innerRadius={15}
+                    outerRadius={25}
                     paddingAngle={2}
+                    stroke="none"
                   >
                     {COLORS_FAILED.map((color, index) => (
                       <Cell key={`failed-${index}`} fill={color} />

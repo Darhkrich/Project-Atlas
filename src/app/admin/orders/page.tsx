@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useState, useEffect } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { OrdersWorkspaceNav, type OrdersView } from "@/components/admin/orders/orders-workspace-nav";
-import { OrderKanbanBoard } from "@/components/admin/orders/orders-kanban-board";
+import { OrderLiveBoard } from "@/components/admin/orders/order-live-board";
 import { OrderAnalytics } from "@/components/admin/orders/order-analytics";
 import { OrderDetailDrawer } from "@/components/admin/orders/order-detail-drawer";
 import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
@@ -15,6 +15,7 @@ import { Badge } from "@/components/admin/ui/badge";
 import { mockOrders } from "@/lib/admin/mock/orders";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { Order } from "@/lib/admin/types/orders";
+import { cn } from "@/lib/utils";
 
 const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
   successful: "success",
@@ -22,28 +23,6 @@ const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info"
   cancelled: "neutral",
   refunded: "neutral",
 };
-
-const allColumns = [
-  { key: "id", header: "Order ID", cell: (order: Order) => <span className="font-medium">{order.id}</span> },
-  { key: "source", header: "Source", cell: (order: Order) => (
-    <Badge variant={order.source === "reseller" ? "brand" : "info"}>
-      {order.source === "reseller" ? "Reseller" : "Direct"}
-    </Badge>
-  ) },
-  { key: "customer", header: "Customer", cell: (order: Order) => order.customer.name },
-  { key: "service", header: "Service", cell: (order: Order) => order.service },
-  { key: "network", header: "Network", cell: (order: Order) => order.network ?? "—" },
-  { key: "amount", header: "Amount", cell: (order: Order) => formatCurrency(order.amount) },
-  { key: "commission", header: "Commission", cell: (order: Order) => formatCurrency(order.commission) },
-  { key: "payment", header: "Payment", cell: (order: Order) => order.paymentMethod },
-  { key: "status", header: "Status", cell: (order: Order) => (
-    <Badge variant={statusVariantMap[order.status]}>{order.status}</Badge>
-  ) },
-  { key: "created", header: "Created", cell: (order: Order) => new Date(order.createdAt).toLocaleDateString() },
-  { key: "actions", header: "", cell: (order: Order) => (
-    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}>View</Button>
-  ) },
-];
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -53,11 +32,74 @@ export default function OrdersPage() {
   const [filters, setFilters] = useState<any>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(allColumns.map((col) => col.key));
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30);
 
+  // Define columns inside component so setSelectedOrder is in scope
+  const allColumns = [
+    {
+      key: "id",
+      header: "Order ID",
+      cell: (order: Order) => <span className="font-medium">{order.id}</span>,
+    },
+    {
+      key: "source",
+      header: "Source",
+      cell: (order: Order) => (
+        <Badge variant={order.source === "reseller" ? "brand" : "info"}>
+          {order.source === "reseller" ? "Reseller" : "Direct"}
+        </Badge>
+      ),
+    },
+    { key: "customer", header: "Customer", cell: (order: Order) => order.customer.name },
+    { key: "service", header: "Service", cell: (order: Order) => order.service },
+    { key: "network", header: "Network", cell: (order: Order) => order.network ?? "—" },
+    { key: "amount", header: "Amount", cell: (order: Order) => formatCurrency(order.amount) },
+    {
+      key: "commission",
+      header: "Commission",
+      cell: (order: Order) => formatCurrency(order.commission),
+    },
+    { key: "payment", header: "Payment", cell: (order: Order) => order.paymentMethod },
+    {
+      key: "status",
+      header: "Status",
+      cell: (order: Order) => (
+        <Badge variant={statusVariantMap[order.status]}>{order.status}</Badge>
+      ),
+    },
+    {
+      key: "created",
+      header: "Created",
+      cell: (order: Order) => new Date(order.createdAt).toLocaleDateString(),
+    },
+    {
+      key: "actions",
+      header: "",
+      cell: (order: Order) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedOrder(order);
+          }}
+        >
+          View
+        </Button>
+      ),
+    },
+  ];
+
+  // Initialize visible columns once allColumns is defined
+  useEffect(() => {
+    setVisibleColumns(allColumns.map((col) => col.key));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load mock data
   useEffect(() => {
     setTimeout(() => {
       setOrders(mockOrders);
@@ -65,6 +107,7 @@ export default function OrdersPage() {
     }, 500);
   }, []);
 
+  // Auto refresh
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
@@ -77,7 +120,7 @@ export default function OrdersPage() {
     return () => clearInterval(interval);
   }, [autoRefresh, refreshInterval]);
 
-  const liveOrders = orders.filter((o) => o.status === "pending" || o.status === "processing");
+  // Derived data
   const pendingOrders = orders.filter((o) => o.status === "pending");
   const processingOrders = orders.filter((o) => o.status === "processing");
   const todayFailedOrders = orders.filter((o) => {
@@ -95,9 +138,14 @@ export default function OrdersPage() {
     ["successful", "failed", "cancelled", "refunded"].includes(o.status)
   );
 
+  // Apply filters to history
   const filteredHistory = historyOrders.filter((order) => {
-    if (filters.search && !order.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !order.customer.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    if (
+      filters.search &&
+      !order.id.toLowerCase().includes(filters.search.toLowerCase()) &&
+      !order.customer.name.toLowerCase().includes(filters.search.toLowerCase())
+    )
+      return false;
     if (filters.status && order.status !== filters.status) return false;
     if (filters.service && order.service !== filters.service) return false;
     if (filters.source && order.source !== filters.source) return false;
@@ -113,11 +161,31 @@ export default function OrdersPage() {
     return true;
   });
 
+  // Visible columns
   const columns = allColumns.filter((col) => visibleColumns.includes(col.key));
 
+  // Handlers
   const exportOrders = (format: string) => {
     console.log(`Exporting ${format}`);
     setExportMenuOpen(false);
+  };
+
+  const handleRetry = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: "processing" as const } : o))
+    );
+  };
+
+  const handleCancel = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: "cancelled" as const } : o))
+    );
+  };
+
+  const handleRefund = (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, status: "refunded" as const } : o))
+    );
   };
 
   return (
@@ -127,12 +195,19 @@ export default function OrdersPage() {
         description="Operational workspace for order management."
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setAutoRefresh(!autoRefresh)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className={cn(
+                autoRefresh && "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              )}
+            >
               Auto Refresh {autoRefresh ? "On" : "Off"}
             </Button>
             {autoRefresh && (
               <select
-                className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
+                className="h-8 rounded-md border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-800"
                 value={refreshInterval}
                 onChange={(e) => setRefreshInterval(Number(e.target.value))}
               >
@@ -145,12 +220,15 @@ export default function OrdersPage() {
         }
       />
 
+      {/* Workspace Layout */}
       <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Vertical Navigation */}
         <OrdersWorkspaceNav activeView={activeView} onChange={setActiveView} />
 
-        <div className="flex-1 min-w-0">
+        {/* Main Content Area */}
+        <div className="min-w-0 flex-1">
           {activeView === "live" && (
-            <OrderKanbanBoard
+            <OrderLiveBoard
               pendingOrders={pendingOrders}
               processingOrders={processingOrders}
               failedOrders={todayFailedOrders}
@@ -180,31 +258,39 @@ export default function OrdersPage() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-neutral-500">Columns:</span>
-                  {allColumns.filter(col => col.key !== "actions").map(col => (
-                    <label key={col.key} className="flex items-center gap-1 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setVisibleColumns(prev => [...prev, col.key]);
-                          } else {
-                            setVisibleColumns(prev => prev.filter(k => k !== col.key));
-                          }
-                        }}
-                        className="h-3 w-3"
-                      />
-                      {col.header}
-                    </label>
-                  ))}
+                  {allColumns
+                    .filter((col) => col.key !== "actions")
+                    .map((col) => (
+                      <label key={col.key} className="flex items-center gap-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns.includes(col.key)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setVisibleColumns((prev) => [...prev, col.key]);
+                            } else {
+                              setVisibleColumns((prev) =>
+                                prev.filter((k) => k !== col.key)
+                              );
+                            }
+                          }}
+                          className="h-3 w-3"
+                        />
+                        {col.header}
+                      </label>
+                    ))}
                 </div>
 
                 <div className="relative">
-                  <Button variant="outline" size="sm" onClick={() => setExportMenuOpen(!exportMenuOpen)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                  >
                     Export
                   </Button>
                   {exportMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 rounded-md border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="absolute right-0 z-10 mt-2 w-40 rounded-md border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
                       <ul className="py-1">
                         <li>
                           <button
@@ -236,6 +322,7 @@ export default function OrdersPage() {
                 </div>
               </div>
 
+              {/* Data Table */}
               <div className="mt-4">
                 <AdminDataTable
                   columns={columns}
@@ -256,9 +343,14 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <OrderDetailDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      {/* Detail Drawer */}
+      <OrderDetailDrawer
+        order={selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        onRetry={handleRetry}
+        onCancel={handleCancel}
+        onRefund={handleRefund}
+      />
     </div>
   );
 }
-
-

@@ -12,7 +12,7 @@ export interface StoreConfig {
   templateId: string;
   customDomain?: string;
   subdomain: string;
-  logo?: string; // URL
+  logo?: string;
 }
 
 export interface Subscription {
@@ -40,6 +40,8 @@ export interface Merchant {
   createdAt: string;
   recentOrders?: { id: string; itemCount: number; total: number; date: string }[];
   recentPayments?: { id: string; amount: number; method: string; date: string }[];
+  walletBalance?: number;
+  walletTransactions?: { id: string; type: string; amount: number; date: string }[];
   activityLog: { id: string; timestamp: string; action: string }[];
   auditTrail?: { id: string; timestamp: string; admin: string; action: string }[];
 }

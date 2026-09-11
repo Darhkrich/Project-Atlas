@@ -1,9 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
 import { formatCurrency } from "@/lib/admin/formatters";
-import { AtlasIcon } from "@/components/atlas/icons";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
 
 interface RefundSummaryData {
@@ -17,12 +16,20 @@ interface RefundSummaryData {
 }
 
 export function RefundSummaryCards({ data }: { data: RefundSummaryData }) {
-  const cards = [
+  const cards: {
+    label: string;
+    value: string;
+    sub: string;
+    icon: AtlasIconName;
+    accent: string;
+    bg: string;
+    highlight?: boolean;
+  }[] = [
     {
       label: "Pending Refunds",
       value: `${data.pendingCount}`,
       sub: formatCurrency(data.pendingAmount),
-      icon: "file-text",
+      icon: "clock",
       accent: "text-warning-600",
       bg: "bg-warning-50 dark:bg-warning-900/20",
     },
@@ -54,7 +61,7 @@ export function RefundSummaryCards({ data }: { data: RefundSummaryData }) {
       label: "Avg Processing",
       value: `${data.avgProcessingHours}h`,
       sub: "Request to process",
-      icon: "clock",
+      icon: "record",
       accent: "text-neutral-600",
       bg: "bg-neutral-100 dark:bg-neutral-800",
     },
@@ -65,17 +72,27 @@ export function RefundSummaryCards({ data }: { data: RefundSummaryData }) {
       icon: "shield",
       accent: "text-danger-600",
       bg: "bg-danger-50 dark:bg-danger-900/20",
+      highlight: data.highRiskCount > 0,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
       {cards.map((card) => (
-        <Card key={card.label} className={cn("border-0 shadow-sm", card.bg)}>
+        <Card
+          key={card.label}
+          className={cn(
+            "border-0 shadow-sm transition-shadow hover:shadow-md",
+            card.bg,
+            card.highlight && "ring-1 ring-danger-300 dark:ring-danger-800"
+          )}
+        >
           <div className="p-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{card.label}</p>
-              <AtlasIcon name={card.icon as any} className={cn("h-5 w-5", card.accent)} />
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                {card.label}
+              </p>
+              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.accent)} />
             </div>
             <p className="mt-2 text-2xl font-bold">{card.value}</p>
             <p className="text-xs text-neutral-500">{card.sub}</p>

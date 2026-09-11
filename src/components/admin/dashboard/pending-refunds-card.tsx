@@ -3,8 +3,13 @@
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
 } from "recharts";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
 
@@ -19,9 +24,8 @@ export function PendingRefundsCard() {
       title="Total Pending Refunds"
       value={total}
       icon="receipt"
-      href="/admin/refunds"
       mainChart={
-        <ResponsiveContainer width="100%" height={120}>
+        <ResponsiveContainer width="100%" height={180}>
           <PieChart>
             <Pie
               data={data}
@@ -29,9 +33,12 @@ export function PendingRefundsCard() {
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius={40}
-              outerRadius={60}
+              innerRadius={50}
+              outerRadius={80}
               paddingAngle={2}
+              stroke="none"
+              label={({ value }) => `${value}`}
+              labelLine={false}
             >
               {data.map((_, index) => (
                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

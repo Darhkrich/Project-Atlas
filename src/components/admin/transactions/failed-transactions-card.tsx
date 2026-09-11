@@ -5,16 +5,25 @@ import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { Transaction } from "@/lib/admin/types/transaction";
 import { formatCurrency } from "@/lib/admin/formatters";
+import Link from "next/link";
 
 interface FailedTransactionsCardProps {
   transactions: Transaction[];
   onViewAll: () => void;
   onTransactionClick: (txn: Transaction) => void;
+  onRetry?: (id: string) => void;
+  onRefund?: (id: string) => void;
 }
 
 const MAX_DISPLAY = 5;
 
-export function FailedTransactionsCard({ transactions, onViewAll, onTransactionClick }: FailedTransactionsCardProps) {
+export function FailedTransactionsCard({
+  transactions,
+  onViewAll,
+  onTransactionClick,
+  onRetry,
+  onRefund,
+}: FailedTransactionsCardProps) {
   const displayTxns = transactions.slice(0, MAX_DISPLAY);
   const remaining = Math.max(0, transactions.length - MAX_DISPLAY);
 
@@ -22,7 +31,7 @@ export function FailedTransactionsCard({ transactions, onViewAll, onTransactionC
     <Card className="border-l-4 border-l-danger-500">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
-          <span className="relative flex h-3 w-3">
+          <span className="relative flex h">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger-400 opacity-75"></span>
             <span className="relative inline-flex h-3 w-3 rounded-full bg-danger-500"></span>
           </span>
@@ -31,7 +40,9 @@ export function FailedTransactionsCard({ transactions, onViewAll, onTransactionC
             {transactions.length}
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={onViewAll}>View All</Button>
+        <Button variant="ghost" size="sm" onClick={onViewAll}>
+          View All
+        </Button>
       </CardHeader>
       <CardContent>
         {transactions.length === 0 ? (
@@ -42,10 +53,12 @@ export function FailedTransactionsCard({ transactions, onViewAll, onTransactionC
               {displayTxns.map((txn) => (
                 <li
                   key={txn.id}
-                  className="flex items-center justify-between rounded-lg bg-danger-50/50 p-3 dark:bg-danger-900/10 cursor-pointer hover:bg-danger-50 dark:hover:bg-danger-900/20 transition-colors"
-                  onClick={() => onTransactionClick(txn)}
+                  className="flex items-center justify-between rounded-lg bg-danger-50/50 p-3 transition-colors hover:bg-danger-50 dark:bg-danger-900/10 dark:hover:bg-danger-900/20"
                 >
-                  <div>
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => onTransactionClick(txn)}
+                  >
                     <p className="font-mono text-xs font-semibold">{txn.id}</p>
                     <p className="text-xs text-neutral-500">{txn.user.name}</p>
                   </div>
@@ -53,12 +66,45 @@ export function FailedTransactionsCard({ transactions, onViewAll, onTransactionC
                     <p className="text-sm font-semibold">{formatCurrency(txn.amount)}</p>
                     <p className="text-xs text-neutral-500">{txn.failureReason || "Unknown"}</p>
                   </div>
-                  <Badge variant="danger">Failed</Badge>
+                  <Badge variant="danger" className="ml-2">
+                    Failed
+                  </Badge>
+                  <div className="ml-2 flex gap-1">
+                    {onRetry && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetry(txn.id);
+                        }}
+                      >
+                        Retry
+                      </Button>
+                    )}
+                    {onRefund && txn.status === "failed" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRefund(txn.id);
+                        }}
+                      >
+                        Refund
+                      </Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
             {remaining > 0 && (
-              <p className="mt-2 text-center text-xs text-neutral-500">+{remaining} more failed</p>
+              <p className="mt-2 text-center text-xs text-neutral-500">
+                +{remaining} more failed ·{" "}
+                <Link href="/admin/transactions?status=failed" className="text-brand-600 hover:underline">
+                  view all
+                </Link>
+              </p>
             )}
           </>
         )}

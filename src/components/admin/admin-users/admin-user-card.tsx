@@ -3,6 +3,7 @@
 import { AdminUser, ADMIN_ROLES } from "@/lib/admin/types/admin-user";
 import { Badge } from "@/components/admin/ui/badge";
 import { cn } from "@/lib/utils";
+import { AtlasIcon } from "@/components/atlas/icons";
 
 interface AdminUserCardProps {
   user: AdminUser;
@@ -27,8 +28,7 @@ function timeAgo(date: string | null) {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 const roleBadgeVariant: Record<string, "brand" | "info" | "warning" | "success" | "danger" | "neutral"> = {
@@ -41,8 +41,15 @@ const roleBadgeVariant: Record<string, "brand" | "info" | "warning" | "success" 
 };
 
 export function AdminUserCard({ user, isSelected, onClick }: AdminUserCardProps) {
-  const roleLabel = ADMIN_ROLES.find(r => r.value === user.role)?.label || user.role;
+  const roleLabel =
+    ADMIN_ROLES.find((r) => r.value === user.role)?.label || user.role;
+
   const statusVariant = user.status === "active" ? "success" : "danger";
+
+  const recentActivity =
+    user.activityLog.length > 0
+      ? new Date(user.activityLog[0].timestamp)
+      : null;
 
   return (
     <button
@@ -50,24 +57,50 @@ export function AdminUserCard({ user, isSelected, onClick }: AdminUserCardProps)
       className={cn(
         "w-full rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md",
         isSelected
-          ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20"
+          ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500 dark:bg-brand-900/20"
           : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900"
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+        {/* Avatar */}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-sm font-bold text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
           {getInitials(user.name)}
         </div>
+
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold">{user.name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{user.name}</p>
+              <p className="truncate text-xs text-neutral-500">
+                {user.email}
+              </p>
+            </div>
             <Badge variant={statusVariant}>{user.status}</Badge>
           </div>
-          <p className="text-xs text-neutral-500">{user.email}</p>
-          <div className="mt-2 flex items-center justify-between">
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant={roleBadgeVariant[user.role]}>{roleLabel}</Badge>
-            <span className="text-xs text-neutral-500">Last login: {timeAgo(user.lastLogin)}</span>
           </div>
+
+          {/* Meta row */}
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <p className="text-neutral-500">Last Login</p>
+              <p className="font-medium">{timeAgo(user.lastLogin)}</p>
+            </div>
+            <div>
+              <p className="text-neutral-500">Permissions</p>
+              <p className="font-medium">{user.permissions.length}</p>
+            </div>
+          </div>
+
+          {/* Recent activity preview */}
+          {recentActivity && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
+              <AtlasIcon name="clock" className="h-3 w-3" />
+              {user.activityLog[0].action} · {timeAgo(user.activityLog[0].timestamp)}
+            </div>
+          )}
         </div>
       </div>
     </button>

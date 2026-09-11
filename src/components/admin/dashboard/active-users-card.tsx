@@ -2,16 +2,22 @@
 
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
-import { PictorialChart } from "./pictorial-chart";
-import { ResponsiveContainer, BarChart, Bar } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from "recharts";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
+import { formatCurrency } from "@/lib/admin/formatters";
+
+const COLORS = ["#3b82f6", "#22c55e", "#f59e0b"];
 
 export function ActiveUsersCard() {
-  const distribution = mockDashboardData.activeUsersDistribution.map((item) => ({
-    ...item,
-    icon: item.name === "Resellers" ? ("users" as const) : item.name === "Customers" ? ("user" as const) : ("store" as const),
-    color: item.name === "Resellers" ? "#3b82f6" : item.name === "Customers" ? "#22c55e" : "#f59e0b",
-  }));
+  const distribution = mockDashboardData.activeUsersDistribution;
   const resellers = mockDashboardData.activeUsers.resellers;
   const customers = mockDashboardData.activeUsers.customers;
   const merchants = mockDashboardData.activeUsers.merchants;
@@ -23,8 +29,28 @@ export function ActiveUsersCard() {
       icon="users"
       trend={5.6}
       trendLabel="vs last month"
-      href="/admin/customers"
-      mainChart={<PictorialChart data={distribution} className="mt-1" />}
+      mainChart={
+        <ResponsiveContainer width="100%" height={180}>
+          <PieChart>
+            <Pie
+              data={distribution}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              innerRadius={50}
+              outerRadius={80}
+              paddingAngle={2}
+              stroke="none"
+            >
+              {distribution.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      }
       subCards={
         <>
           <SubCardWithChart

@@ -6,6 +6,14 @@ export type PaymentStatus =
   | "refunded";
 
 export interface Payment {
+  walletCreditedAt: string | number | Date;
+  walletCreditedAt: import("react").JSX.Element;
+  walletId: ReactNode;
+  walletId: import("react").JSX.Element;
+  walletCreditStatus: ReactNode;
+  walletCreditStatus: string;
+  walletCreditStatus: string;
+  walletCreditStatus: import("react").JSX.Element;
   id: string;
   reference: string;
   user: {
