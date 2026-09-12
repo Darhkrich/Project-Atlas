@@ -1,670 +1,690 @@
+// app/(admin)/settings/page.tsx
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { Input } from "@/components/admin/ui/input";
 import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { cn } from "@/lib/utils";
+import { EnvironmentBadge } from "@/components/admin/ui/environment-badge";
+import { SettingsTabs } from "@/components/admin/settings/settings-tabs";
+import { SettingsSaveBar } from "@/components/admin/settings/settings-save-bar";
+import { SettingsDiffPreview } from "@/components/admin/settings/settings-diff-preview";
+import { SettingsAuditPanel } from "@/components/admin/settings/settings-audit-panel";
+import { ApiKeyCreateModal } from "@/components/admin/settings/api-key-create-modal";
+import { WebhookCreateModal } from "@/components/admin/settings/webhook-create-modal";
 import {
-  mockGeneralSettings,
-  mockNotificationSettings,
-  mockSecuritySettings,
-  mockMaintenanceSettings,
-  mockApiKeys,
-  mockSystemHealth,
-  mockPaymentGatewaySettings,
-  mockWalletWithdrawalSettings,
-  mockSupportSettings,
-  mockLocalizationSettings,
-  mockDataComplianceSettings,
-  mockWebhookSettings,
+  GeneralTab,
+  LocalizationTab,
+  ComplianceTab,
+} from "@/components/admin/settings/tabs/platform-tabs";
+import {
+  NotificationsTab,
+  SupportTab,
+} from "@/components/admin/settings/tabs/communication-tabs";
+import {
+  SecurityTab,
+  MaintenanceTab,
+} from "@/components/admin/settings/tabs/security-tabs";
+import {
+  ApiTab,
+  PaymentsTab,
+  PaymentMethodConfigModal,
+  WalletTab,
+  WebhooksTab,
+} from "@/components/admin/settings/tabs/integration-tabs";
+import {
+  HealthTab,
+  RolesTab,
+} from "@/components/admin/settings/tabs/operations-tabs";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useNow } from "@/lib/admin/hooks/use-now";
+import { useSettingsDraft } from "@/lib/admin/hooks/use-settings-draft";
+import { useUnsavedChanges } from "@/lib/admin/hooks/use-unsaved-changes";
+import { createAuditEntries } from "@/lib/admin/settings/audit";
+import {
+  SETTINGS_TABS,
+  type TabConfig,
+} from "@/lib/admin/settings/constant";
+import {
   mockAdminRolePermissions,
+  mockApiKeys,
+  mockDataComplianceSettings,
+  mockGeneralSettings,
+  mockLocalizationSettings,
+  mockMaintenanceSettings,
+  mockNotificationSettings,
+  mockPaymentGatewaySettings,
+  mockSecuritySettings,
+  mockSupportSettings,
+  mockSystemHealth,
+  mockWalletWithdrawalSettings,
+  mockWebhookSettings,
 } from "@/lib/admin/mock/settings";
-import {
-  GeneralSettings,
-  NotificationSettings,
-  SecuritySettings,
-  MaintenanceSettings,
+import { mockSettingsAudit } from "@/lib/admin/mock/settings-audit";
+import type {
   ApiKey,
-  SystemHealth,
-  PaymentGatewaySettings,
-  WalletWithdrawalSettings,
-  SupportSettings,
-  LocalizationSettings,
+  AtlasSection,
   DataComplianceSettings,
-  WebhookSettings,
-  AdminRolePermissions,
+  GeneralSettings,
+  LocalizationSettings,
+  MaintenanceSettings,
+  NotificationChannel,
+  NotificationSettings,
+  PaymentMethodConfig,
+  PlatformEnvironment,
+  SecuritySettings,
+  SettingsAuditEntry,
+  SettingsTab,
+  SupportSettings,
+  SystemHealth,
+  WalletWithdrawalSettings,
+  Webhook,
 } from "@/lib/admin/types/settings";
 
-type Tab =
-  | "general"
-  | "notifications"
-  | "security"
-  | "maintenance"
-  | "health"
-  | "api"
-  | "payments"
-  | "wallet"
-  | "support"
-  | "localization"
-  | "compliance"
-  | "webhooks"
-  | "roles";
+const CURRENT_ADMIN = {
+  id: "usr-001",
+  name: "Yaw Mensah",
+  email: "yaw.mensah@atlas.com",
+};
 
-const tabs: { key: Tab; label: string }[] = [
-  { key: "general", label: "General" },
-  { key: "notifications", label: "Notifications" },
-  { key: "security", label: "Security" },
-  { key: "maintenance", label: "Maintenance" },
-  { key: "health", label: "System Health" },
-  { key: "api", label: "API Keys" },
-  { key: "payments", label: "Payment Gateway" },
-  { key: "wallet", label: "Wallet & Withdrawals" },
-  { key: "support", label: "Support" },
-  { key: "localization", label: "Localization" },
-  { key: "compliance", label: "Data & Compliance" },
-  { key: "webhooks", label: "Webhooks" },
-  { key: "roles", label: "Roles & Permissions" },
-];
+const DEFAULT_URL_FILTERS = { tab: "general" };
+
+type ToastKind = "success" | "error";
+
+interface Toast {
+  kind: ToastKind;
+  text: string;
+}
+
+interface SystemHealthState {
+  data: SystemHealth;
+  refreshing: boolean;
+}
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("general");
+  return (
+    <Suspense fallback={<SettingsSkeleton />}>
+      <SettingsPageInner />
+    </Suspense>
+  );
+}
 
-  const [general, setGeneral] = useState<GeneralSettings>(mockGeneralSettings);
-  const [notifications, setNotifications] = useState<NotificationSettings>(mockNotificationSettings);
-  const [security, setSecurity] = useState<SecuritySettings>(mockSecuritySettings);
-  const [maintenance, setMaintenance] = useState<MaintenanceSettings>(mockMaintenanceSettings);
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>(mockApiKeys);
-  const [systemHealth] = useState<SystemHealth>(mockSystemHealth);
-  const [paymentGateway, setPaymentGateway] = useState<PaymentGatewaySettings>(mockPaymentGatewaySettings);
-  const [walletWithdrawal, setWalletWithdrawal] = useState<WalletWithdrawalSettings>(mockWalletWithdrawalSettings);
-  const [supportSettings, setSupportSettings] = useState<SupportSettings>(mockSupportSettings);
-  const [localization, setLocalization] = useState<LocalizationSettings>(mockLocalizationSettings);
-  const [compliance, setCompliance] = useState<DataComplianceSettings>(mockDataComplianceSettings);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [webhooks, setWebhooks] = useState<WebhookSettings>(mockWebhookSettings);
-  const [roles] = useState<AdminRolePermissions>(mockAdminRolePermissions);
+function SettingsSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="h-10 w-72 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="h-10 w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const [confirmSave, setConfirmSave] = useState(false);
-  const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
-  const [confirmMaintenance, setConfirmMaintenance] = useState(false);
+function SettingsPageInner() {
+  const { filters, setFilter } = useUrlFilters(DEFAULT_URL_FILTERS);
+  const activeTab = useMemo<SettingsTab>(() => {
+    const found = SETTINGS_TABS.find((t) => t.key === filters.tab);
+    return found?.key ?? "general";
+  }, [filters.tab]);
 
-  const [showAddApiKeyModal, setShowAddApiKeyModal] = useState(false);
-  const [newApiKeyName, setNewApiKeyName] = useState("");
-  const [configureMethodId, setConfigureMethodId] = useState<string | null>(null);
-  const [showAddWebhookModal, setShowAddWebhookModal] = useState(false);
-  const [testResult, setTestResult] = useState<{ id: string; status: "success" | "failed" } | null>(null);
+  const initialDraft = useMemo(
+    () => ({
+      general: { ...mockGeneralSettings },
+      notifications: { ...mockNotificationSettings },
+      security: { ...mockSecuritySettings },
+      maintenance: { ...mockMaintenanceSettings },
+      api: { keys: mockApiKeys.map((k) => ({ ...k })) },
+      payments: {
+        methods: mockPaymentGatewaySettings.methods.map((m) => ({
+          ...m,
+          sections: [...m.sections],
+        })),
+      },
+      wallet: {
+        ...mockWalletWithdrawalSettings,
+        perSectionOverrides: mockWalletWithdrawalSettings.perSectionOverrides
+          ? { ...mockWalletWithdrawalSettings.perSectionOverrides }
+          : undefined,
+      },
+      support: { ...mockSupportSettings },
+      localization: { ...mockLocalizationSettings },
+      compliance: {
+        ...mockDataComplianceSettings,
+        backupSchedule: { ...mockDataComplianceSettings.backupSchedule },
+      },
+      webhooks: {
+        webhooks: mockWebhookSettings.webhooks.map((w) => ({ ...w })),
+      },
+    }),
+    []
+  );
 
-  const handleSave = () => {
-    console.log("Saving settings");
-    setConfirmSave(false);
+  const draft = useSettingsDraft(initialDraft);
+  const now = useNow();
+
+  const [auditEntries, setAuditEntries] = useState<SettingsAuditEntry[]>(
+    mockSettingsAudit
+  );
+  const [auditPanelOpen, setAuditPanelOpen] = useState(false);
+
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [configureMethodId, setConfigureMethodId] = useState<string | null>(
+    null
+  );
+
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showMaintenanceConfirm, setShowMaintenanceConfirm] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null);
+  const [removeWebhookTarget, setRemoveWebhookTarget] = useState<Webhook | null>(
+    null
+  );
+
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [testResult, setTestResult] = useState<{
+    id: string;
+    status: "success" | "failed";
+  } | null>(null);
+  const [health, setHealth] = useState<SystemHealthState>({
+    data: mockSystemHealth,
+    refreshing: false,
+  });
+
+  useUnsavedChanges({ hasChanges: draft.hasChanges });
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!testResult) return;
+    const t = window.setTimeout(() => setTestResult(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [testResult]);
+
+  const activeTabConfig: TabConfig | undefined = SETTINGS_TABS.find(
+    (t) => t.key === activeTab
+  );
+  const isReadOnly = activeTabConfig?.readOnly === true;
+
+  const general = draft.draft.general as unknown as GeneralSettings;
+  const notifications = draft.draft.notifications as unknown as NotificationSettings;
+  const security = draft.draft.security as unknown as SecuritySettings;
+  const maintenance = draft.draft.maintenance as unknown as MaintenanceSettings;
+  const apiState = draft.draft.api as unknown as { keys: ApiKey[] };
+  const payments =
+    draft.draft.payments as unknown as typeof mockPaymentGatewaySettings;
+  const wallet =
+    draft.draft.wallet as unknown as WalletWithdrawalSettings;
+  const support = draft.draft.support as unknown as SupportSettings;
+  const localization =
+    draft.draft.localization as unknown as LocalizationSettings;
+  const compliance =
+    draft.draft.compliance as unknown as DataComplianceSettings;
+  const webhooks =
+    draft.draft.webhooks as unknown as typeof mockWebhookSettings;
+
+  const environment: PlatformEnvironment = general.environment;
+
+  const handleTabChange = (tab: SettingsTab) => {
+    setFilter("tab", tab);
   };
 
-  const handleToggleMaintenance = () => {
-    setMaintenance(prev => ({ ...prev, enabled: !prev.enabled }));
-    setConfirmMaintenance(false);
-  };
+  const patchGeneral = (patch: Partial<GeneralSettings>) =>
+    draft.patch("general", patch as Partial<Record<string, unknown>>);
+  const patchNotifications = (patch: Partial<NotificationSettings>) =>
+    draft.patch("notifications", patch as Partial<Record<string, unknown>>);
+  const patchSecurity = (patch: Partial<SecuritySettings>) =>
+    draft.patch("security", patch as Partial<Record<string, unknown>>);
+  const patchMaintenance = (patch: Partial<MaintenanceSettings>) =>
+    draft.patch("maintenance", patch as Partial<Record<string, unknown>>);
+  const patchApi = (patch: { keys: ApiKey[] }) =>
+    draft.patch("api", patch as unknown as Partial<Record<string, unknown>>);
+  const patchPayments = (
+    patch: Partial<typeof mockPaymentGatewaySettings>
+  ) =>
+    draft.patch("payments", patch as Partial<Record<string, unknown>>);
+  const patchWallet = (patch: Partial<WalletWithdrawalSettings>) =>
+    draft.patch("wallet", patch as Partial<Record<string, unknown>>);
+  const patchSupport = (patch: Partial<SupportSettings>) =>
+    draft.patch("support", patch as Partial<Record<string, unknown>>);
+  const patchLocalization = (patch: Partial<LocalizationSettings>) =>
+    draft.patch("localization", patch as Partial<Record<string, unknown>>);
+  const patchCompliance = (patch: Partial<DataComplianceSettings>) =>
+    draft.patch("compliance", patch as Partial<Record<string, unknown>>);
+  const patchWebhooks = (patch: Partial<typeof mockWebhookSettings>) =>
+    draft.patch("webhooks", patch as Partial<Record<string, unknown>>);
 
-  const handleGenerateApiKey = () => {
-    if (!newApiKeyName.trim()) return;
-    const newKey: ApiKey = {
-      id: `API-${Date.now()}`,
-      name: newApiKeyName,
-      key: `ak_live_${Math.random().toString(36).substring(2, 10)}...`,
-      createdAt: new Date().toISOString(),
-      status: "active",
+  const handleConfirmSave = () => {
+    const actor = { id: CURRENT_ADMIN.id, name: CURRENT_ADMIN.name };
+    const newEntries: SettingsAuditEntry[] = [];
+
+    const tabStateKeys: Record<
+      SettingsTab,
+      keyof typeof draft.draft | null
+    > = {
+      general: "general",
+      notifications: "notifications",
+      security: "security",
+      maintenance: "maintenance",
+      health: null,
+      api: "api",
+      payments: "payments",
+      wallet: "wallet",
+      support: "support",
+      localization: "localization",
+      compliance: "compliance",
+      webhooks: "webhooks",
+      roles: null,
     };
-    setApiKeys(prev => [...prev, newKey]);
-    setNewApiKeyName("");
-    setShowAddApiKeyModal(false);
+
+    for (const tab of draft.dirtyTabs) {
+      const key = tabStateKeys[tab];
+      if (!key) continue;
+      newEntries.push(
+        ...createAuditEntries(
+          tab,
+          draft.saved[key] as Record<string, unknown>,
+          draft.draft[key] as Record<string, unknown>,
+          actor
+        )
+      );
+    }
+
+    if (newEntries.length > 0) {
+      setAuditEntries((prev) => [...newEntries, ...prev]);
+    }
+    draft.markSaved();
+    setShowSaveConfirm(false);
+    setToast({
+      kind: "success",
+      text:
+        newEntries.length === 1
+          ? "1 change saved."
+          : `${newEntries.length} changes saved.`,
+    });
   };
 
-  const handleRevokeKey = (id: string) => {
-    setApiKeys(prev => prev.map(k => k.id === id ? { ...k, status: "revoked" } : k));
-    setConfirmRevoke(null);
+  const handleDiscard = () => {
+    draft.discardAll();
+    setShowDiscardConfirm(false);
+    setToast({ kind: "success", text: "Changes discarded." });
   };
 
-  const handleConfigurePaymentMethod = (methodId: string) => {
-    setConfigureMethodId(methodId);
+  const requestMaintenanceToggle = () => {
+    setShowMaintenanceConfirm(true);
   };
 
-  const handleSavePaymentMethodConfig = (updatedMethod: PaymentGatewaySettings["methods"][number]) => {
-    setPaymentGateway(prev => ({
-      ...prev,
-      methods: prev.methods.map(m => m.id === updatedMethod.id ? updatedMethod : m),
-    }));
+  const confirmMaintenanceToggle = () => {
+    patchMaintenance({ enabled: !maintenance.enabled });
+    setShowMaintenanceConfirm(false);
+  };
+
+  const handleApiKeyCreate = (key: ApiKey) => {
+    patchApi({ keys: [key, ...apiState.keys] });
+  };
+
+  const confirmApiKeyRevoke = () => {
+    if (!revokeTarget) return;
+    const target = revokeTarget;
+    patchApi({
+      keys: apiState.keys.map((k) =>
+        k.id === target.id
+          ? { ...k, status: "revoked", revokedAt: new Date().toISOString() }
+          : k
+      ),
+    });
+    setRevokeTarget(null);
+    setToast({ kind: "success", text: `${target.name} revoked.` });
+  };
+
+  const handleWebhookCreate = (webhook: Webhook) => {
+    patchWebhooks({ webhooks: [...webhooks.webhooks, webhook] });
+  };
+
+  const handleWebhookToggle = (id: string, enabled: boolean) => {
+    patchWebhooks({
+      webhooks: webhooks.webhooks.map((w) =>
+        w.id === id ? { ...w, enabled } : w
+      ),
+    });
+  };
+
+  const handleWebhookRemove = (id: string) => {
+    const target = webhooks.webhooks.find((w) => w.id === id);
+    if (!target) return;
+    setRemoveWebhookTarget(target);
+  };
+
+  const confirmWebhookRemove = () => {
+    if (!removeWebhookTarget) return;
+    const target = removeWebhookTarget;
+    patchWebhooks({
+      webhooks: webhooks.webhooks.filter((w) => w.id !== target.id),
+    });
+    setRemoveWebhookTarget(null);
+    setToast({ kind: "success", text: `Webhook ${target.event} removed.` });
+  };
+
+  const handleWebhookTest = (webhook: Webhook) => {
+    const nextStatus: "success" | "failed" =
+      webhook.url.startsWith("https://") ? "success" : "failed";
+    setTestResult({ id: webhook.id, status: nextStatus });
+  };
+
+  const handlePaymentMethodToggle = (id: string, enabled: boolean) => {
+    patchPayments({
+      methods: payments.methods.map((m) =>
+        m.id === id ? { ...m, enabled } : m
+      ),
+    });
+  };
+
+  const handlePaymentMethodSave = (updated: PaymentMethodConfig) => {
+    patchPayments({
+      methods: payments.methods.map((m) =>
+        m.id === updated.id ? updated : m
+      ),
+    });
     setConfigureMethodId(null);
   };
 
-  const handleAddWebhook = () => {
-    // In a real app, we'd add the webhook; here we just close modal.
-    setShowAddWebhookModal(false);
+  const handleHealthRefresh = () => {
+    setHealth((prev) => ({ ...prev, refreshing: true }));
+    window.setTimeout(() => {
+      setHealth({
+        data: {
+          ...mockSystemHealth,
+          lastChecked: new Date().toISOString(),
+        },
+        refreshing: false,
+      });
+    }, 700);
   };
 
-  const handleTestWebhook = (id: string) => {
-    // eslint-disable-next-line react-hooks/purity
-    setTestResult({ id, status: Math.random() > 0.5 ? "success" : "failed" });
-    setTimeout(() => setTestResult(null), 3000);
+  const handleSendTestNotification = (
+    channel: NotificationChannel,
+    content: string
+  ) => {
+    void channel;
+    void content;
   };
 
-  const healthStatusVariant = {
-    operational: "success",
-    degraded: "warning",
-    down: "danger",
-  } as const;
+  const configureMethod = configureMethodId
+    ? payments.methods.find((m) => m.id === configureMethodId) ?? null
+    : null;
+
+  const recentWebhookEvents = webhooks.webhooks.map((w) => w.event);
+
+  const tabsDirtyCount = draft.dirtyTabs.length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <AdminPageHeader
         title="Settings"
         description="Configure Atlas platform, security, notifications, integrations, and compliance."
-      />
-
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-neutral-200 dark:border-neutral-800 overflow-x-auto">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap",
-              activeTab === tab.key ? "border-brand-600 text-brand-600" : "border-transparent text-neutral-500 hover:text-neutral-700"
+        meta={
+          <>
+            <EnvironmentBadge environment={environment} />
+            {tabsDirtyCount > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-warning-700 dark:text-warning-300">
+                  {tabsDirtyCount} unsaved{" "}
+                  {tabsDirtyCount === 1 ? "tab" : "tabs"}
+                </span>
+              </>
             )}
+          </>
+        }
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAuditPanelOpen(true)}
           >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === "general" && (
-        <Card>
-          <CardHeader><CardTitle>General Configuration</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm">Platform Name</label>
-                <Input value={general.platformName} onChange={e => setGeneral({ ...general, platformName: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Support Email</label>
-                <Input value={general.supportEmail} onChange={e => setGeneral({ ...general, supportEmail: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Support Phone</label>
-                <Input value={general.supportPhone} onChange={e => setGeneral({ ...general, supportPhone: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Currency</label>
-                <Input value={general.currency} onChange={e => setGeneral({ ...general, currency: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Timezone</label>
-                <Input value={general.timezone} onChange={e => setGeneral({ ...general, timezone: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Default Commission Rate (%)</label>
-                <Input type="number" value={general.defaultCommissionRate} onChange={e => setGeneral({ ...general, defaultCommissionRate: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Daily Transaction Limit (GHS)</label>
-                <Input type="number" value={general.transactionLimitPerDay} onChange={e => setGeneral({ ...general, transactionLimitPerDay: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Max Withdrawal Limit (GHS)</label>
-                <Input type="number" value={general.maxWithdrawalLimit} onChange={e => setGeneral({ ...general, maxWithdrawalLimit: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Low Balance Threshold (GHS)</label>
-                <Input type="number" value={general.lowBalanceThreshold} onChange={e => setGeneral({ ...general, lowBalanceThreshold: Number(e.target.value) })} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "notifications" && (
-        <Card>
-          <CardHeader><CardTitle>Notification Settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={notifications.emailEnabled} onChange={e => setNotifications({ ...notifications, emailEnabled: e.target.checked })} className="h-4 w-4" />
-                Email
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={notifications.smsEnabled} onChange={e => setNotifications({ ...notifications, smsEnabled: e.target.checked })} className="h-4 w-4" />
-                SMS
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={notifications.pushEnabled} onChange={e => setNotifications({ ...notifications, pushEnabled: e.target.checked })} className="h-4 w-4" />
-                Push
-              </label>
-            </div>
-            <div>
-              <label className="text-sm">Order Placed Email Template</label>
-              <textarea className="mt-1 w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800" rows={2} value={notifications.emailTemplateOrderPlaced} onChange={e => setNotifications({ ...notifications, emailTemplateOrderPlaced: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Payment Failed Email Template</label>
-              <textarea className="mt-1 w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800" rows={2} value={notifications.emailTemplatePaymentFailed} onChange={e => setNotifications({ ...notifications, emailTemplatePaymentFailed: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Order Placed SMS Template</label>
-              <Input value={notifications.smsTemplateOrderPlaced} onChange={e => setNotifications({ ...notifications, smsTemplateOrderPlaced: e.target.value })} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "security" && (
-        <Card>
-          <CardHeader><CardTitle>Security Settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm">Password Min Length</label>
-                <Input type="number" value={security.passwordMinLength} onChange={e => setSecurity({ ...security, passwordMinLength: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Session Timeout (minutes)</label>
-                <Input type="number" value={security.sessionTimeoutMinutes} onChange={e => setSecurity({ ...security, sessionTimeoutMinutes: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Max Login Attempts</label>
-                <Input type="number" value={security.maxLoginAttempts} onChange={e => setSecurity({ ...security, maxLoginAttempts: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Lockout Duration (minutes)</label>
-                <Input type="number" value={security.lockoutDurationMinutes} onChange={e => setSecurity({ ...security, lockoutDurationMinutes: Number(e.target.value) })} />
-              </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={security.require2FA} onChange={e => setSecurity({ ...security, require2FA: e.target.checked })} className="h-4 w-4" />
-              Require Two-Factor Authentication for Admins
-            </label>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "maintenance" && (
-        <Card>
-          <CardHeader><CardTitle>Maintenance Mode</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Maintenance Mode</span>
-              <Badge variant={maintenance.enabled ? "danger" : "success"}>{maintenance.enabled ? "Enabled" : "Disabled"}</Badge>
-            </div>
-            <div>
-              <label className="text-sm">Message</label>
-              <textarea className="mt-1 w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800" rows={2} value={maintenance.message} onChange={e => setMaintenance({ ...maintenance, message: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Expected Duration</label>
-              <Input value={maintenance.expectedDuration} onChange={e => setMaintenance({ ...maintenance, expectedDuration: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm">Allowed IPs (comma separated)</label>
-              <Input value={maintenance.allowedIPs.join(", ")} onChange={e => setMaintenance({ ...maintenance, allowedIPs: e.target.value.split(",").map(s => s.trim()) })} />
-            </div>
-            <Button variant={maintenance.enabled ? "destructive" : "outline"} size="sm" onClick={() => setConfirmMaintenance(true)}>
-              {maintenance.enabled ? "Disable Maintenance Mode" : "Enable Maintenance Mode"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "health" && (
-        <Card>
-          <CardHeader><CardTitle>System Health</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: "API", status: systemHealth.apiStatus },
-                { label: "Database", status: systemHealth.databaseStatus },
-                { label: "Queue", status: systemHealth.queueStatus },
-                { label: "Providers", status: systemHealth.providerStatus },
-              ].map(item => (
-                <div key={item.label} className="flex items-center justify-between rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <span>{item.label}</span>
-                  <Badge variant={healthStatusVariant[item.status]}>{item.status}</Badge>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-neutral-500">Last checked: {new Date(systemHealth.lastChecked).toLocaleString()}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "api" && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>API Keys & Integrations</CardTitle>
-            <Button size="sm" onClick={() => setShowAddApiKeyModal(true)}>Generate New Key</Button>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {apiKeys.map(key => (
-              <div key={key.id} className="flex items-center justify-between rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
-                <div>
-                  <p className="font-medium">{key.name}</p>
-                  <p className="font-mono text-xs text-neutral-500">{key.key}</p>
-                  <p className="text-xs text-neutral-400">Created: {new Date(key.createdAt).toLocaleDateString()}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={key.status === "active" ? "success" : "neutral"}>{key.status}</Badge>
-                  {key.status === "active" && (
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmRevoke(key.id)}>Revoke</Button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "payments" && (
-        <Card>
-          <CardHeader><CardTitle>Payment Gateway Configuration</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {paymentGateway.methods.map(method => (
-              <div key={method.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
-                <div>
-                  <p className="font-medium">{method.name}</p>
-                  <p className="text-xs text-neutral-500">Fee: {method.feePercent}% + {method.fixedFee} GHS</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={method.enabled}
-                      onChange={e => {
-                        const updated = { ...method, enabled: e.target.checked };
-                        setPaymentGateway(prev => ({ ...prev, methods: prev.methods.map(m => m.id === method.id ? updated : m) }));
-                      }}
-                      className="h-4 w-4"
-                    />
-                    Enabled
-                  </label>
-                  <Button variant="outline" size="sm" onClick={() => handleConfigurePaymentMethod(method.id)}>Configure</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "wallet" && (
-        <Card>
-          <CardHeader><CardTitle>Wallet & Withdrawal Settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm">Auto‑Approve Threshold (GHS)</label>
-                <Input type="number" value={walletWithdrawal.autoApproveThreshold} onChange={e => setWalletWithdrawal({ ...walletWithdrawal, autoApproveThreshold: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Daily Withdrawal Limit (GHS)</label>
-                <Input type="number" value={walletWithdrawal.dailyWithdrawalLimit} onChange={e => setWalletWithdrawal({ ...walletWithdrawal, dailyWithdrawalLimit: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Monthly Withdrawal Limit (GHS)</label>
-                <Input type="number" value={walletWithdrawal.monthlyWithdrawalLimit} onChange={e => setWalletWithdrawal({ ...walletWithdrawal, monthlyWithdrawalLimit: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Minimum Balance to Withdraw (GHS)</label>
-                <Input type="number" value={walletWithdrawal.minBalanceToWithdraw} onChange={e => setWalletWithdrawal({ ...walletWithdrawal, minBalanceToWithdraw: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Processing Time</label>
-                <select
-                  className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                  value={walletWithdrawal.processingTime}
-                  onChange={e => setWalletWithdrawal({ ...walletWithdrawal, processingTime: e.target.value as "instant" | "t1" })}
-                >
-                  <option value="instant">Instant</option>
-                  <option value="t1">T+1</option>
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "support" && (
-        <Card>
-          <CardHeader><CardTitle>Support Settings</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm">SLA Warning (hours)</label>
-                <Input type="number" value={supportSettings.slaWarningHours} onChange={e => setSupportSettings({ ...supportSettings, slaWarningHours: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">SLA Critical (hours)</label>
-                <Input type="number" value={supportSettings.slaCriticalHours} onChange={e => setSupportSettings({ ...supportSettings, slaCriticalHours: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Live Chat Hours</label>
-                <Input value={supportSettings.liveChatHours} onChange={e => setSupportSettings({ ...supportSettings, liveChatHours: e.target.value })} />
-              </div>
-              <div className="flex items-end gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={supportSettings.autoAssign} onChange={e => setSupportSettings({ ...supportSettings, autoAssign: e.target.checked })} className="h-4 w-4" />
-                  Auto‑Assign
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={supportSettings.liveChatEnabled} onChange={e => setSupportSettings({ ...supportSettings, liveChatEnabled: e.target.checked })} className="h-4 w-4" />
-                  Live Chat Enabled
-                </label>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "localization" && (
-        <Card>
-          <CardHeader><CardTitle>Localization</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm">Default Language</label>
-                <Input value={localization.defaultLanguage} onChange={e => setLocalization({ ...localization, defaultLanguage: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Date Format</label>
-                <Input value={localization.dateFormat} onChange={e => setLocalization({ ...localization, dateFormat: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-sm">Time Format</label>
-                <Input value={localization.timeFormat} onChange={e => setLocalization({ ...localization, timeFormat: e.target.value })} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "compliance" && (
-        <Card>
-          <CardHeader><CardTitle>Data & Compliance</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm">Audit Log Retention (days)</label>
-                <Input type="number" value={compliance.auditLogRetentionDays} onChange={e => setCompliance({ ...compliance, auditLogRetentionDays: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm">Backup Schedule</label>
-                <Input value={compliance.backupSchedule} onChange={e => setCompliance({ ...compliance, backupSchedule: e.target.value })} />
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={compliance.dataExportEnabled} onChange={e => setCompliance({ ...compliance, dataExportEnabled: e.target.checked })} className="h-4 w-4" />
-                Data Export Enabled
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={compliance.dataDeleteEnabled} onChange={e => setCompliance({ ...compliance, dataDeleteEnabled: e.target.checked })} className="h-4 w-4" />
-                Data Delete Enabled
-              </label>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "webhooks" && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Webhooks & Integrations</CardTitle>
-            <Button size="sm" onClick={() => setShowAddWebhookModal(true)}>Add Webhook</Button>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {webhooks.webhooks.map(webhook => (
-              <div key={webhook.id} className="flex items-center justify-between rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
-                <div>
-                  <p className="font-medium">{webhook.event}</p>
-                  <p className="text-xs text-neutral-500">{webhook.url}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={webhook.enabled ? "success" : "neutral"}>{webhook.enabled ? "Enabled" : "Disabled"}</Badge>
-                  <Button variant="outline" size="sm" onClick={() => handleTestWebhook(webhook.id)}>Test</Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === "roles" && (
-        <Card>
-          <CardHeader><CardTitle>Roles & Permissions</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {roles.roles.map(role => (
-              <div key={role.name} className="rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
-                <p className="font-medium">{role.name}</p>
-                <p className="text-xs text-neutral-500">{role.permissions.join(", ")}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button size="sm" onClick={() => setConfirmSave(true)}>Save All Changes</Button>
-      </div>
-
-      {/* Modals */}
-      {showAddApiKeyModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowAddApiKeyModal(false)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Generate New API Key</h3>
-            <Input className="mt-4" placeholder="Key Name" value={newApiKeyName} onChange={e => setNewApiKeyName(e.target.value)} />
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowAddApiKeyModal(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleGenerateApiKey}>Generate</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {configureMethodId && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setConfigureMethodId(null)} />
-          <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Configure Payment Method</h3>
-            {paymentGateway.methods.filter(m => m.id === configureMethodId).map(method => (
-              <div key={method.id} className="mt-4 space-y-3">
-                <div>
-                  <label className="text-sm">Fee Percentage (%)</label>
-                  <Input type="number" value={method.feePercent} onChange={e => {
-                    const updated = { ...method, feePercent: Number(e.target.value) };
-                    setPaymentGateway(prev => ({ ...prev, methods: prev.methods.map(m => m.id === method.id ? updated : m) }));
-                  }} />
-                </div>
-                <div>
-                  <label className="text-sm">Fixed Fee (GHS)</label>
-                  <Input type="number" value={method.fixedFee} onChange={e => {
-                    const updated = { ...method, fixedFee: Number(e.target.value) };
-                    setPaymentGateway(prev => ({ ...prev, methods: prev.methods.map(m => m.id === method.id ? updated : m) }));
-                  }} />
-                </div>
-                <div>
-                  <label className="text-sm">API Key</label>
-                  <Input value={method.apiKey || ""} onChange={e => {
-                    const updated = { ...method, apiKey: e.target.value };
-                    setPaymentGateway(prev => ({ ...prev, methods: prev.methods.map(m => m.id === method.id ? updated : m) }));
-                  }} />
-                </div>
-                <div>
-                  <label className="text-sm">Secret</label>
-                  <Input type="password" value={method.secret || ""} onChange={e => {
-                    const updated = { ...method, secret: e.target.value };
-                    setPaymentGateway(prev => ({ ...prev, methods: prev.methods.map(m => m.id === method.id ? updated : m) }));
-                  }} />
-                </div>
-                <div className="mt-6 flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setConfigureMethodId(null)}>Close</Button>
-                  <Button size="sm" onClick={() => handleSavePaymentMethodConfig(method)}>Save</Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {showAddWebhookModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowAddWebhookModal(false)} />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Add Webhook</h3>
-            <div className="mt-4 space-y-3">
-              <Input placeholder="Event (e.g., order.placed)" />
-              <Input placeholder="URL" />
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowAddWebhookModal(false)}>Cancel</Button>
-              <Button size="sm" onClick={handleAddWebhook}>Add</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {testResult && (
-        <div className="fixed bottom-4 right-4 rounded-md bg-white p-4 shadow-lg dark:bg-neutral-900">
-          <p className={testResult.status === "success" ? "text-success-600" : "text-danger-600"}>
-            Webhook test {testResult.status === "success" ? "succeeded" : "failed"}
-          </p>
-        </div>
-      )}
-
-      {/* Confirmations */}
-      <ConfirmDialog
-        open={confirmSave}
-        title="Save Settings"
-        description="Are you sure you want to save all changes?"
-        confirmLabel="Save"
-        onConfirm={handleSave}
-        onCancel={() => setConfirmSave(false)}
+            Audit log
+          </Button>
+        }
       />
+
+      <SettingsTabs
+        activeTab={activeTab}
+        dirtyTabs={draft.dirtyTabs}
+        onChange={handleTabChange}
+      />
+
+      <div
+        role="tabpanel"
+        id={`settings-panel-${activeTab}`}
+        aria-labelledby={`settings-tab-${activeTab}`}
+        tabIndex={0}
+        className="focus-visible:outline-none"
+      >
+        {activeTab === "general" && (
+          <GeneralTab value={general} onChange={patchGeneral} />
+        )}
+
+        {activeTab === "notifications" && (
+          <NotificationsTab
+            value={notifications}
+            onChange={patchNotifications}
+            onSendTest={handleSendTestNotification}
+          />
+        )}
+
+        {activeTab === "security" && (
+          <SecurityTab value={security} onChange={patchSecurity} />
+        )}
+
+        {activeTab === "maintenance" && (
+          <MaintenanceTab
+            value={maintenance}
+            onChange={patchMaintenance}
+            onToggle={requestMaintenanceToggle}
+          />
+        )}
+
+        {activeTab === "health" && (
+          <HealthTab
+            value={health.data}
+            refreshing={health.refreshing}
+            onRefresh={handleHealthRefresh}
+          />
+        )}
+
+        {activeTab === "api" && (
+          <ApiTab
+            keys={apiState.keys}
+            onGenerate={() => setShowApiKeyModal(true)}
+            onRevoke={(id) => {
+              const target = apiState.keys.find((k) => k.id === id);
+              if (target) setRevokeTarget(target);
+            }}
+          />
+        )}
+
+        {activeTab === "payments" && (
+          <PaymentsTab
+            value={payments}
+            onToggleMethod={handlePaymentMethodToggle}
+            onConfigureMethod={(m) => setConfigureMethodId(m.id)}
+          />
+        )}
+
+        {activeTab === "wallet" && (
+          <WalletTab value={wallet} onChange={patchWallet} />
+        )}
+
+        {activeTab === "support" && (
+          <SupportTab value={support} onChange={patchSupport} />
+        )}
+
+        {activeTab === "localization" && (
+          <LocalizationTab value={localization} onChange={patchLocalization} />
+        )}
+
+        {activeTab === "compliance" && (
+          <ComplianceTab value={compliance} onChange={patchCompliance} />
+        )}
+
+        {activeTab === "webhooks" && (
+          <WebhooksTab
+            value={webhooks}
+            onAdd={() => setShowWebhookModal(true)}
+            onToggle={handleWebhookToggle}
+            onRemove={handleWebhookRemove}
+            testResult={testResult}
+            onTest={handleWebhookTest}
+          />
+        )}
+
+        {activeTab === "roles" && (
+          <RolesTab value={mockAdminRolePermissions} />
+        )}
+      </div>
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          {toast.text}
+        </div>
+      )}
+
+      {!isReadOnly && (
+        <SettingsSaveBar
+          dirtyTabs={draft.dirtyTabs}
+          onReview={() => setShowSaveConfirm(true)}
+          onDiscard={() => setShowDiscardConfirm(true)}
+        />
+      )}
+
+      <ApiKeyCreateModal
+        open={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onCreate={handleApiKeyCreate}
+      />
+
+      <WebhookCreateModal
+        open={showWebhookModal}
+        onClose={() => setShowWebhookModal(false)}
+        onCreate={handleWebhookCreate}
+        existingEvents={recentWebhookEvents}
+      />
+
+      <PaymentMethodConfigModal
+        method={configureMethod}
+        onClose={() => setConfigureMethodId(null)}
+        onSave={handlePaymentMethodSave}
+      />
+
+      <SettingsAuditPanel
+        entries={auditEntries}
+        open={auditPanelOpen}
+        onClose={() => setAuditPanelOpen(false)}
+      />
+
       <ConfirmDialog
-        open={confirmRevoke !== null}
-        title="Revoke API Key"
-        description="Are you sure you want to revoke this API key? This action cannot be undone."
-        confirmLabel="Revoke"
+        open={showSaveConfirm}
+        title="Save settings?"
+        description={
+          draft.dirtyTabs.length === 1
+            ? "1 tab has changes. Review the details below before confirming."
+            : `${draft.dirtyTabs.length} tabs have changes. Review the details below before confirming.`
+        }
+        confirmLabel="Save changes"
+        cancelLabel="Keep editing"
+        danger={environment === "production"}
+        onConfirm={handleConfirmSave}
+        onCancel={() => setShowSaveConfirm(false)}
+      >
+        <div className="max-h-72 overflow-y-auto">
+          <SettingsDiffPreview
+            saved={draft.saved}
+            draft={draft.draft}
+            dirtyTabs={draft.dirtyTabs}
+          />
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={showDiscardConfirm}
+        title="Discard changes?"
+        description={
+          draft.dirtyTabs.length === 1
+            ? "Changes in 1 tab will be reverted to their last saved values. This cannot be undone."
+            : `Changes across ${draft.dirtyTabs.length} tabs will be reverted to their last saved values. This cannot be undone.`
+        }
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
         danger
-        onConfirm={() => confirmRevoke && handleRevokeKey(confirmRevoke)}
-        onCancel={() => setConfirmRevoke(null)}
+        onConfirm={handleDiscard}
+        onCancel={() => setShowDiscardConfirm(false)}
       />
+
       <ConfirmDialog
-        open={confirmMaintenance}
-        title={`${maintenance.enabled ? "Disable" : "Enable"} Maintenance Mode`}
-        description={`Are you sure you want to ${maintenance.enabled ? "disable" : "enable"} maintenance mode?`}
-        confirmLabel="Confirm"
+        open={showMaintenanceConfirm}
+        title={
+          maintenance.enabled
+            ? "Disable maintenance mode?"
+            : "Enable maintenance mode?"
+        }
+        description={
+          maintenance.enabled
+            ? "Users will be able to access Atlas again once the change is saved."
+            : `All users will be redirected to the maintenance page as soon as this change is saved. Allowlisted IPs (${maintenance.allowedIPs.length}) will retain access.`
+        }
+        confirmLabel={
+          maintenance.enabled ? "Disable maintenance" : "Enable maintenance"
+        }
+        cancelLabel="Cancel"
         danger={!maintenance.enabled}
-        onConfirm={handleToggleMaintenance}
-        onCancel={() => setConfirmMaintenance(false)}
+        onConfirm={confirmMaintenanceToggle}
+        onCancel={() => setShowMaintenanceConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="Revoke API key?"
+        description={
+          revokeTarget
+            ? `${revokeTarget.name} will stop working immediately. Any integration using it will receive authentication errors. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Revoke key"
+        danger
+        onConfirm={confirmApiKeyRevoke}
+        onCancel={() => setRevokeTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={removeWebhookTarget !== null}
+        title="Remove webhook?"
+        description={
+          removeWebhookTarget
+            ? `${removeWebhookTarget.event} will no longer be delivered to ${removeWebhookTarget.url}. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Remove webhook"
+        danger
+        onConfirm={confirmWebhookRemove}
+        onCancel={() => setRemoveWebhookTarget(null)}
       />
     </div>
   );

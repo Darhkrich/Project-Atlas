@@ -6,6 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+import { useProviders } from "@/lib/admin/hooks/use-providers";
+import { sidebarProviderCounts } from "@/lib/admin/providers/sidebar-counts";
 
 interface NavItem {
   label: string;
@@ -19,6 +21,12 @@ interface NavGroup {
   label: string;
   items: NavItem[];
   collapsible?: boolean;
+}
+
+interface LiveBadge {
+  count: number;
+  tone: "warning" | "danger";
+  label: string;
 }
 
 const navGroups: NavGroup[] = [
@@ -135,6 +143,30 @@ export function AdminSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
+  const { providers } = useProviders();
+  const providerCounts = useMemo(
+    () => sidebarProviderCounts(providers),
+    [providers]
+  );
+
+  /**
+   * Live badges keyed by href. Populated from stores that notify subscribers.
+   * Additional entries are added here as more sections surface a live count.
+   */
+  const liveBadges = useMemo<Record<string, LiveBadge>>(() => {
+    const map: Record<string, LiveBadge> = {};
+    if (providerCounts.attention > 0) {
+      map["/admin/providers"] = {
+        count: providerCounts.attention,
+        tone: providerCounts.down > 0 ? "danger" : "warning",
+        label: `${providerCounts.attention} provider${
+          providerCounts.attention === 1 ? "" : "s"
+        } need attention`,
+      };
+    }
+    return map;
+  }, [providerCounts]);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -248,6 +280,9 @@ export function AdminSidebar() {
                       <ul className="mt-1 space-y-0.5">
                         {group.items.map(item => {
                           const active = isActive(item.href);
+                          const live = liveBadges[item.href];
+                          const badgeCount = live ? live.count : item.badge;
+                          const badgeTone = live?.tone;
                           return (
                             <li key={item.href}>
                               <Link
@@ -279,17 +314,25 @@ export function AdminSidebar() {
                                   )}
                                 />
                                 <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                                {item.badge !== undefined && (
+                                {badgeCount !== undefined && (
                                   <span
+                                    aria-label={live?.label}
                                     className={cn(
                                       "min-w-5 rounded-full px-1.5 py-0.5",
                                       "text-center text-[10px] font-semibold",
-                                      active
-                                        ? "bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-300"
-                                        : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                                      badgeTone === "danger" &&
+                                        "bg-danger-100 text-danger-700 dark:bg-danger-900/60 dark:text-danger-300",
+                                      badgeTone === "warning" &&
+                                        "bg-warning-100 text-warning-700 dark:bg-warning-900/60 dark:text-warning-300",
+                                      !badgeTone &&
+                                        active &&
+                                        "bg-brand-100 text-brand-700 dark:bg-brand-900/60 dark:text-brand-300",
+                                      !badgeTone &&
+                                        !active &&
+                                        "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
                                     )}
                                   >
-                                    {item.badge}
+                                    {badgeCount}
                                   </span>
                                 )}
                               </Link>

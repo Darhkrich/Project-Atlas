@@ -1,163 +1,356 @@
+/* eslint-disable react-hooks/purity */
 /* eslint-disable react-hooks/set-state-in-effect */
+// app/(admin)/audit-logs/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Card, CardContent } from "@/components/admin/ui/card";
-import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { Input } from "@/components/admin/ui/input";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
-import { SavedViews, type SavedView } from "@/components/admin/ui/saved-views";
-import { AuditLogDetailDrawer } from "@/components/admin/security/audit-log-detail-drawer";
+import {
+  SavedViews,
+  type SavedView,
+} from "@/components/admin/ui/saved-views";
+import {
+  AuditLogToolbar,
+  type AuditFilterValues,
+} from "@/components/admin/audit-logs/audit-log-toolbar";
+import { AuditLogRow } from "@/components/admin/audit-logs/audit-log-row";
+import { AuditLogDetailDrawer } from "@/components/admin/audit-logs/audit-log-detail-drawer";
+import { AuditLogEmptyState } from "@/components/admin/audit-logs/audit-log-empty-state";
+import { AuditLogPagination } from "@/components/admin/audit-logs/audit-log-paginations";
 import { mockAuditLogs } from "@/lib/admin/mock/audit-logs";
-import { AuditLogEntry } from "@/lib/admin/types/audit-log";
+import { mockAdminUsers } from "@/lib/admin/mock/admin-users";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
+import { auditLogsToCsv } from "@/lib/admin/audit-logs/csv-export";
+import {
+  TIME_RANGE_MS,
+  type AuditTimeRange,
+} from "@/lib/admin/audit-logs/constants";
+import type { AuditLogEntry } from "@/lib/admin/types/audit-log";
 
-function formatTimestamp(iso: string) {
-  const d = new Date(iso);
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const yyyy = d.getUTCFullYear();
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const min = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${mm}/${dd}/${yyyy}, ${hh}:${min}`;
-}
+type AuditUrlFilterValues = AuditFilterValues & Record<string, string>;
+
+const DEFAULT_FILTERS: AuditUrlFilterValues = {
+  q: "",
+  admin: "",
+  action: "",
+  resourceKind: "",
+  section: "",
+  result: "",
+  range: "7d",
+  resourceId: "",
+  page: "1",
+};
+
+const PAGE_SIZE = 10;
+const STORAGE_KEY = "atlas-audit-log-views-v2";
 
 export default function AuditLogsPage() {
+  return (
+    <Suspense fallback={<AuditLogsSkeleton />}>
+      <AuditLogsPageInner />
+    </Suspense>
+  );
+}
+
+function AuditLogsSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="h-8 w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-20 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuditLogsPageInner() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState("");
-  const [resultFilter, setResultFilter] = useState("");
-  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [viewsLoaded, setViewsLoaded] = useState(false);
+
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<AuditFilterValues>(DEFAULT_FILTERS);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTimeout(() => {
+    const t = window.setTimeout(() => {
       setLogs(mockAuditLogs);
       setLoading(false);
-    }, 500);
+    }, 400);
+    return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("atlas-audit-log-views");
-      if (stored) setSavedViews(JSON.parse(stored));
-    } catch {}
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SavedView[];
+        if (Array.isArray(parsed)) setSavedViews(parsed);
+      }
+    } catch {
+      setSavedViews([]);
+    } finally {
+      setViewsLoaded(true);
+    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("atlas-audit-log-views", JSON.stringify(savedViews));
-  }, [savedViews]);
+    if (!viewsLoaded) return;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(savedViews));
+    } catch {
+      // Storage full or unavailable. The UI keeps working in-memory.
+    }
+  }, [savedViews, viewsLoaded]);
 
-  const filtered = logs.filter(log => {
-    if (search && !log.admin.toLowerCase().includes(search.toLowerCase()) &&
-        !log.resource.toLowerCase().includes(search.toLowerCase()) &&
-        !log.resourceId.toLowerCase().includes(search.toLowerCase())) return false;
-    if (actionFilter && log.action !== actionFilter) return false;
-    if (resultFilter && log.result !== resultFilter) return false;
-    return true;
+  const filtered = useMemo(() => {
+    const cutoff =
+      TIME_RANGE_MS[filters.range as AuditTimeRange] === null
+        ? 0
+        : Date.now() -
+          (TIME_RANGE_MS[filters.range as AuditTimeRange] ?? 0);
+
+    const q = filters.q.trim().toLowerCase();
+
+    return logs.filter((entry) => {
+      if (cutoff) {
+        const t = new Date(entry.timestamp).getTime();
+        if (t < cutoff) return false;
+      }
+
+      if (filters.admin && entry.admin !== filters.admin) return false;
+      if (filters.action && entry.action !== filters.action) return false;
+      if (
+        filters.resourceKind &&
+        entry.resourceKind !== filters.resourceKind
+      ) {
+        return false;
+      }
+      if (filters.section && entry.section !== filters.section) return false;
+      if (filters.result && entry.result !== filters.result) return false;
+      if (filters.resourceId && entry.resourceId !== filters.resourceId) {
+        return false;
+      }
+
+      if (q) {
+        const haystack = [
+          entry.admin,
+          entry.actorName ?? "",
+          entry.resource,
+          entry.resourceId,
+          entry.ip,
+          entry.previousValue ?? "",
+          entry.newValue ?? "",
+          entry.reason ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+
+      return true;
+    });
+  }, [logs, filters]);
+
+  const page = Math.max(1, Number(filters.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
+
+  const filteredIds = useMemo(() => paginated.map((e) => e.id), [paginated]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setFilters({ page: "1" });
+    }
+  }, [page, totalPages, setFilters]);
+
+  useEffect(() => {
+    if (focusedId && !filteredIds.includes(focusedId)) {
+      setFocusedId(filteredIds[0] ?? null);
+    }
+  }, [filteredIds, focusedId]);
+
+  useEffect(() => {
+    if (!focusedId) return;
+    const el = document.querySelector(`[data-audit-id="${focusedId}"]`);
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: "nearest" });
+  }, [focusedId]);
+
+  useInboxKeyboard({
+    itemIds: filteredIds,
+    focusedId,
+    enabled: selectedId === null,
+    onFocusChange: setFocusedId,
+    onOpen: setSelectedId,
+    onFocusSearch: () => searchInputRef.current?.focus(),
   });
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paginatedLogs = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const selected = useMemo(
+    () => logs.find((l) => l.id === selectedId) ?? null,
+    [logs, selectedId]
+  );
 
-  const actions = Array.from(new Set(logs.map(l => l.action)));
+  const admins = useMemo(
+    () =>
+      mockAdminUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+      })),
+    []
+  );
 
-  const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export audit logs as ${format}`);
-  };
+  const failureCount = useMemo(
+    () => filtered.filter((e) => e.result === "failure").length,
+    [filtered]
+  );
 
   const handleSaveView = (name: string) => {
-    setSavedViews(prev => [...prev, { name, filters: { search, actionFilter, resultFilter } }]);
+    const filtersSnapshot: Record<string, string> = {};
+    if (filters.q) filtersSnapshot.q = filters.q;
+    if (filters.admin) filtersSnapshot.admin = filters.admin;
+    if (filters.action) filtersSnapshot.action = filters.action;
+    if (filters.resourceKind)
+      filtersSnapshot.resourceKind = filters.resourceKind;
+    if (filters.section) filtersSnapshot.section = filters.section;
+    if (filters.result) filtersSnapshot.result = filters.result;
+    if (filters.range) filtersSnapshot.range = filters.range;
+    setSavedViews((prev) => [
+      ...prev,
+      { name, filters: filtersSnapshot },
+    ]);
   };
 
   const handleLoadView = (view: SavedView) => {
-    setSearch(view.filters.search || "");
-    setActionFilter(view.filters.actionFilter || "");
-    setResultFilter(view.filters.resultFilter || "");
-    setPage(1);
+    setFilters({
+      ...DEFAULT_FILTERS,
+      ...view.filters,
+      page: "1",
+    });
   };
 
   const handleDeleteView = (name: string) => {
-    setSavedViews(prev => prev.filter(v => v.name !== name));
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
+  };
+
+  const handleExport = (format: "csv" | "excel" | "pdf") => {
+    if (format !== "csv") return;
+    const csv = auditLogsToCsv(filtered);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`atlas-audit-logs-${stamp}.csv`, csv);
   };
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Audit Logs"
+        title="Audit logs"
         description="Immutable record of security-relevant admin actions."
-        actions={<ExportMenu onExport={handleExport} />}
+        meta={
+          <>
+            <span>
+              {logs.length.toLocaleString("en-GH")} total
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{filtered.length.toLocaleString("en-GH")} matching</span>
+            {failureCount > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-danger-700 dark:text-danger-300">
+                  {failureCount} failure{failureCount === 1 ? "" : "s"}
+                </span>
+              </>
+            )}
+          </>
+        }
+        actions={
+          <ExportMenu onExport={handleExport} formats={["csv"]} />
+        }
       />
 
-      <SavedViews views={savedViews} onLoad={handleLoadView} onDelete={handleDeleteView} onSave={handleSaveView} />
+      <SavedViews
+        views={savedViews}
+        onLoad={handleLoadView}
+        onDelete={handleDeleteView}
+        onSave={handleSaveView}
+      />
 
-      <div className="flex flex-wrap gap-2">
-        <Input placeholder="Search admin or resource..." className="max-w-xs" value={search} onChange={e => setSearch(e.target.value)} />
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={actionFilter}
-          onChange={e => { setActionFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All Actions</option>
-          {actions.map(action => <option key={action} value={action}>{action}</option>)}
-        </select>
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={resultFilter}
-          onChange={e => { setResultFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All Results</option>
-          <option value="success">Success</option>
-          <option value="failure">Failure</option>
-        </select>
-      </div>
+      <AuditLogToolbar
+        values={filters}
+        admins={admins}
+        hasActive={hasActive}
+        searchInputRef={searchInputRef}
+        onChange={(patch) => setFilters(patch)}
+        onClear={clearFilters}
+      />
+
+      <p
+        aria-live="polite"
+        className="text-xs text-neutral-500 dark:text-neutral-400"
+      >
+        Showing {paginated.length} of{" "}
+        {filtered.length.toLocaleString("en-GH")} matching entries
+      </p>
 
       {loading ? (
-        <div className="space-y-2">
+        <div
+          className="space-y-2"
+          aria-busy="true"
+          aria-label="Loading audit logs"
+        >
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />
+            <div
+              key={i}
+              className="h-20 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800"
+            />
           ))}
         </div>
+      ) : paginated.length === 0 ? (
+        <AuditLogEmptyState
+          hasActiveFilters={hasActive}
+          onClearFilters={clearFilters}
+        />
       ) : (
-        <div className="space-y-2">
-          {paginatedLogs.length === 0 ? (
-            <Card><CardContent>No audit logs found.</CardContent></Card>
-          ) : (
-            paginatedLogs.map(log => (
-              <div key={log.id} className="flex items-center justify-between rounded-lg border border-neutral-200 p-3 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900/50">
-                <div className="min-w-0">
-                  <p className="font-medium truncate">{log.admin} {log.action} {log.resource}</p>
-                  <p className="text-xs text-neutral-500">{log.resourceId} · {log.ip}</p>
-                  <p className="text-xs text-neutral-400">{formatTimestamp(log.timestamp)}</p>
-                </div>
-                <div className="flex items-center gap-2 ml-4">
-                  <Badge variant={log.result === "success" ? "success" : "danger"}>{log.result}</Badge>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedLog(log)}>View</Button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        <ul role="list" className="space-y-2">
+          {paginated.map((entry) => (
+            <AuditLogRow
+              key={entry.id}
+              entry={entry}
+              focused={focusedId === entry.id}
+              onOpen={setSelectedId}
+              onFocus={setFocusedId}
+            />
+          ))}
+        </ul>
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-xs text-neutral-500">
-            Page {page} of {totalPages} · {filtered.length} logs
-          </span>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</Button>
-          </div>
-        </div>
-      )}
+      <AuditLogPagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        totalCount={filtered.length}
+        onPageChange={(next) => setFilters({ page: String(next) })}
+      />
 
-      <AuditLogDetailDrawer entry={selectedLog} onClose={() => setSelectedLog(null)} />
+      <AuditLogDetailDrawer
+        entry={selected}
+        onClose={() => setSelectedId(null)}
+      />
     </div>
   );
 }

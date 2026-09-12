@@ -1,34 +1,63 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import type { ProviderAlert } from "@/lib/admin/types/provider";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/admin/ui/card";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
+import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { formatRelative } from "@/lib/admin/support/format";
+import { formatDateTime } from "@/lib/admin/formatters";
+import { useNow } from "@/lib/admin/hooks/use-now";
+import {
+  ALERT_SEVERITY_LABEL,
+  ALERT_SEVERITY_VARIANT,
+} from "@/lib/admin/providers/constants";
 
-export interface ProviderAlert {
-  id: string;
-  title: string;
-  description: string;
-  severity: "warning" | "critical";
-  timestamp: string;
-  acknowledged: boolean;
-}
+type Filter = "all" | "open" | "acknowledged";
 
 interface ProviderAlertsPanelProps {
+  providerId: string;
   alerts: ProviderAlert[];
-  onAcknowledge?: (id: string) => void;
-  onAcknowledgeAll?: () => void;
+  onAcknowledge: (id: string) => void;
+  onUnacknowledge: (id: string) => void;
+  onAcknowledgeAll: () => void;
 }
 
 export function ProviderAlertsPanel({
+  providerId,
   alerts,
   onAcknowledge,
+  onUnacknowledge,
   onAcknowledgeAll,
 }: ProviderAlertsPanelProps) {
-  const [filter, setFilter] = useState<"all" | "open" | "acknowledged">("all");
+  const now = useNow();
+  const [filter, setFilter] = useState<Filter>("all");
+  const [confirmAll, setConfirmAll] = useState(false);
 
-  const filtered = alerts.filter((a) => {
+  useEffect(() => {
+    setFilter("all");
+  }, [providerId]);
+
+  const sorted = useMemo(() => {
+    const severityWeight = { critical: 0, warning: 1 } as const;
+    return [...alerts].sort((a, b) => {
+      if (a.acknowledged !== b.acknowledged) return a.acknowledged ? 1 : -1;
+      const s = severityWeight[a.severity] - severityWeight[b.severity];
+      if (s !== 0) return s;
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    });
+  }, [alerts]);
+
+  const filtered = sorted.filter((a) => {
     if (filter === "open") return !a.acknowledged;
     if (filter === "acknowledged") return a.acknowledged;
     return true;
@@ -38,28 +67,50 @@ export function ProviderAlertsPanel({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <CardTitle>Provider Alerts</CardTitle>
-          {openCount > 0 && <Badge variant="danger">{openCount} open</Badge>}
+          <CardTitle>Provider alerts</CardTitle>
+          <span
+            role="status"
+            aria-live="polite"
+            className="text-xs text-neutral-500 dark:text-neutral-400"
+          >
+            {openCount} open
+          </span>
         </div>
-        <div className="flex gap-1">
-          {(["all", "open", "acknowledged"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "rounded-md px-2 py-1 text-xs font-medium capitalize",
-                filter === f
-                  ? "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
-                  : "text-neutral-500 hover:text-neutral-700"
-              )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            role="group"
+            aria-label="Alert filter"
+            className="flex gap-1"
+          >
+            {(["all", "open", "acknowledged"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                  filter === f
+                    ? "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+                    : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                )}
+              >
+                {f === "all"
+                  ? "All"
+                  : f === "open"
+                  ? "Open"
+                  : "Acknowledged"}
+              </button>
+            ))}
+          </div>
+          {openCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmAll(true)}
             >
-              {f}
-            </button>
-          ))}
-          {openCount > 0 && onAcknowledgeAll && (
-            <Button variant="ghost" size="sm" onClick={onAcknowledgeAll}>
               Acknowledge all
             </Button>
           )}
@@ -67,9 +118,13 @@ export function ProviderAlertsPanel({
       </CardHeader>
       <CardContent>
         {filtered.length === 0 ? (
-          <p className="text-sm text-neutral-400">No alerts.</p>
+          <p className="text-sm text-neutral-400 dark:text-neutral-500">
+            {alerts.length === 0
+              ? "No alerts recorded."
+              : "No alerts match this filter."}
+          </p>
         ) : (
-          <ul className="space-y-3">
+          <ul role="list" className="space-y-3">
             {filtered.map((alert) => (
               <li
                 key={alert.id}
@@ -83,38 +138,77 @@ export function ProviderAlertsPanel({
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
-                      variant={alert.severity === "critical" ? "danger" : "warning"}
+                      variant={ALERT_SEVERITY_VARIANT[alert.severity]}
+                      size="sm"
                     >
-                      {alert.severity}
+                      {ALERT_SEVERITY_LABEL[alert.severity]}
                     </Badge>
                     <p className="text-sm font-medium">{alert.title}</p>
                     {alert.acknowledged && (
-                      <Badge variant="neutral">Acknowledged</Badge>
+                      <Badge variant="neutral" size="sm">
+                        Acknowledged
+                      </Badge>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
                     {alert.description}
                   </p>
-                  <p className="mt-1 text-xs text-neutral-400">
-                    {new Date(alert.timestamp).toLocaleString()}
+                  <p
+                    className="mt-1 text-xs text-neutral-400 dark:text-neutral-500"
+                    title={formatDateTime(alert.timestamp)}
+                  >
+                    {formatRelative(alert.timestamp, now)}
+                    {alert.acknowledged && alert.acknowledgedBy
+                      ? ` · acknowledged by ${alert.acknowledgedBy}`
+                      : ""}
                   </p>
                 </div>
-                {!alert.acknowledged && onAcknowledge && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onAcknowledge(alert.id)}
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href={`/admin/data-plans?provider=${providerId}`}
+                    className="inline-flex h-8 items-center rounded-md border border-neutral-300 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
                   >
-                    Acknowledge
-                  </Button>
-                )}
+                    See affected plans
+                  </Link>
+                  {!alert.acknowledged ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onAcknowledge(alert.id)}
+                    >
+                      Acknowledge
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onUnacknowledge(alert.id)}
+                    >
+                      Reopen
+                    </Button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={confirmAll}
+        title="Acknowledge all alerts"
+        description={`Acknowledge ${openCount} open alert${
+          openCount === 1 ? "" : "s"
+        }? Each can still be reopened individually.`}
+        confirmLabel="Acknowledge all"
+        onConfirm={() => {
+          onAcknowledgeAll();
+          setConfirmAll(false);
+        }}
+        onCancel={() => setConfirmAll(false)}
+      />
     </Card>
   );
 }

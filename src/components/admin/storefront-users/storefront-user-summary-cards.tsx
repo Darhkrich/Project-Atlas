@@ -1,23 +1,40 @@
+// components/admin/storefront-users/storefront-user-summary-cards.tsx
 "use client";
 
-import { Card } from "@/components/admin/ui/card";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
-import { formatCurrency } from "@/lib/admin/formatters";
 import { cn } from "@/lib/utils";
-import { Customer } from "@/lib/admin/types/customer";
+import { formatCurrency } from "@/lib/admin/formatters";
+import type { StorefrontUser } from "@/lib/admin/types/storefront-user";
 
 interface StorefrontUserSummaryCardsProps {
-  users: Customer[];
+  users: StorefrontUser[];
   storefrontCount: number;
-  onFilterAll?: () => void;
-  onFilterActive?: () => void;
-  onFilterSuspended?: () => void;
-  onFilterHighRisk?: () => void;
+  activeStatus: string;
+  activeRisk: string;
+  onFilterAll: () => void;
+  onFilterActive: () => void;
+  onFilterSuspended: () => void;
+  onFilterHighRisk: () => void;
+}
+
+interface CardConfig {
+  key: string;
+  label: string;
+  value: string | number;
+  sub: string;
+  icon: AtlasIconName;
+  color: string;
+  bg: string;
+  isActive: boolean;
+  highlight?: boolean;
+  onClick: () => void;
 }
 
 export function StorefrontUserSummaryCards({
   users,
   storefrontCount,
+  activeStatus,
+  activeRisk,
   onFilterAll,
   onFilterActive,
   onFilterSuspended,
@@ -29,51 +46,50 @@ export function StorefrontUserSummaryCards({
   const highRisk = users.filter((u) => u.riskLevel === "high").length;
   const totalSpent = users.reduce((sum, u) => sum + u.totalSpent, 0);
 
-  const cards: {
-    label: string;
-    value: string | number;
-    sub: string;
-    icon: AtlasIconName;
-    color: string;
-    bg: string;
-    highlight?: boolean;
-    onClick?: () => void;
-  }[] = [
+  const cards: CardConfig[] = [
     {
-      label: "Total Users",
+      key: "total",
+      label: "Total users",
       value: total,
-      sub: `${storefrontCount} storefronts`,
+      sub: `${storefrontCount} storefront${storefrontCount === 1 ? "" : "s"}`,
       icon: "users",
-      color: "text-brand-600",
+      color: "text-brand-600 dark:text-brand-400",
       bg: "bg-brand-50 dark:bg-brand-900/20",
+      isActive: activeStatus === "" && activeRisk === "",
       onClick: onFilterAll,
     },
     {
+      key: "active",
       label: "Active",
       value: active,
       sub: "Engaged users",
-      icon: "check",
-      color: "text-success-600",
+      icon: "check-circle",
+      color: "text-success-600 dark:text-success-400",
       bg: "bg-success-50 dark:bg-success-900/20",
+      isActive: activeStatus === "active",
       onClick: onFilterActive,
     },
     {
+      key: "suspended",
       label: "Suspended",
       value: suspended,
       sub: "Restricted access",
       icon: "x-circle",
-      color: "text-danger-600",
+      color: "text-danger-600 dark:text-danger-400",
       bg: "bg-danger-50 dark:bg-danger-900/20",
+      isActive: activeStatus === "suspended",
       highlight: suspended > 0,
       onClick: onFilterSuspended,
     },
     {
-      label: "High Risk",
+      key: "high-risk",
+      label: "High risk",
       value: highRisk,
       sub: `${formatCurrency(totalSpent)} total spent`,
-      icon: "alert",
-      color: "text-warning-600",
+      icon: "alert-triangle",
+      color: "text-warning-600 dark:text-warning-400",
       bg: "bg-warning-50 dark:bg-warning-900/20",
+      isActive: activeRisk === "high",
       highlight: highRisk > 0,
       onClick: onFilterHighRisk,
     },
@@ -82,27 +98,40 @@ export function StorefrontUserSummaryCards({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => (
-        <Card
-          key={card.label}
+        <button
+          key={card.key}
+          type="button"
+          aria-pressed={card.isActive}
           onClick={card.onClick}
-          className={cn(
-            "border-0 shadow-sm transition-all hover:shadow-md",
-            card.bg,
-            card.highlight && "ring-1 ring-danger-300 dark:ring-danger-800",
-            card.onClick && "cursor-pointer"
-          )}
+          className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
-          <div className="p-4">
+          <div
+            className={cn(
+              "rounded-lg border-0 p-4 shadow-sm transition-shadow hover:shadow-md",
+              card.bg,
+              card.isActive && "ring-2 ring-brand-500",
+              card.highlight &&
+                !card.isActive &&
+                "ring-1 ring-warning-300 dark:ring-warning-800"
+            )}
+          >
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
                 {card.label}
               </p>
-              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
+              <AtlasIcon
+                name={card.icon}
+                className={cn("h-4 w-4", card.color)}
+              />
             </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-            <p className="text-xs text-neutral-500">{card.sub}</p>
+            <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+              {card.value}
+            </p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {card.sub}
+            </p>
           </div>
-        </Card>
+        </button>
       ))}
     </div>
   );

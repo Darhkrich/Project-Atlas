@@ -1,27 +1,40 @@
+// components/admin/customers/customer-detail-drawer.tsx
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useId, useState } from "react";
 import { Customer } from "@/lib/admin/types/customer";
-import { formatCurrency } from "@/lib/admin/formatters";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
-import { cn } from "@/lib/utils";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
 import { AtlasIcon } from "@/components/atlas/icons";
-
-interface CustomerDetailDrawerProps {
-  customer: Customer | null;
-  onClose: () => void;
-  onAdjustWallet?: (id: string, amount: number, reason: string) => void;
-  onAddTag?: (id: string, tag: string) => void;
-  onSuspend?: (id: string) => void;
-  onSendNotification?: (id: string, channel: string, message: string) => void;
-}
+import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
+import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/lib/admin/hooks/use-focus-trap";
+import { useNow } from "@/lib/admin/hooks/use-now";
+import { formatAbsolute, formatRelative } from "@/lib/admin/support/format";
+import {
+  formatCurrency,
+  formatDateTime,
+  getInitials,
+} from "@/lib/admin/formatters";
+import { Can } from "@/lib/admin/rbac";
+import { PERMISSIONS } from "@/lib/admin/rbac";
+import { routes } from "@/lib/admin/routes";
+import {
+  RISK_VARIANT,
+  STATUS_VARIANT,
+} from "@/lib/admin/customers/constants";
+import {
+  NotifyModal,
+  SuspendModal,
+  WalletAdjustModal,
+} from "./customer-action-modals";
+import type { WalletAdjustMethod } from "@/lib/admin/customers/constants";
 
 type Tab = "overview" | "financial" | "activity" | "preferences" | "usage";
 
-const tabs: { key: Tab; label: string }[] = [
+const TABS: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "financial", label: "Financial" },
   { key: "activity", label: "Activity" },
@@ -29,656 +42,822 @@ const tabs: { key: Tab; label: string }[] = [
   { key: "usage", label: "Usage" },
 ];
 
+interface CustomerDetailDrawerProps {
+  customer: Customer | null;
+  onClose: () => void;
+  onAdjustWallet: (
+    id: string,
+    amount: number,
+    reason: string,
+    method: WalletAdjustMethod
+  ) => void;
+  onAddTag: (id: string, tag: string) => void;
+  onRemoveTag: (id: string, tag: string) => void;
+  onSuspend: (id: string, reason: string) => void;
+  onReactivate: (id: string) => void;
+  onSendNotification: (
+    id: string,
+    channel: "email" | "sms" | "push",
+    message: string
+  ) => void;
+  onRevealPII: (id: string) => void;
+  onResetPassword: (id: string) => void;
+}
+
 export function CustomerDetailDrawer({
   customer,
   onClose,
   onAdjustWallet,
   onAddTag,
+  onRemoveTag,
   onSuspend,
+  onReactivate,
   onSendNotification,
+  onRevealPII,
+  onResetPassword,
 }: CustomerDetailDrawerProps) {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [showSensitive, setShowSensitive] = useState(false);
-  const [showRevealConfirm, setShowRevealConfirm] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<"suspend" | "disable" | "reset_password" | null>(null);
-
-  const [showAdjustWallet, setShowAdjustWallet] = useState(false);
-  const [adjustAmount, setAdjustAmount] = useState(0);
-  const [adjustReason, setAdjustReason] = useState("");
-
-  const [newTag, setNewTag] = useState("");
-
-  const [showNotifyModal, setShowNotifyModal] = useState(false);
-  const [notifyChannel, setNotifyChannel] = useState<"email" | "sms" | "push">("email");
-  const [notifyMessage, setNotifyMessage] = useState("");
+  const isOpen = customer !== null;
+  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
+  const titleId = useId();
 
   if (!customer) return null;
 
-  const riskVariant =
-    customer.riskLevel === "high"
-      ? "danger"
-      : customer.riskLevel === "medium"
-      ? "warning"
-      : "success";
+  return (
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-50"
+    >
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-  const handleAdjustWallet = () => {
-    if (onAdjustWallet) onAdjustWallet(customer.id, adjustAmount, adjustReason);
-    setShowAdjustWallet(false);
-    setAdjustAmount(0);
-    setAdjustReason("");
-  };
+      <CustomerDetailBody
+        key={customer.id}
+        customer={customer}
+        titleId={titleId}
+        onClose={onClose}
+        onAdjustWallet={onAdjustWallet}
+        onAddTag={onAddTag}
+        onRemoveTag={onRemoveTag}
+        onSuspend={onSuspend}
+        onReactivate={onReactivate}
+        onSendNotification={onSendNotification}
+        onRevealPII={onRevealPII}
+        onResetPassword={onResetPassword}
+      />
+    </div>
+  );
+}
+
+interface BodyProps {
+  customer: Customer;
+  titleId: string;
+  onClose: () => void;
+  onAdjustWallet: (
+    id: string,
+    amount: number,
+    reason: string,
+    method: WalletAdjustMethod
+  ) => void;
+  onAddTag: (id: string, tag: string) => void;
+  onRemoveTag: (id: string, tag: string) => void;
+  onSuspend: (id: string, reason: string) => void;
+  onReactivate: (id: string) => void;
+  onSendNotification: (
+    id: string,
+    channel: "email" | "sms" | "push",
+    message: string
+  ) => void;
+  onRevealPII: (id: string) => void;
+  onResetPassword: (id: string) => void;
+}
+
+function CustomerDetailBody({
+  customer,
+  titleId,
+  onClose,
+  onAdjustWallet,
+  onAddTag,
+  onRemoveTag,
+  onSuspend,
+  onReactivate,
+  onSendNotification,
+  onRevealPII,
+  onResetPassword,
+}: BodyProps) {
+  const now = useNow();
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [showSensitive, setShowSensitive] = useState(false);
+  const [showRevealConfirm, setShowRevealConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [newTag, setNewTag] = useState("");
 
   const handleAddTag = () => {
-    if (newTag.trim() && onAddTag) onAddTag(customer.id, newTag.trim());
+    const trimmed = newTag.trim();
+    if (!trimmed) return;
+    onAddTag(customer.id, trimmed);
     setNewTag("");
   };
 
-  const handleSendNotification = () => {
-    if (onSendNotification) onSendNotification(customer.id, notifyChannel, notifyMessage);
-    setShowNotifyModal(false);
-    setNotifyMessage("");
+  const handleConfirmReveal = () => {
+    setShowSensitive(true);
+    setShowRevealConfirm(false);
+    onRevealPII(customer.id);
   };
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute right-0 top-0 flex h-full w-full max-w-lg flex-col bg-white shadow-xl dark:bg-neutral-900">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
-              {customer.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-            </div>
-            <div>
-              <p className="text-sm font-semibold">{customer.name}</p>
-              <p className="text-xs text-neutral-500">{customer.id}</p>
-            </div>
+    <div className="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-neutral-900">
+      <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
+            {getInitials(customer.name)}
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
+          <div className="min-w-0">
+            <p id={titleId} className="truncate text-sm font-semibold">
+              {customer.name}
+            </p>
+            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+              {customer.id}
+            </p>
+          </div>
         </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
 
-        {/* Status bar */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <Badge variant={customer.status === "active" ? "success" : customer.status === "suspended" ? "danger" : "neutral"}>
-            {customer.status}
-          </Badge>
-          <Badge variant={riskVariant}>Risk: {customer.riskLevel}</Badge>
-          <Badge variant="info">Source: {customer.source}</Badge>
-          {customer.storefrontId && (
-            <Badge variant="neutral">
-              {customer.storefrontType} · {customer.storefrontId}
-            </Badge>
-          )}
-        </div>
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <Badge variant={STATUS_VARIANT[customer.status]}>
+          {customer.status}
+        </Badge>
+        <Badge variant={RISK_VARIANT[customer.riskLevel]}>
+          {customer.riskLevel} risk
+        </Badge>
+        <Badge variant="info" size="sm">
+          Source: {customer.source}
+        </Badge>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-800">
-          {tabs.map((tab) => (
+      <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
+        <Link
+          href={`${routes.orders}?customerId=${customer.id}`}
+          className="text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Orders
+        </Link>
+        <Link
+          href={`${routes.support}?q=${encodeURIComponent(customer.email)}`}
+          className="text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Support tickets
+        </Link>
+        <Link
+          href={`/admin/audit-logs?resourceId=${customer.id}`}
+          className="text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Audit log
+        </Link>
+        <Link
+          href={`/admin/security?q=${encodeURIComponent(customer.email)}`}
+          className="text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Security
+        </Link>
+      </div>
+
+      <div
+        role="tablist"
+        aria-label="Customer sections"
+        className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-800"
+      >
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
             <button
               key={tab.key}
+              role="tab"
+              type="button"
+              aria-selected={isActive}
+              aria-controls={`customer-panel-${tab.key}`}
+              id={`customer-tab-${tab.key}`}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "flex-1 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium",
-                activeTab === tab.key
-                  ? "border-brand-600 text-brand-600"
-                  : "border-transparent text-neutral-500 hover:text-neutral-700"
+                "whitespace-nowrap border-b-2 px-4 py-2 text-xs font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                isActive
+                  ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+                  : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
               )}
             >
               {tab.label}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === "overview" && (
-            <div className="space-y-4">
-              {/* Contact info - masked */}
-              <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-neutral-500">
-                    Contact Information
-                  </p>
-                  {!showSensitive && (
+      <div
+        role="tabpanel"
+        id={`customer-panel-${activeTab}`}
+        aria-labelledby={`customer-tab-${activeTab}`}
+        className="flex-1 overflow-y-auto p-4"
+      >
+        {activeTab === "overview" && (
+          <div className="space-y-4">
+            <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Contact information
+                </p>
+                {!showSensitive && (
+                  <Can permission={PERMISSIONS.CUSTOMERS_REVEAL_PII}>
                     <button
+                      type="button"
                       onClick={() => setShowRevealConfirm(true)}
-                      className="text-xs font-medium text-brand-600 hover:underline"
+                      className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-300"
                     >
                       Reveal
                     </button>
-                  )}
-                </div>
-                <div className="mt-2 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Email</span>
-                    <span className="font-mono text-xs">
-                      {showSensitive ? customer.email : "•••••••@•••••"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Phone</span>
-                    <span className="font-mono text-xs">
-                      {showSensitive ? customer.phone : "••• ••• ••••"}
-                    </span>
-                  </div>
-                </div>
-                {showSensitive && (
-                  <p className="mt-2 text-xs text-warning-600">
-                    Sensitive data is now visible. This action is logged.
-                  </p>
+                  </Can>
                 )}
               </div>
+              <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Email
+                </dt>
+                <dd className="font-mono text-xs text-neutral-800 dark:text-neutral-200">
+                  {showSensitive ? customer.email : "•••••••@•••••"}
+                </dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Phone
+                </dt>
+                <dd className="font-mono text-xs text-neutral-800 dark:text-neutral-200">
+                  {showSensitive ? customer.phone : "••• ••• ••••"}
+                </dd>
+              </dl>
+              {showSensitive && (
+                <p className="mt-2 text-xs text-warning-700 dark:text-warning-300">
+                  Sensitive data is now visible. This reveal has been logged.
+                </p>
+              )}
+            </section>
 
-              {/* Referral */}
-              <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-                <p className="text-xs font-medium text-neutral-500">Referral</p>
-                <div className="mt-2 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Code</span>
-                    <span className="font-mono text-xs">
-                      {customer.referralCode || "—"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Referred by</span>
-                    <span>{customer.referredBy || "—"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Referrals</span>
-                    <span>{customer.referralsCount}</span>
-                  </div>
-                </div>
-              </div>
+            <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Referral
+              </p>
+              <dl className="mt-2 grid grid-cols-[5rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Code
+                </dt>
+                <dd className="font-mono text-xs text-neutral-800 dark:text-neutral-200">
+                  {customer.referralCode || "—"}
+                </dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Referred by
+                </dt>
+                <dd className="text-neutral-800 dark:text-neutral-200">
+                  {customer.referredBy || "—"}
+                </dd>
+                <dt className="text-neutral-500 dark:text-neutral-400">
+                  Referrals
+                </dt>
+                <dd className="text-neutral-800 dark:text-neutral-200">
+                  {customer.referralsCount}
+                </dd>
+              </dl>
+            </section>
 
-              {/* Tags */}
-              <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-                <p className="text-xs font-medium text-neutral-500">Tags</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {customer.tags.length === 0 && (
-                    <span className="text-xs text-neutral-400">No tags</span>
-                  )}
+            <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Tags
+              </p>
+              {customer.tags.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No tags yet.
+                </p>
+              ) : (
+                <ul className="mt-2 flex flex-wrap gap-1.5">
                   {customer.tags.map((tag) => (
-                    <span
+                    <li
                       key={tag}
-                      className="rounded bg-neutral-200 px-2 py-0.5 text-xs dark:bg-neutral-800"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
                     >
                       {tag}
-                    </span>
+                      <Can permission={PERMISSIONS.CUSTOMERS_EDIT}>
+                        <button
+                          type="button"
+                          aria-label={`Remove tag ${tag}`}
+                          onClick={() => onRemoveTag(customer.id, tag)}
+                          className="text-neutral-500 hover:text-danger-600 dark:hover:text-danger-400"
+                        >
+                          x
+                        </button>
+                      </Can>
+                    </li>
                   ))}
-                </div>
-                <div className="mt-2 flex gap-2">
+                </ul>
+              )}
+              <Can permission={PERMISSIONS.CUSTOMERS_EDIT}>
+                <div className="mt-3 flex gap-2">
                   <Input
-                    placeholder="Add tag..."
+                    aria-label="New tag"
                     className="h-8 text-xs"
+                    placeholder="Add tag"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
                   />
-                  <Button variant="outline" size="sm" onClick={handleAddTag}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddTag}
+                    disabled={!newTag.trim()}
+                  >
                     Add
                   </Button>
                 </div>
-              </div>
+              </Can>
+            </section>
 
-              {/* Support tickets */}
-              <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-                <p className="text-xs font-medium text-neutral-500">
-                  Support Tickets
+            <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Support tickets
                 </p>
-                {customer.supportTickets.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">No tickets</p>
-                ) : (
-                  <ul className="mt-2 space-y-1">
-                    {customer.supportTickets.map((ticket) => (
-                      <li
-                        key={ticket.id}
-                        className="flex items-center justify-between text-sm"
+                <Link
+                  href={`${routes.support}?q=${encodeURIComponent(
+                    customer.email
+                  )}`}
+                  className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-300"
+                >
+                  View all
+                </Link>
+              </div>
+              {customer.supportTickets.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No tickets.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {customer.supportTickets.map((ticket) => (
+                    <li
+                      key={ticket.id}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span className="truncate text-neutral-800 dark:text-neutral-200">
+                        {ticket.subject}
+                      </span>
+                      <Badge
+                        variant={
+                          ticket.status === "resolved"
+                            ? "success"
+                            : ticket.status === "pending"
+                            ? "warning"
+                            : "info"
+                        }
+                        size="sm"
                       >
-                        <span className="truncate">{ticket.subject}</span>
+                        {ticket.status}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {customer.reports && customer.reports.length > 0 && (
+              <section className="rounded-lg border border-danger-200 bg-danger-50 p-3 dark:border-danger-800/60 dark:bg-danger-900/20">
+                <p className="text-xs font-medium uppercase tracking-wide text-danger-700 dark:text-danger-300">
+                  Reports
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {customer.reports.map((report) => (
+                    <li key={report.id} className="text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-danger-900 dark:text-danger-100">
+                          {report.reporterName} ({report.reporterType})
+                        </span>
                         <Badge
                           variant={
-                            ticket.status === "resolved"
-                              ? "success"
-                              : ticket.status === "pending"
+                            report.status === "pending"
                               ? "warning"
-                              : "info"
+                              : report.status === "action_taken"
+                              ? "success"
+                              : "neutral"
                           }
+                          size="sm"
                         >
-                          {ticket.status}
+                          {report.status}
                         </Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                      </div>
+                      <p className="mt-0.5 text-danger-800 dark:text-danger-200">
+                        {report.reason}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
 
-              {/* Reports */}
-              {customer.reports && customer.reports.length > 0 && (
-                <div className="rounded-lg border border-danger-200 bg-danger-50 p-3 dark:border-danger-800 dark:bg-danger-900/20">
-                  <p className="text-xs font-medium text-danger-700 dark:text-danger-300">
-                    Reports
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {customer.reports.map((report) => (
-                      <li key={report.id} className="text-xs">
-                        <div className="flex justify-between">
-                          <span className="font-medium">
-                            {report.reporterName} ({report.reporterType})
-                          </span>
-                          <Badge
-                            variant={
-                              report.status === "pending"
-                                ? "warning"
-                                : report.status === "action_taken"
-                                ? "success"
-                                : "neutral"
-                            }
-                          >
-                            {report.status}
-                          </Badge>
-                        </div>
-                        <p className="text-danger-700 dark:text-danger-300">
-                          {report.reason}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+        {activeTab === "financial" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Wallet
+                </p>
+                <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {formatCurrency(customer.walletBalance)}
+                </p>
+              </div>
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Points
+                </p>
+                <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {customer.atlasPointsBalance}
+                </p>
+              </div>
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Total spent
+                </p>
+                <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {formatCurrency(customer.totalSpent)}
+                </p>
+              </div>
             </div>
-          )}
 
-          {activeTab === "financial" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <p className="text-xs text-neutral-500">Wallet</p>
-                  <p className="mt-1 text-lg font-bold">
-                    {formatCurrency(customer.walletBalance)}
-                  </p>
-                </div>
-                <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <p className="text-xs text-neutral-500">Points</p>
-                  <p className="mt-1 text-lg font-bold">
-                    {customer.atlasPointsBalance}
-                  </p>
-                </div>
-                <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
-                  <p className="text-xs text-neutral-500">Total Spent</p>
-                  <p className="mt-1 text-lg font-bold">
-                    {formatCurrency(customer.totalSpent)}
-                  </p>
-                </div>
-              </div>
-
+            <Can permission={PERMISSIONS.CUSTOMERS_WALLET}>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAdjustWallet(true)}
+                onClick={() => setWalletOpen(true)}
               >
-                Adjust Wallet
+                Adjust wallet
               </Button>
+            </Can>
 
-              <div>
-                <p className="text-xs font-medium text-neutral-500">
-                  Atlas Points History
+            {customer.last6MonthsSpend.length > 0 && (
+              <section>
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Spend (last 6 months)
                 </p>
-                {customer.atlasPointsHistory.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">
-                    No points activity
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {customer.atlasPointsHistory.map((pt) => (
-                      <li
-                        key={pt.id}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span>{pt.description}</span>
-                        <span
-                          className={
-                            pt.type === "earned"
-                              ? "text-success-600"
-                              : "text-danger-600"
-                          }
-                        >
-                          {pt.type === "earned" ? "+" : "−"}
-                          {pt.amount}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                <ul className="mt-2 space-y-1">
+                  {customer.last6MonthsSpend.map((m) => (
+                    <li
+                      key={m.month}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <span className="text-neutral-700 dark:text-neutral-300">
+                        {m.month}
+                      </span>
+                      <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                        {formatCurrency(m.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
-              {customer.savedPaymentMethods.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-neutral-500">
-                    Saved Payment Methods
-                  </p>
-                  <ul className="mt-2 space-y-1">
-                    {customer.savedPaymentMethods.map((pm) => (
-                      <li
-                        key={pm.id}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <AtlasIcon
-                          name={
-                            pm.type === "momo"
-                              ? "mobile"
-                              : pm.type === "card"
-                              ? "card"
-                              : pm.type === "bank"
-                              ? "bank"
-                              : "wallet"
-                          }
-                          className="h-3.5 w-3.5 text-neutral-500"
-                        />
-                        {pm.label}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "activity" && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-medium text-neutral-500">
-                  Activity Log
-                </p>
-                {customer.activityLog.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">
-                    No activity recorded
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {customer.activityLog.map((act) => (
-                      <li
-                        key={act.id}
-                        className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
-                      >
-                        <p className="font-medium">{act.action}</p>
-                        <p className="text-neutral-500">
-                          {new Date(act.timestamp).toLocaleString()}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-neutral-500">
-                  Security Events
-                </p>
-                {customer.securityEvents.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">
-                    No security events
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {customer.securityEvents.map((sec) => (
-                      <li
-                        key={sec.id}
-                        className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
-                      >
-                        <p className="font-medium">{sec.event}</p>
-                        <p className="text-neutral-500">
-                          {sec.ip && `${sec.ip} · `}
-                          {new Date(sec.timestamp).toLocaleString()}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "preferences" && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-medium text-neutral-500">Devices</p>
-                {customer.devices.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">
-                    No devices recorded
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {customer.devices.map((device) => (
-                      <li
-                        key={device.id}
-                        className="flex items-center justify-between rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
-                      >
-                        <span>{device.deviceName}</span>
-                        <span className="text-neutral-500">
-                          {device.isCurrent
-                            ? "Current"
-                            : new Date(device.lastActive).toLocaleDateString()}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xs font-medium text-neutral-500">
-                  Notification Preferences
-                </p>
-                {customer.notificationPreferences.length === 0 ? (
-                  <p className="mt-2 text-xs text-neutral-400">
-                    No preferences set
-                  </p>
-                ) : (
-                  <ul className="mt-2 space-y-1">
-                    {customer.notificationPreferences.map((pref) => (
-                      <li
-                        key={pref.channel}
-                        className="flex items-center justify-between text-xs"
-                      >
-                        <span className="capitalize">{pref.channel}</span>
-                        <Badge variant={pref.enabled ? "success" : "neutral"}>
-                          {pref.enabled ? "On" : "Off"}
-                        </Badge>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "usage" && (
-            <div>
-              <p className="text-xs font-medium text-neutral-500">
-                Data & Airtime Usage
+            <section>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Atlas Points history
               </p>
-              {customer.dataUsage.length === 0 ? (
-                <p className="mt-2 text-xs text-neutral-400">
-                  No usage recorded
+              {customer.atlasPointsHistory.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No points activity.
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
-                  {customer.dataUsage.map((usage) => (
+                  {customer.atlasPointsHistory.map((pt) => (
                     <li
-                      key={usage.month}
-                      className="flex items-center justify-between rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                      key={pt.id}
+                      className="flex items-center justify-between text-xs"
                     >
-                      <span className="font-medium">{usage.month}</span>
-                      <span className="text-neutral-500">
-                        Data: {usage.dataUsedGB}GB · Airtime:{" "}
-                        {formatCurrency(usage.airtimeUsedGHS)}
+                      <span className="text-neutral-700 dark:text-neutral-300">
+                        {pt.description}
+                      </span>
+                      <span
+                        className={
+                          pt.type === "earned"
+                            ? "text-success-700 dark:text-success-300"
+                            : "text-danger-700 dark:text-danger-300"
+                        }
+                      >
+                        {pt.type === "earned" ? "+" : "-"}
+                        {pt.amount}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
-          )}
-        </div>
+            </section>
 
-        {/* Actions */}
-        <div className="flex flex-wrap gap-2 border-t border-neutral-200 p-4 dark:border-neutral-800">
+            {customer.savedPaymentMethods.length > 0 && (
+              <section>
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Saved payment methods
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {customer.savedPaymentMethods.map((pm) => (
+                    <li
+                      key={pm.id}
+                      className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300"
+                    >
+                      <AtlasIcon
+                        name={
+                          pm.type === "momo"
+                            ? "mobile"
+                            : pm.type === "card"
+                            ? "card"
+                            : pm.type === "bank"
+                            ? "bank"
+                            : "wallet"
+                        }
+                        className="h-3.5 w-3.5 text-neutral-500"
+                      />
+                      {pm.label}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeTab === "activity" && (
+          <div className="space-y-4">
+            <section>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Activity log
+              </p>
+              {customer.activityLog.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No activity recorded.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {customer.activityLog.map((act) => (
+                    <li
+                      key={act.id}
+                      className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                    >
+                      <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                        {act.action}
+                      </p>
+                      <p className="mt-0.5 text-neutral-500 dark:text-neutral-400">
+                        {formatDateTime(act.timestamp)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Security events
+              </p>
+              {customer.securityEvents.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No security events.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {customer.securityEvents.map((sec) => (
+                    <li
+                      key={sec.id}
+                      className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                    >
+                      <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                        {sec.event}
+                      </p>
+                      <p className="mt-0.5 text-neutral-500 dark:text-neutral-400">
+                        {sec.ip && (
+                          <span className="font-mono">{sec.ip} · </span>
+                        )}
+                        {formatDateTime(sec.timestamp)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        )}
+
+        {activeTab === "preferences" && (
+          <div className="space-y-4">
+            <section>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Devices
+              </p>
+              {customer.devices.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No devices recorded.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-2">
+                  {customer.devices.map((device) => (
+                    <li
+                      key={device.id}
+                      className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                    >
+                      <span className="text-neutral-800 dark:text-neutral-200">
+                        {device.deviceName}
+                      </span>
+                      <span className="text-neutral-500 dark:text-neutral-400">
+                        {device.isCurrent ? (
+                          <Badge variant="success" size="sm">
+                            Current
+                          </Badge>
+                        ) : (
+                          <time
+                            dateTime={device.lastActive}
+                            title={formatAbsolute(device.lastActive)}
+                          >
+                            {formatRelative(device.lastActive, now)}
+                          </time>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Notification preferences
+              </p>
+              {customer.notificationPreferences.length === 0 ? (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  No preferences set.
+                </p>
+              ) : (
+                <ul className="mt-2 space-y-1">
+                  {customer.notificationPreferences.map((pref) => (
+                    <li
+                      key={pref.channel}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <span className="capitalize text-neutral-800 dark:text-neutral-200">
+                        {pref.channel}
+                      </span>
+                      <Badge
+                        variant={pref.enabled ? "success" : "neutral"}
+                        size="sm"
+                      >
+                        {pref.enabled ? "On" : "Off"}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        )}
+
+        {activeTab === "usage" && (
+          <section>
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Data and airtime usage
+            </p>
+            {customer.dataUsage.length === 0 ? (
+              <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                No usage recorded.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {customer.dataUsage.map((usage) => (
+                  <li
+                    key={usage.month}
+                    className="flex items-center justify-between gap-2 rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                  >
+                    <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                      {usage.month}
+                    </span>
+                    <span className="text-neutral-500 dark:text-neutral-400">
+                      Data: {usage.dataUsedGB}GB · Airtime:{" "}
+                      {formatCurrency(usage.airtimeUsedGHS)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <Can permission={PERMISSIONS.CUSTOMERS_NOTIFY}>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowNotifyModal(true)}
+            onClick={() => setNotifyOpen(true)}
           >
-            Send Notification
+            Send notification
           </Button>
+        </Can>
+        <Can permission={PERMISSIONS.RESET_SECURITY}>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setConfirmAction("reset_password")}
+            onClick={() => setShowResetConfirm(true)}
           >
-            Reset Password
+            Reset password
           </Button>
-          {customer.status === "active" ? (
+        </Can>
+        {customer.status === "active" ? (
+          <Can permission={PERMISSIONS.CUSTOMERS_SUSPEND}>
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => setConfirmAction("suspend")}
+              onClick={() => setSuspendOpen(true)}
             >
               Suspend
             </Button>
-          ) : (
-            <Button variant="outline" size="sm" onClick={onClose}>
+          </Can>
+        ) : (
+          <Can permission={PERMISSIONS.CUSTOMERS_SUSPEND}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onReactivate(customer.id)}
+            >
               Reactivate
             </Button>
-          )}
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+          </Can>
+        )}
       </div>
 
-      {/* Reveal confirmation */}
+      <WalletAdjustModal
+        open={walletOpen}
+        customerName={customer.name}
+        currentBalance={customer.walletBalance}
+        onClose={() => setWalletOpen(false)}
+        onConfirm={(amount, reason, method) =>
+          onAdjustWallet(customer.id, amount, reason, method)
+        }
+      />
+
+      <SuspendModal
+        open={suspendOpen}
+        customerName={customer.name}
+        onClose={() => setSuspendOpen(false)}
+        onConfirm={(reason) => {
+          onSuspend(customer.id, reason);
+          onClose();
+        }}
+      />
+
+      <NotifyModal
+        open={notifyOpen}
+        customerName={customer.name}
+        onClose={() => setNotifyOpen(false)}
+        onConfirm={(channel, message) =>
+          onSendNotification(customer.id, channel, message)
+        }
+      />
+
       <ConfirmDialog
         open={showRevealConfirm}
-        title="Reveal Sensitive Data"
-        description="This action will expose customer contact details and will be logged in the audit trail. Continue?"
+        title="Reveal sensitive data?"
+        description="Contact details will be displayed and this reveal will be recorded on the customer's activity log."
         confirmLabel="Reveal"
         danger
-        onConfirm={() => {
-          setShowSensitive(true);
-          setShowRevealConfirm(false);
-        }}
+        onConfirm={handleConfirmReveal}
         onCancel={() => setShowRevealConfirm(false)}
       />
 
-      {/* Adjust wallet modal */}
-      {showAdjustWallet && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setShowAdjustWallet(false)}
-          />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Adjust Wallet Balance</h3>
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="text-xs text-neutral-500">Amount (GHS)</label>
-                <Input
-                  type="number"
-                  value={adjustAmount}
-                  onChange={(e) => setAdjustAmount(Number(e.target.value))}
-                />
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500">Reason</label>
-                <Input
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdjustWallet(false)}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleAdjustWallet}>
-                Adjust
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Notification modal */}
-      {showNotifyModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setShowNotifyModal(false)}
-          />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Send Notification</h3>
-            <div className="mt-4 space-y-3">
-              <select
-                className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                value={notifyChannel}
-                onChange={(e) =>
-                  setNotifyChannel(e.target.value as "email" | "sms" | "push")
-                }
-              >
-                <option value="email">Email</option>
-                <option value="sms">SMS</option>
-                <option value="push">Push Notification</option>
-              </select>
-              <textarea
-                className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                rows={4}
-                placeholder="Message..."
-                value={notifyMessage}
-                onChange={(e) => setNotifyMessage(e.target.value)}
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowNotifyModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSendNotification}>
-                Send
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Action confirmation */}
       <ConfirmDialog
-        open={confirmAction !== null}
-        title={`Confirm ${
-          confirmAction === "suspend"
-            ? "Suspend Customer"
-            : "Reset Password"
-        }`}
-        description={
-          confirmAction === "suspend"
-            ? `Are you sure you want to suspend ${customer.name}? This restricts their account access.`
-            : `Send a password reset link to ${customer.name}?`
-        }
-        confirmLabel={confirmAction === "suspend" ? "Suspend" : "Send"}
-        danger={confirmAction === "suspend"}
+        open={showResetConfirm}
+        title={`Send password reset to ${customer.name}?`}
+        description="A reset link will be emailed to the customer. The link expires in one hour."
+        confirmLabel="Send reset link"
         onConfirm={() => {
-          if (confirmAction === "suspend" && onSuspend) onSuspend(customer.id);
-          setConfirmAction(null);
-          onClose();
+          onResetPassword(customer.id);
+          setShowResetConfirm(false);
         }}
-        onCancel={() => setConfirmAction(null)}
+        onCancel={() => setShowResetConfirm(false)}
       />
     </div>
   );

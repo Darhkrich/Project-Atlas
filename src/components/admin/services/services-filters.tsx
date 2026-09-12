@@ -1,72 +1,76 @@
+// components/admin/services/services-filters.tsx
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/admin/ui/button";
+import type { RefObject } from "react";
 import { Input } from "@/components/admin/ui/input";
+import { Button } from "@/components/admin/ui/button";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import {
+  ALL_FILTER_GROUPS,
+  ALL_SORT_KEYS,
+  FILTER_GROUP_LABEL,
+  SORT_LABEL,
+  STATUS_LABEL,
+  type FilterGroup,
+  type SortKey,
+  type ServiceStatus,
+} from "@/lib/admin/services/constants";
 
-interface ServicesFiltersProps {
-  onFilterChange: (filters: {
-    search: string;
-    filterGroup: string;
-    status: string;
-  }) => void;
+export interface ServiceFilterValues {
+  q: string;
+  status: string;
+  group: string;
+  sort: string;
+  page: string;
+  pageSize: string;
 }
 
-const filterGroups = [
-  { value: "", label: "All Filter Groups" },
-  { value: "all", label: "All" },
-  { value: "airtime", label: "Airtime" },
-  { value: "data", label: "Data" },
-  { value: "tv", label: "TV" },
-  { value: "bills", label: "Bills" },
-  { value: "more", label: "More" },
+interface ServicesFiltersProps {
+  value: ServiceFilterValues;
+  hasActive: boolean;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
+  onChange: (patch: Partial<ServiceFilterValues>) => void;
+  onClear: () => void;
+}
+
+const STATUS_OPTIONS: { value: "" | ServiceStatus; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "available", label: STATUS_LABEL.available },
+  { value: "coming_soon", label: STATUS_LABEL.coming_soon },
+  { value: "inactive", label: STATUS_LABEL.inactive },
 ];
 
-const statuses = [
-  { value: "", label: "All Statuses" },
-  { value: "available", label: "Available" },
-  { value: "coming_soon", label: "Coming Soon" },
-  { value: "inactive", label: "Inactive" },
-];
+const selectClass =
+  "h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100";
 
-export function ServicesFilters({ onFilterChange }: ServicesFiltersProps) {
-  const [search, setSearch] = useState("");
-  const [filterGroup, setFilterGroup] = useState("");
-  const [status, setStatus] = useState("");
+export function ServicesFilters({
+  value,
+  hasActive,
+  searchInputRef,
+  onChange,
+  onClear,
+}: ServicesFiltersProps) {
+  const activeChips: { key: string; label: string; clear: () => void }[] = [];
 
-  const applyChange = (overrides: Partial<{ search: string; filterGroup: string; status: string }>) => {
-    onFilterChange({
-      search: overrides.search ?? search,
-      filterGroup: overrides.filterGroup ?? filterGroup,
-      status: overrides.status ?? status,
+  if (value.group) {
+    activeChips.push({
+      key: "group",
+      label: `Group: ${
+        FILTER_GROUP_LABEL[value.group as FilterGroup] ?? value.group
+      }`,
+      clear: () => onChange({ group: "", page: "1" }),
     });
-  };
-
-  const activeChips = [
-    filterGroup && {
-      label: `Group: ${filterGroups.find((g) => g.value === filterGroup)?.label}`,
-      clear: () => {
-        setFilterGroup("");
-        applyChange({ filterGroup: "" });
-      },
-    },
-    status && {
-      label: `Status: ${statuses.find((s) => s.value === status)?.label}`,
-      clear: () => {
-        setStatus("");
-        applyChange({ status: "" });
-      },
-    },
-  ].filter(Boolean) as { label: string; clear: () => void }[];
-
-  const handleReset = () => {
-    setSearch("");
-    setFilterGroup("");
-    setStatus("");
-    onFilterChange({ search: "", filterGroup: "", status: "" });
-  };
+  }
+  if (value.status) {
+    activeChips.push({
+      key: "status",
+      label: `Status: ${
+        STATUS_LABEL[value.status as ServiceStatus] ?? value.status
+      }`,
+      clear: () => onChange({ status: "", page: "1" }),
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -74,67 +78,82 @@ export function ServicesFilters({ onFilterChange }: ServicesFiltersProps) {
         <div className="relative min-w-[220px] flex-1">
           <AtlasIcon
             name="search"
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
           />
           <Input
-            placeholder="Search services..."
+            ref={searchInputRef}
+            aria-label="Search services"
+            placeholder="Search services...  (press /)"
             className="pl-9"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              applyChange({ search: e.target.value });
-            }}
+            value={value.q}
+            onChange={(e) => onChange({ q: e.target.value, page: "1" })}
           />
         </div>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filterGroup}
-          onChange={(e) => {
-            setFilterGroup(e.target.value);
-            applyChange({ filterGroup: e.target.value });
-          }}
+          aria-label="Filter by group"
+          className={selectClass}
+          value={value.group}
+          onChange={(e) => onChange({ group: e.target.value, page: "1" })}
         >
-          {filterGroups.map((g) => (
-            <option key={g.value} value={g.value}>
-              {g.label}
+          <option value="">All groups</option>
+          {ALL_FILTER_GROUPS.map((group) => (
+            <option key={group} value={group}>
+              {FILTER_GROUP_LABEL[group]}
             </option>
           ))}
         </select>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            applyChange({ status: e.target.value });
-          }}
+          aria-label="Filter by status"
+          className={selectClass}
+          value={value.status}
+          onChange={(e) => onChange({ status: e.target.value, page: "1" })}
         >
-          {statuses.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
             </option>
           ))}
         </select>
 
-        <Button variant="ghost" size="sm" onClick={handleReset}>
-          Reset
-        </Button>
+        <select
+          aria-label="Sort by"
+          className={selectClass}
+          value={value.sort}
+          onChange={(e) => onChange({ sort: e.target.value, page: "1" })}
+        >
+          {ALL_SORT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              Sort: {SORT_LABEL[key as SortKey]}
+            </option>
+          ))}
+        </select>
+
+        {hasActive && (
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {activeChips.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {activeChips.map((chip) => (
             <span
-              key={chip.label}
-              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              key={chip.key}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              )}
             >
               {chip.label}
               <button
+                type="button"
+                aria-label={`Clear ${chip.key} filter`}
                 onClick={chip.clear}
-                className="ml-1 hover:text-danger-600"
+                className="ml-1 rounded-full px-1 text-brand-600 hover:text-danger-600 dark:text-brand-300 dark:hover:text-danger-400"
               >
-                ×
+                x
               </button>
             </span>
           ))}

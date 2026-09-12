@@ -1,14 +1,14 @@
-export interface DataPlan {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  validity: string; // e.g., "1 day", "7 days"
-  active: boolean;
-  typeTag?: string; // e.g., "Unlimited", "Non-Expiry", "Special"
-  providerCost?: number; // mock read-only margin info
-  statusHistory?: { timestamp: string; admin: string; status: "active" | "inactive" }[];
-}
+// lib/admin/types/data-plan.ts
+
+import type { Plan } from "@/lib/services-page-data";
+
+/**
+ * DataPlan is the same entity as Plan. The two names are kept for
+ * backwards compatibility with existing consumers; new code should prefer
+ * `Plan` when referring to the catalog shape and `DataPlan` when referring
+ * to it inside the Data Plans admin.
+ */
+export type DataPlan = Plan;
 
 export interface DataPlanCategory {
   id: string;

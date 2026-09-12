@@ -1,109 +1,116 @@
+// components/admin/customers/customer-filters.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/admin/ui/input";
 import { Button } from "@/components/admin/ui/button";
 import { AtlasIcon } from "@/components/atlas/icons";
+import { cn } from "@/lib/utils";
+import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
+import {
+  ALL_SORT_KEYS,
+  LAST_ACTIVE_OPTIONS,
+  SORT_LABEL,
+  type SortKey,
+} from "@/lib/admin/customers/constants";
 
-interface CustomerFiltersProps {
-  allTags: string[];
-  onFilterChange: (filters: {
-    search: string;
-    status: string;
-    tag: string;
-    source: string;
-    risk: string;
-  }) => void;
+export interface CustomerFilterValues {
+  q: string;
+  status: string;
+  tag: string;
+  risk: string;
+  lastActive: string;
+  sort: string;
 }
 
-const statusOptions = [
-  { value: "", label: "All Statuses" },
+interface CustomerFiltersProps {
+  value: CustomerFilterValues;
+  allTags: string[];
+  hasActive: boolean;
+  onChange: (next: CustomerFilterValues) => void;
+  onClear: () => void;
+}
+
+const STATUS_OPTIONS = [
+  { value: "", label: "All statuses" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
   { value: "suspended", label: "Suspended" },
 ];
 
-const sourceOptions = [
-  { value: "", label: "All Sources" },
-  { value: "direct", label: "Direct" },
-  { value: "reseller", label: "Reseller" },
-  { value: "ecommerce", label: "E‑commerce" },
+const RISK_OPTIONS = [
+  { value: "", label: "All risk levels" },
+  { value: "low", label: "Low risk" },
+  { value: "medium", label: "Medium risk" },
+  { value: "high", label: "High risk" },
 ];
 
-const riskOptions = [
-  { value: "", label: "All Risk Levels" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
+const selectClass =
+  "h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100";
 
 export function CustomerFilters({
+  value,
   allTags,
-  onFilterChange,
+  hasActive,
+  onChange,
+  onClear,
 }: CustomerFiltersProps) {
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [tag, setTag] = useState("");
-  const [source, setSource] = useState("");
-  const [risk, setRisk] = useState("");
+  const [searchLocal, setSearchLocal] = useState(value.q);
+  const lastFiredRef = useRef(value.q);
 
-  const applyChange = (
-    overrides: Partial<{
-      search: string;
-      status: string;
-      tag: string;
-      source: string;
-      risk: string;
-    }>
-  ) => {
-    onFilterChange({
-      search: overrides.search ?? search,
-      status: overrides.status ?? status,
-      tag: overrides.tag ?? tag,
-      source: overrides.source ?? source,
-      risk: overrides.risk ?? risk,
+  useEffect(() => {
+    if (value.q !== lastFiredRef.current) {
+      setSearchLocal(value.q);
+      lastFiredRef.current = value.q;
+    }
+  }, [value.q]);
+
+  const debouncedSearch = useDebouncedValue(searchLocal, 300);
+
+  useEffect(() => {
+    if (debouncedSearch === lastFiredRef.current) return;
+    lastFiredRef.current = debouncedSearch;
+    onChange({ ...value, q: debouncedSearch });
+  }, [debouncedSearch, value, onChange]);
+
+  const activeChips: { key: string; label: string; clear: () => void }[] = [];
+
+  if (value.status) {
+    activeChips.push({
+      key: "status",
+      label: `Status: ${
+        STATUS_OPTIONS.find((s) => s.value === value.status)?.label ??
+        value.status
+      }`,
+      clear: () => onChange({ ...value, status: "" }),
     });
-  };
-
-  const activeChips = [
-    status && {
-      label: `Status: ${statusOptions.find((s) => s.value === status)?.label}`,
-      clear: () => {
-        setStatus("");
-        applyChange({ status: "" });
-      },
-    },
-    tag && {
-      label: `Tag: ${tag}`,
-      clear: () => {
-        setTag("");
-        applyChange({ tag: "" });
-      },
-    },
-    source && {
-      label: `Source: ${sourceOptions.find((s) => s.value === source)?.label}`,
-      clear: () => {
-        setSource("");
-        applyChange({ source: "" });
-      },
-    },
-    risk && {
-      label: `Risk: ${riskOptions.find((r) => r.value === risk)?.label}`,
-      clear: () => {
-        setRisk("");
-        applyChange({ risk: "" });
-      },
-    },
-  ].filter(Boolean) as { label: string; clear: () => void }[];
-
-  const handleReset = () => {
-    setSearch("");
-    setStatus("");
-    setTag("");
-    setSource("");
-    setRisk("");
-    onFilterChange({ search: "", status: "", tag: "", source: "", risk: "" });
-  };
+  }
+  if (value.tag) {
+    activeChips.push({
+      key: "tag",
+      label: `Tag: ${value.tag}`,
+      clear: () => onChange({ ...value, tag: "" }),
+    });
+  }
+  if (value.risk) {
+    activeChips.push({
+      key: "risk",
+      label: `Risk: ${
+        RISK_OPTIONS.find((r) => r.value === value.risk)?.label ?? value.risk
+      }`,
+      clear: () => onChange({ ...value, risk: "" }),
+    });
+  }
+  if (value.lastActive) {
+    activeChips.push({
+      key: "lastActive",
+      label: `Activity: ${
+        LAST_ACTIVE_OPTIONS.find((l) => l.value === value.lastActive)?.label ??
+        value.lastActive
+      }`,
+      clear: () => onChange({ ...value, lastActive: "" }),
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -111,28 +118,24 @@ export function CustomerFilters({
         <div className="relative min-w-[220px] flex-1">
           <AtlasIcon
             name="search"
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
           />
           <Input
-            placeholder="Search customers..."
+            aria-label="Search customers"
+            placeholder="Search by name, email, or phone"
             className="pl-9"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              applyChange({ search: e.target.value });
-            }}
+            value={searchLocal}
+            onChange={(e) => setSearchLocal(e.target.value)}
           />
         </div>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            applyChange({ status: e.target.value });
-          }}
+          aria-label="Filter by status"
+          className={selectClass}
+          value={value.status}
+          onChange={(e) => onChange({ ...value, status: e.target.value })}
         >
-          {statusOptions.map((opt) => (
+          {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
@@ -140,29 +143,12 @@ export function CustomerFilters({
         </select>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={source}
-          onChange={(e) => {
-            setSource(e.target.value);
-            applyChange({ source: e.target.value });
-          }}
+          aria-label="Filter by tag"
+          className={selectClass}
+          value={value.tag}
+          onChange={(e) => onChange({ ...value, tag: e.target.value })}
         >
-          {sourceOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={tag}
-          onChange={(e) => {
-            setTag(e.target.value);
-            applyChange({ tag: e.target.value });
-          }}
-        >
-          <option value="">All Tags</option>
+          <option value="">All tags</option>
           {allTags.map((t) => (
             <option key={t} value={t}>
               {t}
@@ -171,38 +157,68 @@ export function CustomerFilters({
         </select>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={risk}
-          onChange={(e) => {
-            setRisk(e.target.value);
-            applyChange({ risk: e.target.value });
-          }}
+          aria-label="Filter by risk level"
+          className={selectClass}
+          value={value.risk}
+          onChange={(e) => onChange({ ...value, risk: e.target.value })}
         >
-          {riskOptions.map((opt) => (
+          {RISK_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
         </select>
 
-        <Button variant="ghost" size="sm" onClick={handleReset}>
-          Reset
-        </Button>
+        <select
+          aria-label="Filter by last activity"
+          className={selectClass}
+          value={value.lastActive}
+          onChange={(e) => onChange({ ...value, lastActive: e.target.value })}
+        >
+          {LAST_ACTIVE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Sort by"
+          className={selectClass}
+          value={value.sort}
+          onChange={(e) => onChange({ ...value, sort: e.target.value })}
+        >
+          {ALL_SORT_KEYS.map((k) => (
+            <option key={k} value={k}>
+              Sort: {SORT_LABEL[k as SortKey]}
+            </option>
+          ))}
+        </select>
+
+        {hasActive && (
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {activeChips.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {activeChips.map((chip) => (
             <span
-              key={chip.label}
-              className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              key={chip.key}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+              )}
             >
               {chip.label}
               <button
+                type="button"
+                aria-label={`Clear ${chip.key} filter`}
                 onClick={chip.clear}
-                className="ml-1 hover:text-danger-600"
+                className="ml-1 rounded-full px-1 text-brand-600 hover:text-danger-600 dark:text-brand-300 dark:hover:text-danger-400"
               >
-                ×
+                x
               </button>
             </span>
           ))}

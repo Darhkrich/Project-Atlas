@@ -1,68 +1,59 @@
 "use client";
 
-import { useState } from "react";
-import { Provider } from "@/lib/admin/types/provider";
+import Link from "next/link";
+import type { Provider } from "@/lib/admin/types/provider";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { cn } from "@/lib/utils";
 import { AtlasIcon } from "@/components/atlas/icons";
-import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { providerOperationalState } from "@/lib/admin/providers/state";
 
 interface ProviderHealthAlertProps {
   providers: Provider[];
 }
 
 export function ProviderHealthAlert({ providers }: ProviderHealthAlertProps) {
-  const [dismissed, setDismissed] = useState(false);
+  const atRisk = providers
+    .map((p) => ({ provider: p, state: providerOperationalState(p) }))
+    .filter((x) => x.state.kind === "impaired" || x.state.kind === "down");
 
-  const unhealthy = providers.filter(
-    (p) => p.healthStatus === "warning" || p.healthStatus === "critical"
-  );
-
-  if (dismissed) return null;
-
-  if (unhealthy.length === 0) {
+  if (atRisk.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-700 dark:border-success-800 dark:bg-success-900/20 dark:text-success-300">
-        <AtlasIcon name="check" className="h-4 w-4" />
-        All provider connections are operating normally.
+      <div
+        role="status"
+        className="flex items-center gap-3 rounded-lg border border-success-200 bg-success-50 p-3 text-sm text-success-700 dark:border-success-800 dark:bg-success-900/20 dark:text-success-300"
+      >
+        <AtlasIcon name="check" aria-hidden="true" className="h-4 w-4" />
+        No provider health issues detected.
       </div>
     );
   }
 
-  const criticalCount = unhealthy.filter(
-    (p) => p.healthStatus === "critical"
-  ).length;
-  const warningCount = unhealthy.filter(
-    (p) => p.healthStatus === "warning"
-  ).length;
+  const criticalCount = atRisk.filter((x) => x.state.kind === "down").length;
+  const warningCount = atRisk.length - criticalCount;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge variant={criticalCount > 0 ? "danger" : "warning"}>
-            {criticalCount > 0 ? "Critical" : "Warning"}
-          </Badge>
-          <p className="text-sm font-medium">
-            {unhealthy.length} provider{unhealthy.length > 1 ? "s" : ""} require
-            attention
-          </p>
-          <span className="text-xs text-neutral-500">
-            ({criticalCount} critical · {warningCount} degraded)
-          </span>
-        </div>
-        <button
-          onClick={() => setDismissed(true)}
-          className="text-xs text-neutral-500 hover:text-neutral-700"
-        >
-          Dismiss
-        </button>
+    <div
+      role="alert"
+      aria-live={criticalCount > 0 ? "assertive" : "polite"}
+      className="space-y-2"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={criticalCount > 0 ? "danger" : "warning"}>
+          {criticalCount > 0 ? "Critical" : "Warning"}
+        </Badge>
+        <p className="text-sm font-medium">
+          {atRisk.length} provider{atRisk.length === 1 ? "" : "s"} require
+          attention
+        </p>
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+          {criticalCount} critical · {warningCount} degraded
+        </span>
       </div>
 
       <div className="space-y-2">
-        {unhealthy.map((provider) => {
-          const isCritical = provider.healthStatus === "critical";
+        {atRisk.map(({ provider, state }) => {
+          const isCritical = state.kind === "down";
           const failureRate = (100 - provider.successRate).toFixed(1);
           return (
             <div
@@ -77,27 +68,39 @@ export function ProviderHealthAlert({ providers }: ProviderHealthAlertProps) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      isCritical ? "bg-danger-500" : "bg-warning-500"
-                    )}
+                    aria-hidden="true"
+                    className={cn("h-2 w-2 rounded-full", state.dotClass)}
                   />
                   <span className="font-medium">{provider.name}</span>
-                  <span className="font-mono text-xs text-neutral-500">
+                  <span className="font-mono text-xs text-neutral-500 dark:text-neutral-400">
                     {provider.code}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">
                   {isCritical
-                    ? `Connection failures detected · Failure rate: ${failureRate}%`
-                    : `Elevated response time · Current: ${provider.averageResponseTime}ms`}
+                    ? `Connection failures detected. Failure rate: ${failureRate}%`
+                    : state.headline}
                 </p>
               </div>
-              <Link href={`/admin/providers/${provider.id}`}>
-                <Button size="sm" variant={isCritical ? "destructive" : "outline"}>
-                  {isCritical ? "Investigate" : "View Provider"}
-                </Button>
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/providers/${provider.id}`}
+                  className={cn(
+                    "inline-flex h-8 items-center rounded-md px-3 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                    isCritical
+                      ? "bg-danger-600 text-white hover:bg-danger-700"
+                      : "border border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  )}
+                >
+                  {isCritical ? "Investigate" : "View provider"}
+                </Link>
+                <Link
+                  href={`/admin/support?providerId=${provider.id}`}
+                  className="inline-flex h-8 items-center rounded-md border border-neutral-300 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                >
+                  See tickets
+                </Link>
+              </div>
             </div>
           );
         })}

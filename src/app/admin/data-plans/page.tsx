@@ -1,834 +1,1293 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type {
+  Plan,
+  PlanCategory,
+  ServiceCategory,
+} from "@/lib/services-page-data";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import { DataPlanSummaryCards } from "@/components/admin/data-plans/data-plan-summary-cards";
+import { Button } from "@/components/admin/ui/button";
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
+import { ExportMenu } from "@/components/admin/ui/export-menu";
+import {
+  DataPlanSummaryCards,
+  type SummaryFilter,
+} from "@/components/admin/data-plans/data-plan-summary-cards";
 import { NetworkSidebar } from "@/components/admin/data-plans/network-sidebar";
 import { DataPlansToolbar } from "@/components/admin/data-plans/data-plans-toolbar";
 import { CategorySection } from "@/components/admin/data-plans/category-section";
-import { Button } from "@/components/admin/ui/button";
-import { Input } from "@/components/admin/ui/input";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockDataNetworks } from "@/lib/admin/mock/data-plans";
+import { DataPlanAuditPanel } from "@/components/admin/data-plans/data-plan-audit-panel";
 import {
-  DataNetwork,
-  DataPlanCategory,
-  DataPlan,
-} from "@/lib/admin/types/data-plan";
+  NetworkEditModal,
+  NetworkDeleteModal,
+  CategoryEditModal,
+  PlanEditModal,
+  ImportPlansModal,
+} from "@/components/admin/data-plans/data-plan-modals";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
+import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
+import { getFreshCatalog } from "@/lib/admin/mock/data-plans";
+import {
+  projectNetworksFromCatalog,
+  applyNetworkMutation,
+  applyNetworkTreeMutation,
+} from "@/lib/admin/data-plans/projection";
+import {
+  dataPlanIdFor,
+  filterPlans,
+  type ImportRow,
+} from "@/lib/admin/data-plans/helpers";
+import { dataPlansToCsv } from "@/lib/admin/data-plans/csv-export";
+import {
+  buildDataPlanAuditEntry,
+  mockDataPlansAudit,
+  type DataPlanAuditEntry,
+  type DataPlanAuditScope,
+} from "@/lib/admin/data-plans/audit";
 
-type ModalType = "network" | "category" | "plan" | "import" | null;
-
-interface ModalState {
-  type: ModalType;
-  networkId?: string;
-  categoryId?: string;
-  planId?: string;
-  isNew: boolean;
+interface DataPlanFilters {
+  network: string;
+  q: string;
+  filter: SummaryFilter;
 }
 
-export default function DataPlansPage() {
-  const [networks, setNetworks] = useState<DataNetwork[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedNetworkId, setSelectedNetworkId] = useState<string>("");
-  const [search, setSearch] = useState("");
-  const [auditLog, setAuditLog] = useState<
-    { id: string; timestamp: string; admin: string; action: string }[]
-  >([]);
-  const [modal, setModal] = useState<ModalState>({ type: null, isNew: false });
-  const [confirmDelete, setConfirmDelete] = useState<{
-    type: "network" | "category" | "plan";
-    id: string;
-    name: string;
-    networkId?: string;
-    categoryId?: string;
-  } | null>(null);
-  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+const DEFAULT_FILTERS: DataPlanFilters = {
+  network: "",
+  q: "",
+  filter: "all",
+};
 
-  // Form states
-  const [networkName, setNetworkName] = useState("");
-  const [categoryName, setCategoryName] = useState("");
-  const [planForm, setPlanForm] = useState({
-    name: "",
-    description: "",
-    price: 0,
-    validity: "",
-    typeTag: "",
-  });
+const SYSTEM_ADMIN = {
+  id: "system",
+  name: "System",
+  email: "system@atlas.com",
+  role: "super_admin" as const,
+  extraPermissions: [],
+};
+
+interface Toast {
+  kind: "success" | "error";
+  text: string;
+}
+
+type ModalState =
+  | { kind: "none" }
+  | { kind: "network-create" }
+  | { kind: "network-rename"; networkName: string }
+  | { kind: "network-delete"; networkName: string; planCount: number }
+  | { kind: "category-create"; networkName: string }
+  | { kind: "category-rename"; networkName: string; categoryName: string }
+  | { kind: "plan-create"; networkName: string; categoryName: string }
+  | { kind: "plan-edit"; networkName: string; categoryName: string; plan: Plan }
+  | { kind: "import"; networkName: string; categoryName: string };
+
+type ConfirmState =
+  | { kind: "none" }
+  | { kind: "category"; networkName: string; categoryName: string }
+  | { kind: "plan"; networkName: string; categoryName: string; plan: Plan }
+  | { kind: "bulk"; enable: boolean; ids: string[] };
+
+export default function DataPlansPage() {
+  return (
+    <Suspense fallback={<DataPlansSkeleton />}>
+      <DataPlansPageInner />
+    </Suspense>
+  );
+}
+
+function DataPlansSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="h-96 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800" />
+    </div>
+  );
+}
+
+function DataPlansPageInner() {
+  const admin = useCurrentAdmin();
+
+  const [catalog, setCatalog] = useState<ServiceCategory[]>([]);
+  const [audit, setAudit] = useState<DataPlanAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [focusedPlanId, setFocusedPlanId] = useState<string | null>(null);
+  const [modal, setModal] = useState<ModalState>({ kind: "none" });
+  const [confirm, setConfirm] = useState<ConfirmState>({ kind: "none" });
+  const [selectedPlanIds, setSelectedPlanIds] = useState<string[]>([]);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<DataPlanFilters>(DEFAULT_FILTERS);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const debouncedSearch = useDebouncedValue(filters.q, 300);
 
   useEffect(() => {
-    setTimeout(() => {
-      setNetworks(mockDataNetworks);
-      if (mockDataNetworks.length > 0) {
-        setSelectedNetworkId(mockDataNetworks[0].id);
-      }
+    const t = window.setTimeout(() => {
+      setCatalog(getFreshCatalog());
+      setAudit(mockDataPlansAudit);
       setLoading(false);
-    }, 500);
+    }, 400);
+    return () => window.clearTimeout(t);
   }, []);
 
-  const selectedNetwork = networks.find((n) => n.id === selectedNetworkId);
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
-  // Auditing
-  const addAudit = (action: string) => {
-    setAuditLog((prev) => [
-      {
-        id: `AUD-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        admin: "current_admin@atlas.com",
-        action,
-      },
-      ...prev,
-    ]);
-  };
+  const networks = useMemo(
+    () => projectNetworksFromCatalog(catalog),
+    [catalog]
+  );
 
-  // Network operations
-  const handleAddNetwork = () => {
-    setNetworkName("");
-    setModal({ type: "network", isNew: true });
-  };
+  const selectedNetwork = useMemo(() => {
+    if (filters.network) {
+      const found = networks.find((n) => n.name === filters.network);
+      if (found) return found;
+    }
+    return networks[0] ?? null;
+  }, [networks, filters.network]);
 
-  const handleEditNetwork = (id: string) => {
-    const net = networks.find((n) => n.id === id);
-    if (!net) return;
-    setNetworkName(net.name);
-    setModal({ type: "network", networkId: id, isNew: false });
-  };
+  const summaryFilter: SummaryFilter =
+    filters.filter === "low-margin" || filters.filter === "inactive"
+      ? filters.filter
+      : "all";
 
-  // Category operations
-  const handleAddCategory = () => {
-    setCategoryName("");
-    setModal({ type: "category", networkId: selectedNetworkId, isNew: true });
-  };
+  const filteredCategories = useMemo(() => {
+    if (!selectedNetwork) return [];
+    const searching = debouncedSearch.trim() !== "";
+    const filtering = summaryFilter !== "all";
+    return selectedNetwork.categories
+      .map((c) => ({
+        ...c,
+        plans: filterPlans(c.plans, debouncedSearch, summaryFilter),
+      }))
+      .filter((c) => {
+        if (!searching && !filtering) return true;
+        return c.plans.length > 0;
+      });
+  }, [selectedNetwork, debouncedSearch, summaryFilter]);
 
-  const handleEditCategory = (category: DataPlanCategory) => {
-    setCategoryName(category.name);
-    setModal({
-      type: "category",
-      networkId: selectedNetworkId,
-      categoryId: category.id,
-      isNew: false,
-    });
-  };
+  const visiblePlanIds = useMemo(
+    () => filteredCategories.flatMap((c) => c.plans.map((p) => p.id)),
+    [filteredCategories]
+  );
 
-  // Plan operations
-  const handleAddPlan = (categoryId: string) => {
-    setPlanForm({ name: "", description: "", price: 0, validity: "", typeTag: "" });
-    setModal({
-      type: "plan",
-      networkId: selectedNetworkId,
-      categoryId,
-      isNew: true,
-    });
-  };
+  const selectNetwork = useCallback(
+    (name: string) => {
+      setFilters({ network: name });
+      setSelectedPlanIds([]);
+    },
+    [setFilters]
+  );
 
-  const handleEditPlan = (plan: DataPlan) => {
-    if (!selectedNetwork) return;
-    const category = selectedNetwork.categories.find((c) =>
-      c.plans.some((p) => p.id === plan.id)
+  const pushAudit = useCallback((entry: DataPlanAuditEntry) => {
+    setAudit((prev) => [entry, ...prev]);
+  }, []);
+
+  const buildAudit = useCallback(
+    (input: {
+      scope: DataPlanAuditScope;
+      scopeId: string;
+      scopeName: string;
+      networkName: string;
+      action: string;
+      summary: string;
+    }) =>
+      buildDataPlanAuditEntry({
+        admin: admin ?? SYSTEM_ADMIN,
+        ...input,
+      }),
+    [admin]
+  );
+
+  const findPlanContext = useCallback(
+    (planId: string): { categoryName: string; plan: Plan } | null => {
+      if (!selectedNetwork) return null;
+      for (const cat of selectedNetwork.categories) {
+        const plan = cat.plans.find((p) => p.id === planId);
+        if (plan) return { categoryName: cat.name, plan };
+      }
+      return null;
+    },
+    [selectedNetwork]
+  );
+
+  useEffect(() => {
+    if (!focusedPlanId) return;
+    const el = document.querySelector(`[data-plan-id="${focusedPlanId}"]`);
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: "nearest" });
+  }, [focusedPlanId]);
+
+  useInboxKeyboard({
+    itemIds: visiblePlanIds,
+    focusedId: focusedPlanId,
+    enabled: modal.kind === "none" && confirm.kind === "none",
+    onFocusChange: setFocusedPlanId,
+    onOpen: (planId) => {
+      if (!selectedNetwork) return;
+      const found = findPlanContext(planId);
+      if (!found) return;
+      setModal({
+        kind: "plan-edit",
+        networkName: selectedNetwork.name,
+        categoryName: found.categoryName,
+        plan: found.plan,
+      });
+    },
+    onFocusSearch: () => searchInputRef.current?.focus(),
+  });
+
+  /* ----------------------------- Mutations ---------------------------- */
+
+  const handleCreateNetwork = (name: string) => {
+    setCatalog((prev) =>
+      applyNetworkTreeMutation(prev, (tree) => ({
+        ...tree,
+        [name]: [],
+      }))
     );
-    if (!category) return;
-    setPlanForm({
-      name: plan.name,
-      description: plan.description,
-      price: plan.price,
-      validity: plan.validity,
-      typeTag: plan.typeTag || "",
-    });
-    setModal({
-      type: "plan",
-      networkId: selectedNetwork.id,
-      categoryId: category.id,
-      planId: plan.id,
-      isNew: false,
-    });
+    pushAudit(
+      buildAudit({
+        scope: "network",
+        scopeId: name,
+        scopeName: name,
+        networkName: name,
+        action: "Created",
+        summary: `Network "${name}" created`,
+      })
+    );
+    selectNetwork(name);
+    setToast({ kind: "success", text: `${name} created.` });
   };
 
-  const handleDuplicatePlan = (plan: DataPlan) => {
-    if (!selectedNetwork) return;
-    const category = selectedNetwork.categories.find((c) =>
-      c.plans.some((p) => p.id === plan.id)
+  const handleRenameNetwork = (oldName: string, newName: string) => {
+    setCatalog((prev) =>
+      applyNetworkTreeMutation(prev, (tree) => {
+        const next: Record<string, PlanCategory[]> = {};
+        for (const [key, value] of Object.entries(tree)) {
+          next[key === oldName ? newName : key] = value;
+        }
+        return next;
+      })
     );
-    if (!category) return;
+    pushAudit(
+      buildAudit({
+        scope: "network",
+        scopeId: newName,
+        scopeName: newName,
+        networkName: newName,
+        action: "Renamed",
+        summary: `Network renamed from "${oldName}" to "${newName}"`,
+      })
+    );
+    if (filters.network === oldName || !filters.network) {
+      selectNetwork(newName);
+    }
+    setToast({ kind: "success", text: `${newName} renamed.` });
+  };
 
-    const copy: DataPlan = {
-      ...plan,
-      id: `${plan.id}-copy-${Date.now()}`,
-      name: `${plan.name} Copy`,
-      active: false,
-      statusHistory: [],
-    };
+  const handleDeleteNetwork = (name: string) => {
+    setCatalog((prev) =>
+      applyNetworkTreeMutation(prev, (tree) => {
+        const next = { ...tree };
+        delete next[name];
+        return next;
+      })
+    );
+    pushAudit(
+      buildAudit({
+        scope: "network",
+        scopeId: name,
+        scopeName: name,
+        networkName: name,
+        action: "Deleted",
+        summary: `Network "${name}" deleted`,
+      })
+    );
+    if (filters.network === name) selectNetwork("");
+    setToast({ kind: "success", text: `${name} deleted.` });
+  };
 
-    setNetworks((prev) =>
-      prev.map((n) =>
-        n.id === selectedNetwork.id
-          ? {
-              ...n,
-              categories: n.categories.map((c) =>
-                c.id === category.id ? { ...c, plans: [...c.plans, copy] } : c
-              ),
-            }
-          : n
+  const handleCreateCategory = (networkName: string, name: string) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) => [
+        ...cats,
+        { name, plans: [] },
+      ])
+    );
+    pushAudit(
+      buildAudit({
+        scope: "category",
+        scopeId: name,
+        scopeName: name,
+        networkName,
+        action: "Created",
+        summary: `Category "${name}" created on ${networkName}`,
+      })
+    );
+    setToast({ kind: "success", text: `${name} added.` });
+  };
+
+  const handleRenameCategory = (
+    networkName: string,
+    oldName: string,
+    newName: string
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
       )
     );
-    addAudit(`Duplicated plan ${plan.name}`);
+    pushAudit(
+      buildAudit({
+        scope: "category",
+        scopeId: newName,
+        scopeName: newName,
+        networkName,
+        action: "Renamed",
+        summary: `Category renamed from "${oldName}" to "${newName}" on ${networkName}`,
+      })
+    );
+    setToast({ kind: "success", text: `${newName} renamed.` });
   };
 
-  const handleTogglePlanActive = (planId: string) => {
-    if (!selectedNetwork) return;
-    setNetworks((prev) =>
-      prev.map((n) =>
-        n.id === selectedNetwork.id
-          ? {
-              ...n,
-              categories: n.categories.map((c) => ({
-                ...c,
-                plans: c.plans.map((p) =>
-                  p.id === planId
-                    ? {
-                        ...p,
-                        active: !p.active,
-                        statusHistory: [
-                          ...(p.statusHistory || []),
-                          {
-                            timestamp: new Date().toISOString(),
-                            admin: "current_admin@atlas.com",
-                            status: p.active ? "inactive" : "active",
-                          },
-                        ],
-                      }
-                    : p
-                ),
-              })),
-            }
-          : n
+  const handleDeleteCategory = (
+    networkName: string,
+    categoryName: string
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.filter((c) => c.name !== categoryName)
       )
     );
-  };
-
-  const handleMovePlan = (planId: string, direction: "up" | "down") => {
-    if (!selectedNetwork) return;
-    setNetworks((prev) =>
-      prev.map((n) =>
-        n.id === selectedNetwork.id
-          ? {
-              ...n,
-              categories: n.categories.map((c) => {
-                const idx = c.plans.findIndex((p) => p.id === planId);
-                if (idx === -1) return c;
-                const target = direction === "up" ? idx - 1 : idx + 1;
-                if (target < 0 || target >= c.plans.length) return c;
-                const plans = [...c.plans];
-                [plans[idx], plans[target]] = [plans[target], plans[idx]];
-                return { ...c, plans };
-              }),
-            }
-          : n
-      )
+    pushAudit(
+      buildAudit({
+        scope: "category",
+        scopeId: categoryName,
+        scopeName: categoryName,
+        networkName,
+        action: "Deleted",
+        summary: `Category "${categoryName}" removed from ${networkName}`,
+      })
     );
+    setToast({ kind: "success", text: `${categoryName} deleted.` });
   };
 
-  const handleMoveCategory = (categoryId: string, direction: "up" | "down") => {
-    if (!selectedNetwork) return;
-    setNetworks((prev) =>
-      prev.map((n) => {
-        if (n.id !== selectedNetwork.id) return n;
-        const idx = n.categories.findIndex((c) => c.id === categoryId);
-        if (idx === -1) return n;
+  const handleMoveCategory = (
+    networkName: string,
+    categoryName: string,
+    direction: "up" | "down"
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) => {
+        const idx = cats.findIndex((c) => c.name === categoryName);
+        if (idx === -1) return cats;
         const target = direction === "up" ? idx - 1 : idx + 1;
-        if (target < 0 || target >= n.categories.length) return n;
-        const categories = [...n.categories];
-        [categories[idx], categories[target]] = [categories[target], categories[idx]];
-        return { ...n, categories };
+        if (target < 0 || target >= cats.length) return cats;
+        const next = [...cats];
+        [next[idx], next[target]] = [next[target], next[idx]];
+        return next;
+      })
+    );
+    pushAudit(
+      buildAudit({
+        scope: "category",
+        scopeId: categoryName,
+        scopeName: categoryName,
+        networkName,
+        action: "Reordered",
+        summary: `Category "${categoryName}" moved ${direction}`,
       })
     );
   };
 
-  // Save modal
-  const handleSaveModal = () => {
-    if (!modal.type) return;
-
-    if (modal.type === "network") {
-      if (modal.isNew) {
-        const newId = `net-${Date.now()}`;
-        const newNetwork: DataNetwork = {
-          id: newId,
-          name: networkName,
-          categories: [],
-        };
-        setNetworks((prev) => [...prev, newNetwork]);
-        setSelectedNetworkId(newId);
-        addAudit(`Created network ${networkName}`);
-      } else if (modal.networkId) {
-        setNetworks((prev) =>
-          prev.map((n) =>
-            n.id === modal.networkId ? { ...n, name: networkName } : n
-          )
-        );
-        addAudit(`Renamed network to ${networkName}`);
-      }
-    } else if (modal.type === "category" && modal.networkId) {
-      if (modal.isNew) {
-        const newCategory: DataPlanCategory = {
-          id: `cat-${Date.now()}`,
-          name: categoryName,
-          plans: [],
-        };
-        setNetworks((prev) =>
-          prev.map((n) =>
-            n.id === modal.networkId
-              ? { ...n, categories: [...n.categories, newCategory] }
-              : n
-          )
-        );
-        addAudit(`Added category ${categoryName}`);
-      } else if (modal.categoryId) {
-        setNetworks((prev) =>
-          prev.map((n) =>
-            n.id === modal.networkId
-              ? {
-                  ...n,
-                  categories: n.categories.map((c) =>
-                    c.id === modal.categoryId
-                      ? { ...c, name: categoryName }
-                      : c
-                  ),
-                }
-              : n
-          )
-        );
-        addAudit(`Renamed category to ${categoryName}`);
-      }
-    } else if (
-      modal.type === "plan" &&
-      modal.networkId &&
-      modal.categoryId
-    ) {
-      if (modal.isNew) {
-        const newPlan: DataPlan = {
-          id: `plan-${Date.now()}`,
-          name: planForm.name,
-          description: planForm.description,
-          price: planForm.price,
-          validity: planForm.validity,
-          active: true,
-          typeTag: planForm.typeTag,
-          providerCost: planForm.price * 0.8,
-          statusHistory: [],
-        };
-        setNetworks((prev) =>
-          prev.map((n) =>
-            n.id === modal.networkId
-              ? {
-                  ...n,
-                  categories: n.categories.map((c) =>
-                    c.id === modal.categoryId
-                      ? { ...c, plans: [...c.plans, newPlan] }
-                      : c
-                  ),
-                }
-              : n
-          )
-        );
-        addAudit(`Added plan ${planForm.name}`);
-      } else if (modal.planId) {
-        setNetworks((prev) =>
-          prev.map((n) =>
-            n.id === modal.networkId
-              ? {
-                  ...n,
-                  categories: n.categories.map((c) =>
-                    c.id === modal.categoryId
-                      ? {
-                          ...c,
-                          plans: c.plans.map((p) =>
-                            p.id === modal.planId
-                              ? {
-                                  ...p,
-                                  name: planForm.name,
-                                  description: planForm.description,
-                                  price: planForm.price,
-                                  validity: planForm.validity,
-                                  typeTag: planForm.typeTag,
-                                }
-                              : p
-                          ),
-                        }
-                      : c
-                  ),
-                }
-              : n
-          )
-        );
-        addAudit(`Updated plan ${planForm.name}`);
-      }
-    }
-
-    setModal({ type: null, isNew: false });
-  };
-
-  // Delete handlers
-  const handleConfirmDelete = () => {
-    if (!confirmDelete) return;
-    const { type, id, networkId, categoryId } = confirmDelete;
-
-    if (type === "network") {
-      setNetworks((prev) => prev.filter((n) => n.id !== id));
-      if (selectedNetworkId === id) {
-        setSelectedNetworkId(networks.find((n) => n.id !== id)?.id || "");
-      }
-    } else if (type === "category" && networkId) {
-      setNetworks((prev) =>
-        prev.map((n) =>
-          n.id === networkId
-            ? { ...n, categories: n.categories.filter((c) => c.id !== id) }
-            : n
-        )
-      );
-    } else if (type === "plan" && networkId && categoryId) {
-      setNetworks((prev) =>
-        prev.map((n) =>
-          n.id === networkId
-            ? {
-                ...n,
-                categories: n.categories.map((c) =>
-                  c.id === categoryId
-                    ? { ...c, plans: c.plans.filter((p) => p.id !== id) }
-                    : c
-                ),
-              }
-            : n
-        )
-      );
-    }
-
-    addAudit(`Deleted ${type} ${confirmDelete.name}`);
-    setConfirmDelete(null);
-  };
-
-  // Bulk actions
-  const togglePlanSelect = (planId: string) => {
-    setSelectedPlanIds((prev) =>
-      prev.includes(planId)
-        ? prev.filter((id) => id !== planId)
-        : [...prev, planId]
+  const handleSavePlan = (
+    networkName: string,
+    categoryName: string,
+    plan: Plan,
+    mode: "create" | "edit"
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) => {
+          if (c.name !== categoryName) return c;
+          if (mode === "create") return { ...c, plans: [...c.plans, plan] };
+          return {
+            ...c,
+            plans: c.plans.map((p) => (p.id === plan.id ? plan : p)),
+          };
+        })
+      )
     );
+    pushAudit(
+      buildAudit({
+        scope: "plan",
+        scopeId: plan.id,
+        scopeName: plan.name,
+        networkName,
+        action: mode === "create" ? "Created" : "Updated",
+        summary:
+          mode === "create"
+            ? `Plan "${plan.name}" added to ${categoryName} on ${networkName}`
+            : `Plan "${plan.name}" updated in ${categoryName} on ${networkName}`,
+      })
+    );
+    setToast({
+      kind: "success",
+      text: `${plan.name} ${mode === "create" ? "created" : "updated"}.`,
+    });
   };
 
-  const bulkToggle = (active: boolean) => {
-    setNetworks((prev) =>
-      prev.map((n) => ({
-        ...n,
-        categories: n.categories.map((c) => ({
+  const handleDeletePlan = (
+    networkName: string,
+    categoryName: string,
+    planId: string,
+    planName: string
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) =>
+          c.name === categoryName
+            ? { ...c, plans: c.plans.filter((p) => p.id !== planId) }
+            : c
+        )
+      )
+    );
+    pushAudit(
+      buildAudit({
+        scope: "plan",
+        scopeId: planId,
+        scopeName: planName,
+        networkName,
+        action: "Deleted",
+        summary: `Plan "${planName}" deleted from ${categoryName} on ${networkName}`,
+      })
+    );
+    setToast({ kind: "success", text: `${planName} deleted.` });
+  };
+
+  const handleDuplicatePlan = (
+    networkName: string,
+    categoryName: string,
+    source: Plan,
+    existingPlanIds: string[]
+  ) => {
+    const baseName = `${source.name} Copy`;
+    let candidateName = baseName;
+    let suffix = 2;
+    let newId = dataPlanIdFor(candidateName, networkName);
+    while (existingPlanIds.includes(newId)) {
+      candidateName = `${baseName} ${suffix}`;
+      newId = dataPlanIdFor(candidateName, networkName);
+      suffix += 1;
+    }
+
+    const copy: Plan = {
+      ...source,
+      id: newId,
+      name: candidateName,
+      active: false,
+      statusHistory: [],
+    };
+
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) =>
+          c.name === categoryName ? { ...c, plans: [...c.plans, copy] } : c
+        )
+      )
+    );
+    pushAudit(
+      buildAudit({
+        scope: "plan",
+        scopeId: newId,
+        scopeName: candidateName,
+        networkName,
+        action: "Duplicated",
+        summary: `Plan "${source.name}" duplicated as "${candidateName}"`,
+      })
+    );
+    setToast({ kind: "success", text: `${candidateName} created.` });
+  };
+
+  const handleTogglePlanActive = (networkName: string, planId: string) => {
+    if (!selectedNetwork) return;
+    const plan = selectedNetwork.categories
+      .flatMap((c) => c.plans)
+      .find((p) => p.id === planId);
+    if (!plan) return;
+
+    const nextActive = plan.active === false;
+    const nowIso = new Date().toISOString();
+    const adminEmail = (admin ?? SYSTEM_ADMIN).email;
+
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) => ({
           ...c,
-          plans: c.plans.map((p) =>
-            selectedPlanIds.includes(p.id) ? { ...p, active } : p
-          ),
-        })),
-      }))
+          plans: c.plans.map((p) => {
+            if (p.id !== planId) return p;
+            return {
+              ...p,
+              active: nextActive,
+              statusHistory: [
+                ...(p.statusHistory ?? []),
+                {
+                  timestamp: nowIso,
+                  admin: adminEmail,
+                  status: nextActive ? "active" : "inactive",
+                },
+              ],
+            };
+          }),
+        }))
+      )
     );
-    addAudit(
-      `Bulk ${active ? "enabled" : "disabled"} ${selectedPlanIds.length} plans`
+
+    pushAudit(
+      buildAudit({
+        scope: "plan",
+        scopeId: planId,
+        scopeName: plan.name,
+        networkName,
+        action: nextActive ? "Enabled" : "Disabled",
+        summary: `Plan "${plan.name}" ${nextActive ? "enabled" : "disabled"}`,
+      })
     );
+  };
+
+  const handleMovePlan = (
+    networkName: string,
+    categoryName: string,
+    planId: string,
+    direction: "up" | "down"
+  ) => {
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) => {
+          if (c.name !== categoryName) return c;
+          const idx = c.plans.findIndex((p) => p.id === planId);
+          if (idx === -1) return c;
+          const target = direction === "up" ? idx - 1 : idx + 1;
+          if (target < 0 || target >= c.plans.length) return c;
+          const next = [...c.plans];
+          [next[idx], next[target]] = [next[target], next[idx]];
+          return { ...c, plans: next };
+        })
+      )
+    );
+  };
+
+  const handleBulkToggle = (
+    networkName: string,
+    ids: string[],
+    enable: boolean
+  ) => {
+    const nowIso = new Date().toISOString();
+    const adminEmail = (admin ?? SYSTEM_ADMIN).email;
+    const idSet = new Set(ids);
+
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) => ({
+          ...c,
+          plans: c.plans.map((p) => {
+            if (!idSet.has(p.id)) return p;
+            return {
+              ...p,
+              active: enable,
+              statusHistory: [
+                ...(p.statusHistory ?? []),
+                {
+                  timestamp: nowIso,
+                  admin: adminEmail,
+                  status: enable ? "active" : "inactive",
+                },
+              ],
+            };
+          }),
+        }))
+      )
+    );
+
+    pushAudit(
+      buildAudit({
+        scope: "network",
+        scopeId: networkName,
+        scopeName: networkName,
+        networkName,
+        action: "Bulk update",
+        summary: `${enable ? "Enabled" : "Disabled"} ${ids.length} plan${
+          ids.length === 1 ? "" : "s"
+        }`,
+      })
+    );
+
     setSelectedPlanIds([]);
+    setToast({
+      kind: "success",
+      text: `${ids.length} plan${ids.length === 1 ? "" : "s"} ${
+        enable ? "enabled" : "disabled"
+      }.`,
+    });
   };
 
-  // Export
-  const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export data plans as ${format}`);
-  };
-
-  const handleExportAudit = () => {
-    const csv =
-      "Timestamp,Admin,Action\n" +
-      auditLog.map((e) => `${e.timestamp},${e.admin},${e.action}`).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "data-plans-audit.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImport = () => {
-    setModal({ type: "import", isNew: true });
-  };
-
-  // Filter for search across all networks
-  const filteredCategoriesForNetwork = useMemo(() => {
-    if (!selectedNetwork) return [];
-    return selectedNetwork.categories.map((c) => ({
-      ...c,
-      plans: c.plans.filter((p) => {
-        if (!search) return true;
-        const q = search.toLowerCase();
-        return (
-          p.name.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q)
-        );
-      }),
+  const handleImportPlans = (
+    networkName: string,
+    categoryName: string,
+    rows: ImportRow[]
+  ) => {
+    const newPlans: Plan[] = rows.map((row) => ({
+      id: dataPlanIdFor(row.name, networkName),
+      name: row.name,
+      description: row.description || undefined,
+      price: row.price,
+      validity: row.validity || undefined,
+      typeTag: row.typeTag || undefined,
+      active: true,
+      statusHistory: [],
     }));
-  }, [selectedNetwork, search]);
+
+    setCatalog((prev) =>
+      applyNetworkMutation(prev, networkName, (cats) =>
+        cats.map((c) =>
+          c.name === categoryName
+            ? { ...c, plans: [...c.plans, ...newPlans] }
+            : c
+        )
+      )
+    );
+
+    pushAudit(
+      buildAudit({
+        scope: "category",
+        scopeId: categoryName,
+        scopeName: categoryName,
+        networkName,
+        action: "Bulk import",
+        summary: `${rows.length} plan${
+          rows.length === 1 ? "" : "s"
+        } imported into ${categoryName}`,
+      })
+    );
+
+    setToast({
+      kind: "success",
+      text: `${rows.length} plan${rows.length === 1 ? "" : "s"} imported.`,
+    });
+  };
+
+  const handleExport = (format: "csv" | "excel" | "pdf") => {
+    if (format !== "csv") return;
+    const csv = dataPlansToCsv(networks);
+    downloadCsv(
+      `atlas-data-plans-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv
+    );
+  };
+
+  const headerMeta = useMemo(() => {
+    const totalNetworks = networks.length;
+    const totalCategories = networks.reduce(
+      (s, n) => s + n.categories.length,
+      0
+    );
+    const totalPlans = networks.reduce(
+      (s, n) => s + n.categories.reduce((t, c) => t + c.plans.length, 0),
+      0
+    );
+    const activePlans = networks.reduce(
+      (s, n) =>
+        s +
+        n.categories.reduce(
+          (t, c) => t + c.plans.filter((p) => p.active !== false).length,
+          0
+        ),
+      0
+    );
+
+    return (
+      <>
+        <span>
+          {totalNetworks} network{totalNetworks === 1 ? "" : "s"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {totalCategories} categor
+          {totalCategories === 1 ? "y" : "ies"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {totalPlans} plan{totalPlans === 1 ? "" : "s"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>{activePlans} active</span>
+      </>
+    );
+  }, [networks]);
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Data Plans"
         description="Manage data bundle categories and plans across all networks."
+        meta={headerMeta}
+        actions={
+          <>
+            <ExportMenu onExport={handleExport} formats={["csv"]} />
+            <Can permission={PERMISSIONS.DATA_PLANS_MANAGE}>
+              <Button
+                size="sm"
+                onClick={() => setModal({ kind: "network-create" })}
+              >
+                Add network
+              </Button>
+            </Can>
+          </>
+        }
       />
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
-            />
-          ))}
+        <DataPlansSkeleton />
+      ) : networks.length === 0 ? (
+        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <EmptyState
+            variant="no_data"
+            title="No networks yet"
+            description="Add your first network to start building a data plan catalog."
+            action={
+              <Can permission={PERMISSIONS.DATA_PLANS_MANAGE}>
+                <Button
+                  size="sm"
+                  onClick={() => setModal({ kind: "network-create" })}
+                >
+                  Add network
+                </Button>
+              </Can>
+            }
+          />
         </div>
       ) : (
         <>
           <DataPlanSummaryCards
             networks={networks}
-            onFilterAll={() => setSearch("")}
-            onFilterLowMargin={() => console.log("filter low margin")}
-            onFilterInactive={() => console.log("filter inactive")}
+            activeFilter={summaryFilter}
+            onFilterAll={() => setFilters({ filter: "all" })}
+            onFilterLowMargin={() => setFilters({ filter: "low-margin" })}
+            onFilterInactive={() => setFilters({ filter: "inactive" })}
           />
 
           <DataPlansToolbar
-            search={search}
-            onSearchChange={setSearch}
+            search={filters.q}
+            onSearchChange={(value) => setFilters({ q: value })}
             selectedCount={selectedPlanIds.length}
-            onEnable={() => bulkToggle(true)}
-            onDisable={() => bulkToggle(false)}
+            onEnable={() =>
+              setConfirm({ kind: "bulk", enable: true, ids: selectedPlanIds })
+            }
+            onDisable={() =>
+              setConfirm({ kind: "bulk", enable: false, ids: selectedPlanIds })
+            }
             onClearSelection={() => setSelectedPlanIds([])}
             onExport={handleExport}
-            onExportAudit={handleExportAudit}
-            onImport={handleImport}
-            onAddCategory={handleAddCategory}
+            onImport={() => {
+              if (!selectedNetwork) return;
+              const firstCategory = selectedNetwork.categories[0];
+              if (!firstCategory) {
+                setToast({
+                  kind: "error",
+                  text: "Add a category to this network first.",
+                });
+                return;
+              }
+              setModal({
+                kind: "import",
+                networkName: selectedNetwork.name,
+                categoryName: firstCategory.name,
+              });
+            }}
           />
 
           <div className="flex flex-col gap-6 lg:flex-row">
-            {/* Network sidebar */}
             <NetworkSidebar
               networks={networks}
-              selectedNetworkId={selectedNetworkId}
-              onSelectNetwork={setSelectedNetworkId}
-              onAddNetwork={handleAddNetwork}
+              selectedNetworkId={selectedNetwork?.id ?? ""}
+              onSelectNetwork={(id) => {
+                const net = networks.find((n) => n.id === id);
+                if (net) selectNetwork(net.name);
+              }}
+              onAddNetwork={() => setModal({ kind: "network-create" })}
             />
 
-            {/* Main content */}
             <div className="min-w-0 flex-1 space-y-4">
-              {selectedNetwork ? (
+              {selectedNetwork && (
                 <>
-                  {/* Network header */}
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-semibold">
                         {selectedNetwork.name}
                       </h2>
                       <span className="rounded-full bg-info-100 px-2 py-0.5 text-xs font-medium text-info-700 dark:bg-info-900/40 dark:text-info-300">
-                        {selectedNetwork.categories.length} categories
+                        {selectedNetwork.categories.length} categor
+                        {selectedNetwork.categories.length === 1
+                          ? "y"
+                          : "ies"}
                       </span>
                       <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
                         {selectedNetwork.categories.reduce(
-                          (sum, c) => sum + c.plans.length,
+                          (s, c) => s + c.plans.length,
                           0
                         )}{" "}
-                        plans
+                        plan
+                        {selectedNetwork.categories.reduce(
+                          (s, c) => s + c.plans.length,
+                          0
+                        ) === 1
+                          ? ""
+                          : "s"}
                       </span>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditNetwork(selectedNetwork.id)}
-                      >
-                        Rename Network
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() =>
-                          setConfirmDelete({
-                            type: "network",
-                            id: selectedNetwork.id,
-                            name: selectedNetwork.name,
-                          })
-                        }
-                      >
-                        Delete Network
-                      </Button>
-                    </div>
+                    <Can permission={PERMISSIONS.DATA_PLANS_MANAGE}>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setModal({
+                              kind: "network-rename",
+                              networkName: selectedNetwork.name,
+                            })
+                          }
+                        >
+                          Rename network
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setModal({
+                              kind: "category-create",
+                              networkName: selectedNetwork.name,
+                            })
+                          }
+                        >
+                          Add category
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            setModal({
+                              kind: "network-delete",
+                              networkName: selectedNetwork.name,
+                              planCount: selectedNetwork.categories.reduce(
+                                (s, c) => s + c.plans.length,
+                                0
+                              ),
+                            })
+                          }
+                        >
+                          Delete network
+                        </Button>
+                      </div>
+                    </Can>
                   </div>
 
-                  {/* Categories */}
-                  {filteredCategoriesForNetwork.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-                      <p className="text-sm text-neutral-500">
-                        No categories yet. Add one to get started.
-                      </p>
-                      <Button
-                        size="sm"
-                        className="mt-3"
-                        onClick={handleAddCategory}
-                      >
-                        Add Category
-                      </Button>
+                  {filteredCategories.length === 0 ? (
+                    <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+                      {hasActive ? (
+                        <EmptyState
+                          variant="no_results"
+                          title="No plans match these filters"
+                          description="Try a different search or clear the filters."
+                          action={
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={clearFilters}
+                            >
+                              Clear filters
+                            </Button>
+                          }
+                        />
+                      ) : (
+                        <EmptyState
+                          variant="no_data"
+                          title="No categories yet"
+                          description="Add a category to start grouping plans."
+                          action={
+                            <Can permission={PERMISSIONS.DATA_PLANS_MANAGE}>
+                              <Button
+                                size="sm"
+                                onClick={() =>
+                                  setModal({
+                                    kind: "category-create",
+                                    networkName: selectedNetwork.name,
+                                  })
+                                }
+                              >
+                                Add category
+                              </Button>
+                            </Can>
+                          }
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {filteredCategoriesForNetwork.map((category, index) => (
+                      {filteredCategories.map((category, index) => (
                         <CategorySection
                           key={category.id}
                           category={category}
-                          planSearch={search}
-                          onEditCategory={handleEditCategory}
+                          onEditCategory={(cat) =>
+                            setModal({
+                              kind: "category-rename",
+                              networkName: selectedNetwork.name,
+                              categoryName: cat.name,
+                            })
+                          }
                           onDeleteCategory={(cat) =>
-                            setConfirmDelete({
-                              type: "category",
-                              id: cat.id,
-                              name: cat.name,
-                              networkId: selectedNetwork.id,
+                            setConfirm({
+                              kind: "category",
+                              networkName: selectedNetwork.name,
+                              categoryName: cat.name,
                             })
                           }
-                          onAddPlan={handleAddPlan}
-                          onEditPlan={handleEditPlan}
-                          onDeletePlan={(plan) =>
-                            setConfirmDelete({
-                              type: "plan",
-                              id: plan.id,
-                              name: plan.name,
-                              networkId: selectedNetwork.id,
-                              categoryId: category.id,
-                            })
+                          onAddPlan={(categoryId) => {
+                            const cat = selectedNetwork.categories.find(
+                              (c) => c.id === categoryId
+                            );
+                            if (!cat) return;
+                            setModal({
+                              kind: "plan-create",
+                              networkName: selectedNetwork.name,
+                              categoryName: cat.name,
+                            });
+                          }}
+                          onEditPlan={(plan) => {
+                            const cat = selectedNetwork.categories.find((c) =>
+                              c.plans.some((p) => p.id === plan.id)
+                            );
+                            if (!cat) return;
+                            setModal({
+                              kind: "plan-edit",
+                              networkName: selectedNetwork.name,
+                              categoryName: cat.name,
+                              plan,
+                            });
+                          }}
+                          onDeletePlan={(plan) => {
+                            const cat = selectedNetwork.categories.find((c) =>
+                              c.plans.some((p) => p.id === plan.id)
+                            );
+                            if (!cat) return;
+                            setConfirm({
+                              kind: "plan",
+                              networkName: selectedNetwork.name,
+                              categoryName: cat.name,
+                              plan,
+                            });
+                          }}
+                          onDuplicatePlan={(plan) => {
+                            const cat = selectedNetwork.categories.find((c) =>
+                              c.plans.some((p) => p.id === plan.id)
+                            );
+                            if (!cat) return;
+                            const allIds =
+                              selectedNetwork.categories.flatMap((c) =>
+                                c.plans.map((p) => p.id)
+                              );
+                            handleDuplicatePlan(
+                              selectedNetwork.name,
+                              cat.name,
+                              plan,
+                              allIds
+                            );
+                          }}
+                          onTogglePlanActive={(planId) =>
+                            handleTogglePlanActive(
+                              selectedNetwork.name,
+                              planId
+                            )
                           }
-                          onDuplicatePlan={handleDuplicatePlan}
-                          onTogglePlanActive={handleTogglePlanActive}
-                          onMovePlan={handleMovePlan}
-                          onMoveCategory={handleMoveCategory}
+                          onMovePlan={(planId, direction) => {
+                            const cat = selectedNetwork.categories.find((c) =>
+                              c.plans.some((p) => p.id === planId)
+                            );
+                            if (!cat) return;
+                            handleMovePlan(
+                              selectedNetwork.name,
+                              cat.name,
+                              planId,
+                              direction
+                            );
+                          }}
+                          onMoveCategory={(categoryId, direction) => {
+                            const cat = selectedNetwork.categories.find(
+                              (c) => c.id === categoryId
+                            );
+                            if (!cat) return;
+                            handleMoveCategory(
+                              selectedNetwork.name,
+                              cat.name,
+                              direction
+                            );
+                          }}
                           selectedPlanIds={selectedPlanIds}
-                          onTogglePlanSelect={togglePlanSelect}
+                          onTogglePlanSelect={(planId) =>
+                            setSelectedPlanIds((prev) =>
+                              prev.includes(planId)
+                                ? prev.filter((id) => id !== planId)
+                                : [...prev, planId]
+                            )
+                          }
                           disableMoveUp={index === 0}
                           disableMoveDown={
-                            index === filteredCategoriesForNetwork.length - 1
+                            index === filteredCategories.length - 1
+                          }
+                          searchActive={
+                            debouncedSearch.trim() !== "" ||
+                            summaryFilter !== "all"
                           }
                         />
                       ))}
                     </div>
                   )}
                 </>
-              ) : (
-                <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-                  <p className="text-sm text-neutral-500">
-                    Select a network to view its data plans.
-                  </p>
-                </div>
               )}
             </div>
           </div>
 
-          {/* Audit log */}
-          {auditLog.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Recent Activity</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-1">
-                  {auditLog.slice(0, 10).map((entry) => (
-                    <li
-                      key={entry.id}
-                      className="flex justify-between text-xs"
-                    >
-                      <span>{entry.action}</span>
-                      <span className="text-neutral-500">
-                        {new Date(entry.timestamp).toLocaleString()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          )}
+          <DataPlanAuditPanel entries={audit} />
         </>
       )}
 
-      {/* Modals */}
-      {modal.type === "network" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setModal({ type: null, isNew: false })}
-          />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">
-              {modal.isNew ? "Add Network" : "Rename Network"}
-            </h3>
-            <Input
-              className="mt-4"
-              value={networkName}
-              onChange={(e) => setNetworkName(e.target.value)}
-              placeholder="Network name"
-            />
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setModal({ type: null, isNew: false })}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveModal}>
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NetworkEditModal
+        open={modal.kind === "network-create"}
+        mode="create"
+        existingNames={networks.map((n) => n.name)}
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={handleCreateNetwork}
+      />
 
-      {modal.type === "category" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setModal({ type: null, isNew: false })}
-          />
-          <div className="relative w-full max-w-sm rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">
-              {modal.isNew ? "Add Category" : "Rename Category"}
-            </h3>
-            <Input
-              className="mt-4"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-              placeholder="Category name"
-            />
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setModal({ type: null, isNew: false })}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveModal}>
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NetworkEditModal
+        open={modal.kind === "network-rename"}
+        mode="rename"
+        currentName={modal.kind === "network-rename" ? modal.networkName : ""}
+        existingNames={networks.map((n) => n.name)}
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={(name) => {
+          if (modal.kind !== "network-rename") return;
+          handleRenameNetwork(modal.networkName, name);
+        }}
+      />
 
-      {modal.type === "plan" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setModal({ type: null, isNew: false })}
-          />
-          <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">
-              {modal.isNew ? "Add Plan" : "Edit Plan"}
-            </h3>
-            <div className="mt-4 space-y-3">
-              <Input
-                placeholder="Plan name"
-                value={planForm.name}
-                onChange={(e) =>
-                  setPlanForm({ ...planForm, name: e.target.value })
-                }
-              />
-              <Input
-                placeholder="Description"
-                value={planForm.description}
-                onChange={(e) =>
-                  setPlanForm({ ...planForm, description: e.target.value })
-                }
-              />
-              <div className="flex gap-2">
-                <Input
-                  type="number"
-                  placeholder="Price (GHS)"
-                  value={planForm.price}
-                  onChange={(e) =>
-                    setPlanForm({ ...planForm, price: Number(e.target.value) })
-                  }
-                />
-                <Input
-                  placeholder="Validity (e.g., 7 days)"
-                  value={planForm.validity}
-                  onChange={(e) =>
-                    setPlanForm({ ...planForm, validity: e.target.value })
-                  }
-                />
-              </div>
-              <Input
-                placeholder="Type Tag (e.g., Unlimited)"
-                value={planForm.typeTag}
-                onChange={(e) =>
-                  setPlanForm({ ...planForm, typeTag: e.target.value })
-                }
-              />
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setModal({ type: null, isNew: false })}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveModal}>
-                Save
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <NetworkDeleteModal
+        open={modal.kind === "network-delete"}
+        networkName={modal.kind === "network-delete" ? modal.networkName : ""}
+        planCount={modal.kind === "network-delete" ? modal.planCount : 0}
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={() => {
+          if (modal.kind !== "network-delete") return;
+          handleDeleteNetwork(modal.networkName);
+        }}
+      />
 
-      {modal.type === "import" && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setModal({ type: null, isNew: false })}
-          />
-          <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Import Plans (CSV)</h3>
-            <p className="mt-2 text-xs text-neutral-500">
-              Format: name, description, price, validity, typeTag
-            </p>
-            <textarea
-              className="mt-4 h-40 w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              placeholder="plan1,Description,10,7 days,Unlimited"
-            />
-            <div className="mt-6 flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setModal({ type: null, isNew: false })}
-              >
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveModal}>
-                Import
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CategoryEditModal
+        open={modal.kind === "category-create"}
+        mode="create"
+        networkName={modal.kind === "category-create" ? modal.networkName : ""}
+        existingNames={
+          modal.kind === "category-create"
+            ? networks
+                .find((n) => n.name === modal.networkName)
+                ?.categories.map((c) => c.name) ?? []
+            : []
+        }
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={(name) => {
+          if (modal.kind !== "category-create") return;
+          handleCreateCategory(modal.networkName, name);
+        }}
+      />
+
+      <CategoryEditModal
+        open={modal.kind === "category-rename"}
+        mode="rename"
+        networkName={modal.kind === "category-rename" ? modal.networkName : ""}
+        currentName={modal.kind === "category-rename" ? modal.categoryName : ""}
+        existingNames={
+          modal.kind === "category-rename"
+            ? networks
+                .find((n) => n.name === modal.networkName)
+                ?.categories.map((c) => c.name) ?? []
+            : []
+        }
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={(name) => {
+          if (modal.kind !== "category-rename") return;
+          handleRenameCategory(
+            modal.networkName,
+            modal.categoryName,
+            name
+          );
+        }}
+      />
+
+      <PlanEditModal
+        open={modal.kind === "plan-create" || modal.kind === "plan-edit"}
+        mode={modal.kind === "plan-edit" ? "edit" : "create"}
+        networkName={
+          modal.kind === "plan-create" || modal.kind === "plan-edit"
+            ? modal.networkName
+            : ""
+        }
+        categoryName={
+          modal.kind === "plan-create" || modal.kind === "plan-edit"
+            ? modal.categoryName
+            : ""
+        }
+        plan={modal.kind === "plan-edit" ? modal.plan : null}
+        existingPlanIds={
+          modal.kind === "plan-create" || modal.kind === "plan-edit"
+            ? networks
+                .find((n) => n.name === modal.networkName)
+                ?.categories.flatMap((c) => c.plans.map((p) => p.id)) ?? []
+            : []
+        }
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={(plan, mode) => {
+          if (modal.kind !== "plan-create" && modal.kind !== "plan-edit") {
+            return;
+          }
+          handleSavePlan(modal.networkName, modal.categoryName, plan, mode);
+        }}
+      />
+
+      <ImportPlansModal
+        open={modal.kind === "import"}
+        networkName={modal.kind === "import" ? modal.networkName : ""}
+        categoryName={modal.kind === "import" ? modal.categoryName : ""}
+        existingPlanNames={
+          modal.kind === "import"
+            ? networks
+                .find((n) => n.name === modal.networkName)
+                ?.categories.flatMap((c) => c.plans.map((p) => p.name)) ?? []
+            : []
+        }
+        onClose={() => setModal({ kind: "none" })}
+        onConfirm={(rows) => {
+          if (modal.kind !== "import") return;
+          handleImportPlans(modal.networkName, modal.categoryName, rows);
+        }}
+      />
 
       <ConfirmDialog
-        open={confirmDelete !== null}
-        title={`Confirm Delete ${
-          confirmDelete ? confirmDelete.type.charAt(0).toUpperCase() + confirmDelete.type.slice(1) : ""
-        }`}
-        description={`Are you sure you want to delete ${
-          confirmDelete?.name || ""
-        }? This cannot be undone.`}
-        confirmLabel="Delete"
+        open={confirm.kind === "category"}
+        title="Delete category"
+        description={
+          confirm.kind === "category"
+            ? `Delete "${confirm.categoryName}"? Every plan in it will also be removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete category"
         danger
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          if (confirm.kind !== "category") return;
+          handleDeleteCategory(confirm.networkName, confirm.categoryName);
+          setConfirm({ kind: "none" });
+        }}
+        onCancel={() => setConfirm({ kind: "none" })}
       />
+
+      <ConfirmDialog
+        open={confirm.kind === "plan"}
+        title="Delete plan"
+        description={
+          confirm.kind === "plan"
+            ? `Delete "${confirm.plan.name}"? This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete plan"
+        danger
+        onConfirm={() => {
+          if (confirm.kind !== "plan") return;
+          handleDeletePlan(
+            confirm.networkName,
+            confirm.categoryName,
+            confirm.plan.id,
+            confirm.plan.name
+          );
+          setConfirm({ kind: "none" });
+        }}
+        onCancel={() => setConfirm({ kind: "none" })}
+      />
+
+      <ConfirmDialog
+        open={confirm.kind === "bulk"}
+        title={
+          confirm.kind === "bulk" && confirm.enable
+            ? "Enable plans"
+            : "Disable plans"
+        }
+        description={
+          confirm.kind === "bulk"
+            ? `${
+                confirm.enable ? "Enable" : "Disable"
+              } ${confirm.ids.length} plan${confirm.ids.length === 1 ? "" : "s"}?`
+            : ""
+        }
+        confirmLabel={
+          confirm.kind === "bulk" && confirm.enable ? "Enable" : "Disable"
+        }
+        danger={confirm.kind === "bulk" && !confirm.enable}
+        onConfirm={() => {
+          if (confirm.kind !== "bulk" || !selectedNetwork) return;
+          handleBulkToggle(
+            selectedNetwork.name,
+            confirm.ids,
+            confirm.enable
+          );
+          setConfirm({ kind: "none" });
+        }}
+        onCancel={() => setConfirm({ kind: "none" })}
+      />
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }

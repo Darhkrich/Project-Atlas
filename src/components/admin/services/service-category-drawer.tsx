@@ -1,590 +1,718 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/services/service-category-drawer.tsx
 "use client";
 
-import { useState, useEffect } from "react";
-import {
+import Link from "next/link";
+import { useEffect, useId, useMemo, useState } from "react";
+import type {
   ServiceCategory,
-  FormFieldConfig,
-  Plan,
+  ServiceSection,
 } from "@/lib/services-page-data";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
+import { StatusDot } from "@/components/admin/ui/status-dot";
 import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/lib/admin/hooks/use-focus-trap";
+import {
+  ALL_FILTER_GROUPS,
+  ALL_SECTIONS,
+  FILTER_GROUP_LABEL,
+  SECTION_LABEL,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+  type FilterGroup,
+} from "@/lib/admin/services/constants";
+import {
+  isUniqueId,
+  networkCount,
+  planCountFor,
+  sectionsFor,
+  serviceStatus,
+  slugify,
+} from "@/lib/admin/services/helpers";
+import { ServiceIconPicker } from "./service-icon-picker";
+import {
+  ServiceAuditPanel,
+  ServiceFieldsEditor,
+  ServiceNetworksEditor,
+  ServicePlansEditor,
+  ServicePreviewPanel,
+} from "./service-category-editors";
+import {
+  ServiceDeleteModal,
+  ServiceDuplicateModal,
+  type DuplicateResult,
+} from "./service-action-modals";
+import type { ServiceAuditEntry } from "@/lib/admin/services/audit";
+import { Can, PERMISSIONS } from "@/lib/admin/rbac";
+
+type Tab =
+  | "general"
+  | "fields"
+  | "plans"
+  | "networks"
+  | "preview"
+  | "audit";
+
+const BASE_TABS: { key: Tab; label: string }[] = [
+  { key: "general", label: "General" },
+  { key: "fields", label: "Form" },
+  { key: "plans", label: "Plans" },
+  { key: "preview", label: "Preview" },
+  { key: "audit", label: "Audit" },
+];
 
 interface ServiceCategoryDrawerProps {
   category: ServiceCategory | null;
+  isNew: boolean;
+  existingIds: string[];
+  allCategories: ServiceCategory[];
+  auditEntries: ServiceAuditEntry[];
   onClose: () => void;
   onSave: (category: ServiceCategory) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (category: ServiceCategory) => void;
-  auditLog: { id: string; timestamp: string; admin: string; action: string }[];
+  onDuplicate: (source: ServiceCategory, result: DuplicateResult) => void;
+  onToggleAvailable: (id: string) => void;
 }
-
-type Tab = "general" | "form" | "plans" | "amounts" | "networks" | "preview" | "audit";
 
 export function ServiceCategoryDrawer({
   category,
+  isNew,
+  existingIds,
+  allCategories,
+  auditEntries,
   onClose,
   onSave,
   onDelete,
   onDuplicate,
-  auditLog,
+  onToggleAvailable,
 }: ServiceCategoryDrawerProps) {
+  const isOpen = category !== null;
+  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
+  const titleId = useId();
+
+  if (!category) return null;
+
+  return (
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-50"
+    >
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      <DrawerBody
+        key={category.id}
+        category={category}
+        isNew={isNew}
+        existingIds={existingIds}
+        allCategories={allCategories}
+        auditEntries={auditEntries}
+        titleId={titleId}
+        onClose={onClose}
+        onSave={onSave}
+        onDelete={onDelete}
+        onDuplicate={onDuplicate}
+        onToggleAvailable={onToggleAvailable}
+      />
+    </div>
+  );
+}
+
+interface DrawerBodyProps {
+  category: ServiceCategory;
+  isNew: boolean;
+  existingIds: string[];
+  allCategories: ServiceCategory[];
+  auditEntries: ServiceAuditEntry[];
+  titleId: string;
+  onClose: () => void;
+  onSave: (category: ServiceCategory) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (source: ServiceCategory, result: DuplicateResult) => void;
+  onToggleAvailable: (id: string) => void;
+}
+
+function DrawerBody({
+  category,
+  isNew,
+  existingIds,
+  allCategories,
+  auditEntries,
+  titleId,
+  onClose,
+  onSave,
+  onDelete,
+  onDuplicate,
+  onToggleAvailable,
+}: DrawerBodyProps) {
+  const [edited, setEdited] = useState<ServiceCategory>(category);
   const [activeTab, setActiveTab] = useState<Tab>("general");
-  const [edited, setEdited] = useState<ServiceCategory | null>(category);
-  const [showConfirmSave, setShowConfirmSave] = useState(false);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setEdited(category);
     setActiveTab("general");
+    setError(null);
   }, [category]);
 
-  if (!edited) return null;
+  const status = serviceStatus(edited);
+  const sections = sectionsFor(edited);
+  const plans = planCountFor(edited);
+  const networks = networkCount(edited);
 
-  const updateField = (field: keyof ServiceCategory, value: any) => {
-    setEdited((prev) => ({ ...prev!, [field]: value }));
+  const showNetworksTab =
+    edited.filterGroup === "airtime" || edited.filterGroup === "data";
+
+  const tabs = useMemo(() => {
+    const tabs: { key: Tab; label: string }[] = [];
+    for (const tab of BASE_TABS) {
+      if (tab.key === "plans" && plans === 0 && edited.formConfig?.selectionType === "amounts") {
+        tabs.push({ key: tab.key, label: "Amounts" });
+        continue;
+      }
+      tabs.push(tab);
+      if (tab.key === "fields" && showNetworksTab) {
+        tabs.push({ key: "networks", label: "Networks" });
+      }
+    }
+    return tabs;
+  }, [edited.formConfig?.selectionType, plans, showNetworksTab]);
+
+  const patch = (p: Partial<ServiceCategory>) => {
+    setEdited((prev) => ({ ...prev, ...p }));
+    setError(null);
   };
 
-  const updateFormConfig = (formConfig: ServiceCategory["formConfig"]) => {
-    setEdited((prev) => ({ ...prev!, formConfig }));
-  };
-
-  const addField = () => {
-    const newField: FormFieldConfig = {
-      name: "",
-      label: "",
-      type: "text",
-      placeholder: "",
-    };
-    const fields = edited.formConfig?.fields
-      ? [...edited.formConfig.fields, newField]
-      : [newField];
-    updateFormConfig({ ...edited.formConfig!, fields });
-  };
-
-  const updateFieldConfig = (index: number, field: Partial<FormFieldConfig>) => {
-    const fields = [...(edited.formConfig?.fields || [])];
-    fields[index] = { ...fields[index], ...field };
-    updateFormConfig({ ...edited.formConfig!, fields });
-  };
-
-  const removeField = (index: number) => {
-    const fields = edited.formConfig?.fields?.filter((_, i) => i !== index) || [];
-    updateFormConfig({ ...edited.formConfig!, fields });
-  };
-
-  const addItem = () => {
-    const newItem: Plan = {
-      id: `item-${Date.now()}`,
-      name: "New Item",
-      price: 0,
-    };
-    const items = edited.formConfig?.plans
-      ? [...edited.formConfig.plans, newItem]
-      : [newItem];
-    updateFormConfig({ ...edited.formConfig!, plans: items });
-  };
-
-  const updateItem = (index: number, item: Partial<Plan>) => {
-    const items = [...(edited.formConfig?.plans || [])];
-    items[index] = { ...items[index], ...item };
-    updateFormConfig({ ...edited.formConfig!, plans: items });
-  };
-
-  const removeItem = (index: number) => {
-    const items = edited.formConfig?.plans?.filter((_, i) => i !== index) || [];
-    updateFormConfig({ ...edited.formConfig!, plans: items });
+  const toggleSection = (section: ServiceSection) => {
+    const current = sectionsFor(edited);
+    const next = current.includes(section)
+      ? current.filter((s) => s !== section)
+      : [...current, section];
+    patch({ sections: next });
   };
 
   const handleSave = () => {
-    onSave(edited);
-    setShowConfirmSave(false);
+    const trimmedName = edited.name.trim();
+    const trimmedId = slugify(edited.id);
+
+    if (!trimmedName) {
+      setError("Enter a service name.");
+      return;
+    }
+    if (!trimmedId) {
+      setError("Enter a service ID.");
+      return;
+    }
+    if (
+      isNew &&
+      !isUniqueId(allCategories, trimmedId)
+    ) {
+      setError("That ID is already in use.");
+      return;
+    }
+
+    const next: ServiceCategory = {
+      ...edited,
+      id: trimmedId,
+      name: trimmedName,
+      comingSoon: edited.available ? false : Boolean(edited.comingSoon),
+      comingSoonReason: edited.available
+        ? undefined
+        : edited.comingSoon
+        ? edited.comingSoonReason
+        : undefined,
+      disabledReason: edited.available ? undefined : edited.disabledReason,
+      availableToResellers: sections.includes("resellers")
+        ? edited.availableToResellers ?? true
+        : false,
+    };
+
+    onSave(next);
     onClose();
   };
 
-  const availableTabs: { key: Tab; label: string; icon: AtlasIconName }[] = [
-    { key: "general", label: "General", icon: "settings" },
-    { key: "form", label: "Form Config", icon: "list" },
-    {
-      key: edited.formConfig?.selectionType === "plans" && edited.id !== "data"
-        ? "plans"
-        : "amounts",
-      label:
-        edited.formConfig?.selectionType === "plans" && edited.id !== "data"
-          ? "Plans"
-          : "Amounts",
-      icon: "tag",
-    },
-    ...(edited.filterGroup === "airtime" || edited.filterGroup === "data"
-      ? [{ key: "networks" as Tab, label: "Networks", icon: "globe" as AtlasIconName }]
-      : []),
-    { key: "preview", label: "Preview", icon: "eye" },
-    { key: "audit", label: "Audit", icon: "list" },
-  ];
+  const handleDeleteConfirm = () => {
+    onDelete(edited.id);
+    onClose();
+  };
+
+  const handleDuplicateConfirm = (result: DuplicateResult) => {
+    onDuplicate(edited, result);
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-neutral-900">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
-              <AtlasIcon name={edited.icon as AtlasIconName} className="h-4 w-4" />
+    <div className="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-neutral-900">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
+            <span className="text-xs font-bold uppercase">
+              {edited.name.slice(0, 2)}
             </span>
-            <div>
-              <p className="text-sm font-semibold">{edited.name}</p>
-              <p className="text-xs text-neutral-500">
-                {edited.filterGroup} · {edited.available ? "Active" : "Inactive"}
-              </p>
-            </div>
+          </span>
+          <div className="min-w-0">
+            <p id={titleId} className="truncate text-sm font-semibold">
+              {isNew ? "New service" : edited.name}
+            </p>
+            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
+              {FILTER_GROUP_LABEL[edited.filterGroup]} · {plans} plan
+              {plans === 1 ? "" : "s"}
+              {networks > 0 ? ` · ${networks} network${networks === 1 ? "" : "s"}` : ""}
+            </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
         </div>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-800">
-          {availableTabs.map((tab) => (
+      {/* Status strip */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <div className="flex items-center gap-1.5">
+          <StatusDot
+            tone={
+              status === "available"
+                ? "success"
+                : status === "coming_soon"
+                ? "warning"
+                : "neutral"
+            }
+            size="sm"
+          />
+          <Badge variant={STATUS_VARIANT[status]}>
+            {STATUS_LABEL[status]}
+          </Badge>
+        </div>
+        {sections.map((section) => (
+          <Badge key={section} variant="brand" size="sm">
+            {SECTION_LABEL[section]}
+          </Badge>
+        ))}
+      </div>
+
+      {/* Cross-links */}
+      {!isNew && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
+          <Link
+            href={`/admin/analytics?serviceId=${edited.id}`}
+            className="text-brand-700 hover:underline dark:text-brand-300"
+          >
+            Analytics
+          </Link>
+          <Link
+            href={`/admin/support?q=${encodeURIComponent(edited.name)}`}
+            className="text-brand-700 hover:underline dark:text-brand-300"
+          >
+            Support tickets
+          </Link>
+          {sections.includes("resellers") && (
+            <Link
+              href={`/admin/settings?tab=general&focus=commission`}
+              className="text-brand-700 hover:underline dark:text-brand-300"
+            >
+              Commission rate
+            </Link>
+          )}
+          {plans > 0 && (
+            <Link
+              href={`/admin/data-plans?serviceId=${edited.id}`}
+              className="text-brand-700 hover:underline dark:text-brand-300"
+            >
+              Data plans
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div
+        role="tablist"
+        aria-label="Service sections"
+        className="flex overflow-x-auto border-b border-neutral-200 dark:border-neutral-800"
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeTab;
+          return (
             <button
               key={tab.key}
+              role="tab"
+              type="button"
+              aria-selected={isActive}
+              aria-controls={`service-panel-${tab.key}`}
+              id={`service-tab-${tab.key}`}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium",
-                activeTab === tab.key
-                  ? "border-brand-600 text-brand-600"
-                  : "border-transparent text-neutral-500 hover:text-neutral-700"
+                "whitespace-nowrap border-b-2 px-4 py-2 text-xs font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                isActive
+                  ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+                  : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
               )}
             >
-              <AtlasIcon name={tab.icon} className="h-3.5 w-3.5" />
               {tab.label}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {/* General Tab */}
-          {activeTab === "general" && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-medium text-neutral-500">Name</label>
+      {/* Content */}
+      <div
+        role="tabpanel"
+        id={`service-panel-${activeTab}`}
+        aria-labelledby={`service-tab-${activeTab}`}
+        className="flex-1 overflow-y-auto p-4"
+      >
+        {activeTab === "general" && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  Name
+                </span>
                 <Input
+                  className="mt-1"
                   value={edited.name}
-                  onChange={(e) => updateField("name", e.target.value)}
+                  onChange={(e) => patch({ name: e.target.value })}
                 />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-neutral-500">
-                  Description
-                </label>
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  ID
+                </span>
                 <Input
-                  value={edited.description}
-                  onChange={(e) => updateField("description", e.target.value)}
+                  className="mt-1"
+                  value={edited.id}
+                  onChange={(e) => patch({ id: slugify(e.target.value) })}
+                  disabled={!isNew}
                 />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-neutral-500">Icon</label>
-                  <Input
-                    value={edited.icon}
-                    onChange={(e) => updateField("icon", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-neutral-500">
-                    Filter Group
-                  </label>
-                  <select
-                    className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                    value={edited.filterGroup}
-                    onChange={(e) => updateField("filterGroup", e.target.value)}
-                  >
-                    <option value="all">All</option>
-                    <option value="airtime">Airtime</option>
-                    <option value="data">Data</option>
-                    <option value="tv">TV</option>
-                    <option value="bills">Bills</option>
-                    <option value="more">More</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={edited.available}
-                    onChange={(e) => updateField("available", e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Available
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={edited.comingSoon || false}
-                    onChange={(e) => updateField("comingSoon", e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Coming Soon
-                </label>
-              </div>
+                <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
+                  {isNew
+                    ? "Used by the storefront to reference this service. Lowercase, numbers, hyphens."
+                    : "ID cannot be changed after creation."}
+                </span>
+              </label>
             </div>
-          )}
 
-          {/* Form Config Tab */}
-          {activeTab === "form" && (
-            <div className="space-y-4">
+            <label className="block">
+              <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                Description
+              </span>
+              <Input
+                className="mt-1"
+                value={edited.description}
+                onChange={(e) => patch({ description: e.target.value })}
+              />
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-medium text-neutral-500">
-                  Selection Type
-                </label>
+                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  Icon
+                </span>
+                <div className="mt-1">
+                  <ServiceIconPicker
+                    value={edited.icon}
+                    onChange={(iconName) => patch({ icon: iconName })}
+                  />
+                </div>
+              </div>
+              <label className="block">
+                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  Filter group
+                </span>
                 <select
-                  className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                  value={edited.formConfig?.selectionType || "amounts"}
+                  aria-label="Filter group"
+                  className="mt-1 h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                  value={edited.filterGroup}
                   onChange={(e) =>
-                    updateFormConfig({
-                      ...edited.formConfig!,
-                      selectionType: e.target.value as "plans" | "amounts",
-                    })
+                    patch({ filterGroup: e.target.value as FilterGroup })
                   }
                 >
-                  <option value="amounts">Amounts</option>
-                  <option value="plans">Plans</option>
+                  {ALL_FILTER_GROUPS.map((group) => (
+                    <option key={group} value={group}>
+                      {FILTER_GROUP_LABEL[group]}
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Fields</h3>
-                {edited.formConfig?.fields?.map((field, index) => (
-                  <div
-                    key={index}
-                    className="mb-2 space-y-2 rounded-md border p-3 dark:border-neutral-700"
-                  >
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Name"
-                        value={field.name}
-                        onChange={(e) =>
-                          updateFieldConfig(index, { name: e.target.value })
-                        }
-                      />
-                      <Input
-                        placeholder="Label"
-                        value={field.label}
-                        onChange={(e) =>
-                          updateFieldConfig(index, { label: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <select
-                        className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-                        value={field.type}
-                        onChange={(e) =>
-                          updateFieldConfig(index, {
-                            type: e.target.value as FormFieldConfig["type"],
-                          })
-                        }
-                      >
-                        <option value="text">Text</option>
-                        <option value="tel">Tel</option>
-                        <option value="select">Select</option>
-                        <option value="number">Number</option>
-                      </select>
-                      <Input
-                        placeholder="Placeholder"
-                        value={field.placeholder || ""}
-                        onChange={(e) =>
-                          updateFieldConfig(index, {
-                            placeholder: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    {field.type === "select" && (
-                      <Input
-                        placeholder="Options (comma separated)"
-                        value={field.options?.join(", ") || ""}
-                        onChange={(e) =>
-                          updateFieldConfig(index, {
-                            options: e.target.value.split(",").map((s) => s.trim()),
-                          })
-                        }
-                      />
-                    )}
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={field.required || false}
-                          onChange={(e) =>
-                            updateFieldConfig(index, {
-                              required: e.target.checked,
-                            })
-                          }
-                        />
-                        Required
-                      </label>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeField(index)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" onClick={addField}>
-                  Add Field
-                </Button>
-              </div>
-
-              <div>
-                <h3 className="mb-2 text-sm font-medium">Custom Amount</h3>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Min"
-                    value={edited.formConfig?.customAmount?.min || ""}
-                    onChange={(e) =>
-                      updateFormConfig({
-                        ...edited.formConfig!,
-                        customAmount: {
-                          ...edited.formConfig!.customAmount!,
-                          label:
-                            edited.formConfig?.customAmount?.label ||
-                            "Custom Amount",
-                          min: Number(e.target.value),
-                        },
-                      })
-                    }
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Max"
-                    value={edited.formConfig?.customAmount?.max || ""}
-                    onChange={(e) =>
-                      updateFormConfig({
-                        ...edited.formConfig!,
-                        customAmount: {
-                          ...edited.formConfig!.customAmount!,
-                          label:
-                            edited.formConfig?.customAmount?.label ||
-                            "Custom Amount",
-                          max: Number(e.target.value),
-                        },
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Plans/Amounts Tab */}
-          {(activeTab === "plans" || activeTab === "amounts") && edited.id !== "data" && (
-            <div className="space-y-3">
-              {edited.formConfig?.plans?.map((item, index) => (
-                <div
-                  key={index}
-                  className="space-y-2 rounded-md border p-3 dark:border-neutral-700"
-                >
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="ID"
-                      value={item.id}
-                      onChange={(e) => updateItem(index, { id: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Name"
-                      value={item.name}
-                      onChange={(e) => updateItem(index, { name: e.target.value })}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Description"
-                      value={item.description || ""}
-                      onChange={(e) =>
-                        updateItem(index, { description: e.target.value })
-                      }
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Price"
-                      value={item.price}
-                      onChange={(e) =>
-                        updateItem(index, { price: Number(e.target.value) })
-                      }
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeItem(index)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-              <Button variant="outline" size="sm" onClick={addItem}>
-                Add {activeTab === "plans" ? "Plan" : "Amount"}
-              </Button>
-            </div>
-          )}
-
-          {/* Networks Tab */}
-          {activeTab === "networks" && (
-            <div>
-              <label className="text-xs font-medium text-neutral-500">
-                Network Options (comma separated)
               </label>
-              <Input
-                value={edited.networkOptions?.join(", ") || ""}
-                onChange={(e) =>
-                  updateField(
-                    "networkOptions",
-                    e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                  )
-                }
-              />
             </div>
-          )}
 
-          {/* Preview Tab */}
-          {activeTab === "preview" && (
-            <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
-              <h3 className="text-base font-semibold">{edited.name}</h3>
-              <p className="text-sm text-neutral-500">{edited.description}</p>
-              <div className="mt-4 space-y-3">
-                {edited.formConfig?.fields?.map((field, idx) => (
-                  <div key={idx}>
-                    <label className="text-sm font-medium">{field.label}</label>
-                    {field.type === "select" ? (
-                      <select className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800">
-                        {field.options?.map((opt) => (
-                          <option key={opt}>{opt}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Input placeholder={field.placeholder} type={field.type} />
-                    )}
-                  </div>
-                ))}
-                {edited.formConfig?.selectionType === "amounts" &&
-                  edited.formConfig?.plans && (
-                    <div className="flex flex-wrap gap-2">
-                      {edited.formConfig.plans.map((item) => (
-                        <button
-                          key={item.id}
-                          className="rounded-md border px-3 py-1 text-sm"
-                        >
-                          {item.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                {edited.formConfig?.selectionType === "plans" &&
-                  edited.formConfig?.plans &&
-                  edited.id !== "data" && (
-                    <div className="flex flex-wrap gap-2">
-                      {edited.formConfig.plans.map((item) => (
-                        <button
-                          key={item.id}
-                          className="rounded-md border px-3 py-1 text-sm"
-                        >
-                          {item.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            <div>
+              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                Sections
+              </p>
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                Which Atlas surfaces consume this service.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                {ALL_SECTIONS.map((section) => {
+                  const isOn = sections.includes(section);
+                  return (
+                    <label
+                      key={section}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={isOn}
+                        onChange={() => toggleSection(section)}
+                      />
+                      {SECTION_LABEL[section]}
+                    </label>
+                  );
+                })}
               </div>
             </div>
-          )}
 
-          {/* Audit Tab */}
-          {activeTab === "audit" && (
-            <div>
-              <p className="text-sm font-medium">Audit Trail</p>
-              {auditLog.length === 0 ? (
-                <p className="mt-2 text-sm text-neutral-400">
-                  No changes recorded.
+            {sections.includes("resellers") && (
+              <label className="flex items-start gap-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={edited.availableToResellers ?? true}
+                  onChange={(e) =>
+                    patch({ availableToResellers: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                    Available to resellers
+                  </span>
+                  <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">
+                    When off, the service is available on Atlas direct but
+                    hidden from reseller storefronts.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            <div className="space-y-3 rounded-md border border-neutral-200 p-3 dark:border-neutral-700">
+              <label className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4"
+                  checked={edited.available}
+                  onChange={(e) => {
+                    const available = e.target.checked;
+                    patch({
+                      available,
+                      comingSoon: available ? false : edited.comingSoon,
+                      comingSoonReason: available
+                        ? undefined
+                        : edited.comingSoonReason,
+                      disabledReason: available ? undefined : edited.disabledReason,
+                    });
+                  }}
+                />
+                <span>
+                  <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                    Available
+                  </span>
+                  <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">
+                    Shows on the customer-facing storefront after the catalog
+                    is republished.
+                  </span>
+                </span>
+              </label>
+
+              {!edited.available && (
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4"
+                    checked={edited.comingSoon ?? false}
+                    onChange={(e) => {
+                      const comingSoon = e.target.checked;
+                      patch({
+                        comingSoon,
+                        comingSoonReason: comingSoon
+                          ? edited.comingSoonReason
+                          : undefined,
+                        disabledReason: comingSoon
+                          ? undefined
+                          : edited.disabledReason,
+                      });
+                    }}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      Coming soon
+                    </span>
+                    <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">
+                      Announce the service before it opens. It appears in a
+                      preview state but cannot be ordered.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {!edited.available && edited.comingSoon && (
+                <label className="block">
+                  <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                    Coming soon reason
+                  </span>
+                  <Input
+                    className="mt-1"
+                    value={edited.comingSoonReason ?? ""}
+                    onChange={(e) =>
+                      patch({ comingSoonReason: e.target.value })
+                    }
+                    placeholder="e.g. Awaiting provider contract"
+                  />
+                </label>
+              )}
+
+              {!edited.available && !edited.comingSoon && (
+                <label className="block">
+                  <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                    Disabled reason
+                  </span>
+                  <Input
+                    className="mt-1"
+                    value={edited.disabledReason ?? ""}
+                    onChange={(e) =>
+                      patch({ disabledReason: e.target.value })
+                    }
+                    placeholder="e.g. Provider outage"
+                  />
+                </label>
+              )}
+            </div>
+
+            {edited.providerIds && edited.providerIds.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  Providers
                 </p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {auditLog.map((entry) => (
+                <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                  {edited.providerIds.map((id) => (
                     <li
-                      key={entry.id}
-                      className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                      key={id}
+                      className="rounded bg-neutral-100 px-2 py-0.5 font-mono text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
                     >
-                      <p className="font-medium">{entry.admin}</p>
-                      <p>{entry.action}</p>
-                      <p className="text-neutral-400">
-                        {new Date(entry.timestamp).toLocaleString()}
-                      </p>
+                      {id}
                     </li>
                   ))}
                 </ul>
-              )}
-            </div>
-          )}
-        </div>
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  Provider assignment is managed from the Providers page.
+                </p>
+              </div>
+            )}
 
-        {/* Footer Actions */}
-        <div className="flex flex-wrap gap-2 border-t border-neutral-200 p-4 dark:border-neutral-800">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDuplicate(edited)}
-          >
-            Duplicate
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setShowConfirmDelete(true)}
-          >
-            Delete
-          </Button>
-          <div className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={() => setShowConfirmSave(true)}>
-              Save Changes
-            </Button>
+            {error && (
+              <p
+                role="alert"
+                className="rounded-md border border-danger-200 bg-danger-50 p-2 text-xs text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/25 dark:text-danger-200"
+              >
+                {error}
+              </p>
+            )}
           </div>
+        )}
+
+        {activeTab === "fields" && (
+          <ServiceFieldsEditor category={edited} onChange={patch} />
+        )}
+
+        {activeTab === "networks" && (
+          <ServiceNetworksEditor category={edited} onChange={patch} />
+        )}
+
+        {activeTab === "plans" && (
+          <ServicePlansEditor category={edited} onChange={patch} />
+        )}
+
+        {activeTab === "preview" && <ServicePreviewPanel category={edited} />}
+
+        {activeTab === "audit" && (
+          <ServiceAuditPanel
+            entries={auditEntries.filter((e) => e.serviceId === edited.id)}
+          />
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        {!isNew && (
+          <Can permission={PERMISSIONS.SERVICES_MANAGE}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDuplicateOpen(true)}
+            >
+              Duplicate
+            </Button>
+          </Can>
+        )}
+
+        {!isNew && (
+          <Can permission={PERMISSIONS.SERVICES_MANAGE}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-danger-700 hover:bg-danger-50 dark:text-danger-300 dark:hover:bg-danger-900/20"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete
+            </Button>
+          </Can>
+        )}
+
+        {!isNew && (
+          <Can permission={PERMISSIONS.SERVICES_MANAGE}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onToggleAvailable(edited.id)}
+            >
+              {edited.available ? "Disable" : "Enable"}
+            </Button>
+          </Can>
+        )}
+
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Can permission={PERMISSIONS.SERVICES_MANAGE}>
+            <Button size="sm" onClick={handleSave}>
+              {isNew ? "Create service" : "Save changes"}
+            </Button>
+          </Can>
         </div>
       </div>
 
-      <ConfirmDialog
-        open={showConfirmSave}
-        title="Confirm Save Changes"
-        description="Are you sure you want to save these changes?"
-        confirmLabel="Save"
-        onConfirm={handleSave}
-        onCancel={() => setShowConfirmSave(false)}
+      <ServiceDeleteModal
+        open={deleteOpen}
+        service={edited}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteConfirm}
       />
-      <ConfirmDialog
-        open={showConfirmDelete}
-        title="Confirm Delete"
-        description="Are you sure you want to delete this service? This cannot be undone."
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => {
-          onDelete(edited.id);
-          onClose();
-        }}
-        onCancel={() => setShowConfirmDelete(false)}
+
+      <ServiceDuplicateModal
+        open={duplicateOpen}
+        service={edited}
+        existingIds={existingIds}
+        onClose={() => setDuplicateOpen(false)}
+        onConfirm={handleDuplicateConfirm}
       />
-    </div>
+
+    </div> 
   );
 }

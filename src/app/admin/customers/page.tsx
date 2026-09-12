@@ -1,125 +1,257 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/purity */
+// app/(admin)/customers/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { CustomerSummaryCards } from "@/components/admin/customers/customer-summary-cards";
-import { CustomerFilters } from "@/components/admin/customers/customer-filters";
-import { CustomerListItem } from "@/components/admin/customers/customer-list-item";
-import { CustomerDetailDrawer } from "@/components/admin/customers/customer-detail-drawer";
 import { Button } from "@/components/admin/ui/button";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
-import { SavedViews, type SavedView } from "@/components/admin/ui/saved-views";
 import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { CustomerSummaryCards } from "@/components/admin/customers/customer-summary-cards";
+import {
+  CustomerFilters,
+  type CustomerFilterValues,
+} from "@/components/admin/customers/customer-filters";
+import { CustomerListItem } from "@/components/admin/customers/customer-list-item";
+import { CustomerDetailDrawer } from "@/components/admin/customers/customer-detail-drawer";
 import { mockCustomers } from "@/lib/admin/mock/customers";
-import { Customer } from "@/lib/admin/types/customer";
+import type { Customer } from "@/lib/admin/types/customer";
+import type { WalletAdjustMethod } from "@/lib/admin/customers/constants";
+import { PAGE_SIZE } from "@/lib/admin/customers/constants";
+import { customersToCsv } from "@/lib/admin/customers/csv-export";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
+import { Can, PERMISSIONS } from "@/lib/admin/rbac";
 
-const PAGE_SIZE = 12;
+const DEFAULT_FILTERS: CustomerFilterValues & { page: string } = {
+  q: "",
+  status: "",
+  tag: "",
+  risk: "",
+  lastActive: "",
+  sort: "lastActive",
+  page: "1",
+};
+
+type CustomerUrlFilters = Record<string, string> & typeof DEFAULT_FILTERS;
+
+type BulkIntent = { kind: "suspend"; ids: string[] };
+
+interface Toast {
+  kind: "success" | "error";
+  text: string;
+  onUndo?: () => void;
+}
 
 export default function CustomersPage() {
+  return (
+    <Suspense fallback={<CustomersSkeleton />}>
+      <CustomersPageInner />
+    </Suspense>
+  );
+}
+
+function CustomersSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-32 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CustomersPageInner() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [page, setPage] = useState(1);
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
-  const [bulkAction, setBulkAction] = useState<"suspend" | "export" | null>(null);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const [bulkIntent, setBulkIntent] = useState<BulkIntent | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
-  const [filters, setFilters] = useState<{
-    search: string;
-    status: string;
-    tag: string;
-    source: string;
-    risk: string;
-  }>({
-    search: "",
-    status: "",
-    tag: "",
-    source: "",
-    risk: "",
-  });
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<CustomerUrlFilters>(DEFAULT_FILTERS);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTimeout(() => {
-      // Only direct customers (no storefront)
+    const t = window.setTimeout(() => {
       setCustomers(mockCustomers.filter((c) => !c.storefrontId));
       setLoading(false);
-    }, 500);
-  }, []);
-
-  // Load/save saved views
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("atlas-customer-views");
-      if (stored) setSavedViews(JSON.parse(stored));
-    } catch {}
+    }, 400);
+    return () => window.clearTimeout(t);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("atlas-customer-views", JSON.stringify(savedViews));
-  }, [savedViews]);
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
-  // Filters
-  const filteredCustomers = useMemo(() => {
-    return customers.filter((c) => {
-      if (
-        filters.search &&
-        !c.name.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !c.email.toLowerCase().includes(filters.search.toLowerCase())
-      )
-        return false;
+  const filtered = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const nowMs = Date.now();
+
+    const list = customers.filter((c) => {
+      if (q) {
+        const haystack = `${c.name} ${c.email} ${c.phone}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       if (filters.status && c.status !== filters.status) return false;
       if (filters.tag && !c.tags.includes(filters.tag)) return false;
-      if (filters.source && c.source !== filters.source) return false;
       if (filters.risk && c.riskLevel !== filters.risk) return false;
+      if (filters.lastActive) {
+        const days =
+          (nowMs - new Date(c.lastActive).getTime()) / 86_400_000;
+        if (filters.lastActive === "7d" && days > 7) return false;
+        if (filters.lastActive === "30d" && days > 30) return false;
+        if (filters.lastActive === "90d" && days > 90) return false;
+        if (filters.lastActive === "90d+" && days <= 90) return false;
+      }
       return true;
     });
+
+    const sorted = [...list];
+    switch (filters.sort) {
+      case "joined":
+        sorted.sort(
+          (a, b) =>
+            new Date(b.joinedAt).getTime() - new Date(a.joinedAt).getTime()
+        );
+        break;
+      case "totalSpent":
+        sorted.sort((a, b) => b.totalSpent - a.totalSpent);
+        break;
+      case "totalOrders":
+        sorted.sort((a, b) => b.totalOrders - a.totalOrders);
+        break;
+      case "wallet":
+        sorted.sort((a, b) => b.walletBalance - a.walletBalance);
+        break;
+      case "lastActive":
+      default:
+        sorted.sort(
+          (a, b) =>
+            new Date(b.lastActive).getTime() -
+            new Date(a.lastActive).getTime()
+        );
+    }
+
+    return sorted;
   }, [customers, filters]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredCustomers.length / PAGE_SIZE);
-  const paginated = filteredCustomers.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
+  const page = Math.max(1, Number(filters.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
   );
 
-  // All tags
+  const filteredIds = useMemo(() => paginated.map((c) => c.id), [paginated]);
+
+  useEffect(() => {
+    if (focusedId && !filteredIds.includes(focusedId)) {
+      setFocusedId(filteredIds[0] ?? null);
+    }
+  }, [filteredIds, focusedId]);
+
+  useEffect(() => {
+    if (!focusedId) return;
+    const el = document.querySelector(`[data-customer-id="${focusedId}"]`);
+    if (el instanceof HTMLElement) el.scrollIntoView({ block: "nearest" });
+  }, [focusedId]);
+
+  useInboxKeyboard({
+    itemIds: filteredIds,
+    focusedId,
+    enabled: selectedId === null && bulkIntent === null,
+    onFocusChange: setFocusedId,
+    onOpen: setSelectedId,
+    onFocusSearch: () => searchInputRef.current?.focus(),
+  });
+
+  const selected = useMemo(
+    () => customers.find((c) => c.id === selectedId) ?? null,
+    [customers, selectedId]
+  );
+
   const allTags = useMemo(() => {
     const tags = new Set<string>();
     customers.forEach((c) => c.tags.forEach((t) => tags.add(t)));
     return Array.from(tags).sort();
   }, [customers]);
 
-  // Summary data
-  const summaryData = {
-    totalCustomers: customers.length,
-    activeCustomers: customers.filter((c) => c.status === "active").length,
-    newThisMonth: 12,
-    suspendedCustomers: customers.filter((c) => c.status === "suspended").length,
-    totalSpent: customers.reduce((sum, c) => sum + c.totalSpent, 0),
-    avgOrderValue:
-      customers.reduce((sum, c) => sum + c.totalSpent, 0) /
-      Math.max(
-        customers.reduce((sum, c) => sum + c.totalOrders, 0),
-        1
-      ),
+  const summaryData = useMemo(() => {
+    const nowMs = Date.now();
+    const thirtyDaysAgo = nowMs - 30 * 86_400_000;
+    const nowDate = new Date();
+
+    const activeCustomers = customers.filter(
+      (c) => new Date(c.lastActive).getTime() >= thirtyDaysAgo
+    ).length;
+
+    const newThisMonth = customers.filter((c) => {
+      const d = new Date(c.joinedAt);
+      return (
+        d.getMonth() === nowDate.getMonth() &&
+        d.getFullYear() === nowDate.getFullYear()
+      );
+    }).length;
+
+    const totalSpent = customers.reduce((s, c) => s + c.totalSpent, 0);
+    const totalOrders = customers.reduce((s, c) => s + c.totalOrders, 0);
+
+    return {
+      totalCustomers: customers.length,
+      activeCustomers,
+      newThisMonth,
+      suspendedCustomers: customers.filter((c) => c.status === "suspended")
+        .length,
+      totalSpent,
+      avgOrderValue: totalOrders > 0 ? totalSpent / totalOrders : 0,
+    };
+  }, [customers]);
+
+  const updateCustomer = (
+    id: string,
+    patch: (c: Customer) => Customer
+  ) => {
+    setCustomers((prev) => prev.map((c) => (c.id === id ? patch(c) : c)));
   };
 
-  // Handlers
-  const handleFilterChange = (newFilters: typeof filters) => {
-    setFilters(newFilters);
-    setPage(1);
-  };
-
-  const filterByStatus = (status: string) => {
-    setFilters((prev) => ({ ...prev, status }));
-    setPage(1);
-  };
-
-  const resetFilters = () => {
-    setFilters({ search: "", status: "", tag: "", source: "", risk: "" });
-    setPage(1);
+  const appendActivity = (
+    c: Customer,
+    action: string
+  ): Customer => {
+    return {
+      ...c,
+      activityLog: [
+        ...c.activityLog,
+        {
+          id: crypto.randomUUID(),
+          timestamp: new Date().toISOString(),
+          action,
+        },
+      ],
+    };
   };
 
   const handleToggleSelect = (id: string) => {
@@ -131,152 +263,266 @@ export default function CustomersPage() {
   const handleAdjustWallet = (
     id: string,
     amount: number,
-    reason: string
+    reason: string,
+    method: WalletAdjustMethod
   ) => {
-    setCustomers((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, walletBalance: c.walletBalance + amount } : c
-      )
-    );
-    if (selectedCustomer && selectedCustomer.id === id) {
-      setSelectedCustomer((prev) =>
-        prev ? { ...prev, walletBalance: prev.walletBalance + amount } : prev
+    updateCustomer(id, (c) => {
+      const withBalance = {
+        ...c,
+        walletBalance: c.walletBalance + amount,
+      };
+      const direction = amount >= 0 ? "Credited" : "Debited";
+      return appendActivity(
+        withBalance,
+        `${direction} ${Math.abs(amount).toFixed(2)} GHS via ${method}. ${reason}`
       );
-    }
-    console.log(`Adjusted wallet for ${id}: ${amount} (${reason})`);
+    });
+    setToast({
+      kind: "success",
+      text: `Wallet ${amount >= 0 ? "credited" : "debited"} ${Math.abs(
+        amount
+      ).toFixed(2)} GHS.`,
+    });
   };
 
   const handleAddTag = (id: string, tag: string) => {
-    setCustomers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, tags: [...c.tags, tag] } : c))
+    updateCustomer(id, (c) =>
+      c.tags.includes(tag) ? c : { ...c, tags: [...c.tags, tag] }
     );
-    if (selectedCustomer && selectedCustomer.id === id) {
-      setSelectedCustomer((prev) =>
-        prev ? { ...prev, tags: [...prev.tags, tag] } : prev
-      );
-    }
   };
 
-  const handleSuspend = (id: string) => {
-    setCustomers((prev) =>
-      prev.map((c) =>
-        c.id === id ? { ...c, status: "suspended" as const } : c
+  const handleRemoveTag = (id: string, tag: string) => {
+    updateCustomer(id, (c) => ({
+      ...c,
+      tags: c.tags.filter((t) => t !== tag),
+    }));
+  };
+
+  const handleSuspend = (id: string, reason: string) => {
+    updateCustomer(id, (c) =>
+      appendActivity(
+        { ...c, status: "suspended" },
+        `Suspended: ${reason}`
       )
     );
-    setSelectedCustomer(null);
+    setSelectedId(null);
+    setToast({ kind: "success", text: "Customer suspended." });
+  };
+
+  const handleReactivate = (id: string) => {
+    updateCustomer(id, (c) =>
+      appendActivity({ ...c, status: "active" }, "Reactivated")
+    );
+    setSelectedId(null);
+    setToast({ kind: "success", text: "Customer reactivated." });
+  };
+
+  const handleRevealPII = (id: string) => {
+    updateCustomer(id, (c) =>
+      appendActivity(c, "Revealed contact details")
+    );
+  };
+
+  const handleResetPassword = (id: string) => {
+    const target = customers.find((c) => c.id === id);
+    if (!target) return;
+    updateCustomer(id, (c) =>
+      appendActivity(c, "Password reset link sent")
+    );
+    setToast({
+      kind: "success",
+      text: `Reset link sent to ${target.email}.`,
+    });
   };
 
   const handleSendNotification = (
     id: string,
-    channel: string,
+    channel: "email" | "sms" | "push",
     message: string
   ) => {
-    console.log(`Sent ${channel} to ${id}: ${message}`);
+    void message;
+    const target = customers.find((c) => c.id === id);
+    if (!target) return;
+    updateCustomer(id, (c) =>
+      appendActivity(c, `Notification sent via ${channel.toUpperCase()}`)
+    );
+    setToast({
+      kind: "success",
+      text: `${channel.toUpperCase()} sent to ${target.name}.`,
+    });
   };
 
-  const handleBulkAction = () => {
-    if (bulkAction === "suspend") {
-      setCustomers((prev) =>
-        prev.map((c) =>
-          selectedIds.includes(c.id)
-            ? { ...c, status: "suspended" as const }
-            : c
-        )
-      );
-    } else if (bulkAction === "export") {
-      console.log(`Export selected customers:`, selectedIds);
-    }
+  const handleBulkSuspend = () => {
+    setBulkIntent({ kind: "suspend", ids: selectedIds });
+  };
+
+  const confirmBulkSuspend = () => {
+    if (!bulkIntent) return;
+    const idSet = new Set(bulkIntent.ids);
+    setCustomers((prev) =>
+      prev.map((c) =>
+        idSet.has(c.id)
+          ? appendActivity(
+              { ...c, status: "suspended" },
+              "Suspended via bulk action"
+            )
+          : c
+      )
+    );
     setSelectedIds([]);
-    setShowBulkConfirm(false);
-    setBulkAction(null);
+    setBulkIntent(null);
+    setToast({
+      kind: "success",
+      text: `Suspended ${bulkIntent.ids.length} customers.`,
+    });
   };
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export customers as ${format}`);
+    if (format !== "csv") return;
+    const csv = customersToCsv(filtered);
+    downloadCsv(
+      `atlas-customers-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv
+    );
   };
 
-  const handleSaveView = (name: string) => {
-    setSavedViews((prev) => [...prev, { name, filters }]);
+  const handleBulkExport = () => {
+    const selectedCustomers = customers.filter((c) =>
+      selectedIds.includes(c.id)
+    );
+    const csv = customersToCsv(selectedCustomers);
+    downloadCsv(
+      `atlas-customers-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv
+    );
+    setToast({
+      kind: "success",
+      text: `Exported ${selectedCustomers.length} customers.`,
+    });
+    setSelectedIds([]);
   };
 
-  const handleLoadView = (view: SavedView) => {
-    setFilters(view.filters);
+  const handleBulkClear = () => {
+    setSelectedIds([]);
   };
 
-  const handleDeleteView = (name: string) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== name));
+  const filterValues: CustomerFilterValues = {
+    q: filters.q,
+    status: filters.status,
+    tag: filters.tag,
+    risk: filters.risk,
+    lastActive: filters.lastActive,
+    sort: filters.sort,
   };
+
+  const headerMeta = useMemo(() => {
+    return (
+      <>
+        <span>{customers.length} customers</span>
+        <span aria-hidden="true">·</span>
+        <span>{summaryData.activeCustomers} active in last 30d</span>
+        {summaryData.suspendedCustomers > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="text-danger-700 dark:text-danger-300">
+              {summaryData.suspendedCustomers} suspended
+            </span>
+          </>
+        )}
+      </>
+    );
+  }, [customers.length, summaryData]);
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Customers"
         description="Atlas Digital Services direct customers."
-        actions={<ExportMenu onExport={handleExport} />}
+        meta={headerMeta}
+        actions={<ExportMenu onExport={handleExport} formats={["csv"]} />}
       />
 
       <CustomerSummaryCards
         data={summaryData}
-        onFilterAll={() => filterByStatus("")}
-        onFilterActive={() => filterByStatus("active")}
-        onFilterSuspended={() => filterByStatus("suspended")}
+        activeStatus={filters.status}
+        activeLastActive={filters.lastActive}
+        activeSort={filters.sort}
+        onFilterAll={() =>
+          setFilters({
+            status: "",
+            lastActive: "",
+            sort: "lastActive",
+            page: "1",
+          })
+        }
+        onFilterActive={() =>
+          setFilters({ lastActive: "30d", status: "", page: "1" })
+        }
+        onFilterSuspended={() =>
+          setFilters({ status: "suspended", lastActive: "", page: "1" })
+        }
+        onSortBySpend={() =>
+          setFilters({ sort: "totalSpent", page: "1" })
+        }
       />
 
-      <SavedViews
-        views={savedViews}
-        onLoad={handleLoadView}
-        onDelete={handleDeleteView}
-        onSave={handleSaveView}
+      <CustomerFilters
+        value={filterValues}
+        allTags={allTags}
+        hasActive={hasActive}
+        onChange={(next) =>
+          setFilters({
+            ...next,
+            page: "1",
+          })
+        }
+        onClear={clearFilters}
       />
 
-      <CustomerFilters allTags={allTags} onFilterChange={handleFilterChange} />
-
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {selectedIds.length > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">
-              {selectedIds.length} selected
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBulkAction("suspend");
-                setShowBulkConfirm(true);
-              }}
-            >
-              Suspend
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setBulkAction("export");
-                setShowBulkConfirm(true);
-              }}
-            >
-              Export Selected
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedIds([])}
-            >
+      {selectedIds.length > 0 ? (
+        <div
+          role="region"
+          aria-label="Bulk customer actions"
+          className="flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-2 dark:border-brand-800/60 dark:bg-brand-900/20"
+        >
+          <span
+            className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
+            aria-live="polite"
+          >
+            {selectedIds.length} selected
+          </span>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Can permission={PERMISSIONS.CUSTOMERS_SUSPEND}>
+              <Button variant="outline" size="sm" onClick={handleBulkSuspend}>
+                Suspend
+              </Button>
+            </Can>
+            <Can permission={PERMISSIONS.EXPORT}>
+              <Button variant="outline" size="sm" onClick={handleBulkExport}>
+                Export selected
+              </Button>
+            </Can>
+            <Button variant="ghost" size="sm" onClick={handleBulkClear}>
               Clear
             </Button>
           </div>
-        ) : (
-          <span className="text-sm text-neutral-500">
-            {filteredCustomers.length} customers
-            {Object.values(filters).some((v) => v) ? " (filtered)" : ""}
-          </span>
-        )}
-      </div>
+        </div>
+      ) : (
+        <p
+          aria-live="polite"
+          className="text-xs text-neutral-500 dark:text-neutral-400"
+        >
+          {filtered.length} customer{filtered.length === 1 ? "" : "s"}
+          {hasActive ? " (filtered)" : ""}
+        </p>
+      )}
 
-      {/* Customer List */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        <div
+          aria-busy="true"
+          aria-label="Loading customers"
+          className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3"
+        >
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
@@ -285,90 +531,118 @@ export default function CustomersPage() {
           ))}
         </div>
       ) : paginated.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-          <p className="text-sm text-neutral-500">
-            No customers match your filters.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={resetFilters}
-          >
-            Clear filters
-          </Button>
+        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          {hasActive ? (
+            <EmptyState
+              variant="no_results"
+              title="No customers match these filters"
+              description="Try a different search or clear the filters."
+              action={
+                <Button variant="outline" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              variant="no_data"
+              title="No customers yet"
+              description="New customers will appear here once they sign up."
+            />
+          )}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <ul
+            role="list"
+            className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3"
+          >
             {paginated.map((customer) => (
-              <div key={customer.id} className="relative">
-                <input
-                  type="checkbox"
-                  className="absolute left-3 top-3 z-10 h-4 w-4"
-                  checked={selectedIds.includes(customer.id)}
-                  onChange={() => handleToggleSelect(customer.id)}
-                  onClick={(e) => e.stopPropagation()}
-                />
+              <li key={customer.id} data-customer-id={customer.id}>
                 <CustomerListItem
                   customer={customer}
                   isSelected={selectedIds.includes(customer.id)}
-                  onClick={setSelectedCustomer}
+                  onToggleSelect={handleToggleSelect}
+                  onOpen={setSelectedId}
                 />
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">
-                Page {page} of {totalPages}
+            <nav
+              aria-label="Customer pagination"
+              className="flex flex-wrap items-center justify-between gap-3"
+            >
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                Page {safePage} of {totalPages} · {filtered.length} customers
               </span>
-              <div className="flex gap-1">
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
+                  disabled={safePage <= 1}
+                  onClick={() => setFilters({ page: String(safePage - 1) })}
                 >
                   Previous
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
+                  disabled={safePage >= totalPages}
+                  onClick={() => setFilters({ page: String(safePage + 1) })}
                 >
                   Next
                 </Button>
               </div>
-            </div>
+            </nav>
           )}
         </>
       )}
 
       <CustomerDetailDrawer
-        customer={selectedCustomer}
-        onClose={() => setSelectedCustomer(null)}
+        customer={selected}
+        onClose={() => setSelectedId(null)}
         onAdjustWallet={handleAdjustWallet}
         onAddTag={handleAddTag}
+        onRemoveTag={handleRemoveTag}
         onSuspend={handleSuspend}
+        onReactivate={handleReactivate}
         onSendNotification={handleSendNotification}
+        onRevealPII={handleRevealPII}
+        onResetPassword={handleResetPassword}
       />
 
       <ConfirmDialog
-        open={showBulkConfirm}
-        title={`Confirm ${bulkAction ?? ""}`}
-        description={`Are you sure you want to ${bulkAction} ${selectedIds.length} customers?`}
-        confirmLabel="Confirm"
-        danger={bulkAction === "suspend"}
-        onConfirm={handleBulkAction}
-        onCancel={() => {
-          setShowBulkConfirm(false);
-          setBulkAction(null);
-        }}
+        open={bulkIntent !== null}
+        title={
+          bulkIntent ? `Suspend ${bulkIntent.ids.length} customers?` : ""
+        }
+        description="The selected customers will be signed out and blocked from placing orders or withdrawing. Their history is preserved."
+        confirmLabel="Suspend customers"
+        danger
+        onConfirm={confirmBulkSuspend}
+        onCancel={() => setBulkIntent(null)}
       />
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "flex items-center justify-between gap-3 rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "flex items-center justify-between gap-3 rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          <span>{toast.text}</span>
+          {toast.onUndo && (
+            <Button variant="ghost" size="sm" onClick={toast.onUndo}>
+              Undo
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

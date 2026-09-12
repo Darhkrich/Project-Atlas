@@ -1,13 +1,45 @@
+// lib/admin/types/settings.ts
+
+import type { export export NotificationChannel } from "./notification";
+
+export type PlatformEnvironment = "development" | "staging" | "production";
+
+export type AtlasSection =
+  | "digital_services"
+  | "resellers"
+  | "ecommerce"
+  | "admin";
+
+export type SettingsTab =
+  | "general"
+  | "notifications"
+  | "security"
+  | "maintenance"
+  | "health"
+  | "api"
+  | "payments"
+  | "wallet"
+  | "support"
+  | "localization"
+  | "compliance"
+  | "webhooks"
+  | "roles";
+
+export type HealthStatus = "operational" | "degraded" | "down";
+
 export interface GeneralSettings {
   platformName: string;
   supportEmail: string;
   supportPhone: string;
   currency: string;
   timezone: string;
+  environment: PlatformEnvironment;
   defaultCommissionRate: number;
+  commissionPerSection: Record<AtlasSection, number>;
   transactionLimitPerDay: number;
   maxWithdrawalLimit: number;
   lowBalanceThreshold: number;
+  lowBalanceAlertChannels: NotificationChannel[];
 }
 
 export interface NotificationSettings {
@@ -21,46 +53,65 @@ export interface NotificationSettings {
 
 export interface SecuritySettings {
   passwordMinLength: number;
+  passwordMinLengthMax: number;
   require2FA: boolean;
   sessionTimeoutMinutes: number;
+  sessionTimeoutMinutesMax: number;
   maxLoginAttempts: number;
+  maxLoginAttemptsMax: number;
   lockoutDurationMinutes: number;
+  lockoutDurationMinutesMax: number;
+}
+
+export interface MaintenanceWindow {
+  startAt: string;
+  endAt: string;
 }
 
 export interface MaintenanceSettings {
   enabled: boolean;
   message: string;
-  expectedDuration: string;
+  window?: MaintenanceWindow;
   allowedIPs: string[];
 }
 
 export interface ApiKey {
   id: string;
   name: string;
-  key: string;
+  keyPreview: string;
   createdAt: string;
   lastUsedAt?: string;
   status: "active" | "revoked";
+  revokedAt?: string;
 }
 
 export interface SystemHealth {
-  apiStatus: "operational" | "degraded" | "down";
-  databaseStatus: "operational" | "degraded" | "down";
-  queueStatus: "operational" | "degraded" | "down";
-  providerStatus: "operational" | "degraded" | "down";
+  apiStatus: HealthStatus;
+  databaseStatus: HealthStatus;
+  queueStatus: HealthStatus;
+  providerStatus: HealthStatus;
   lastChecked: string;
 }
 
+export interface PaymentMethodConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  feePercent: number;
+  fixedFee: number;
+  sections: AtlasSection[];
+  apiKeyPreview?: string;
+  secretSet: boolean;
+  secretLastUpdatedAt?: string;
+}
+
 export interface PaymentGatewaySettings {
-  methods: {
-    id: string;
-    name: string;
-    enabled: boolean;
-    feePercent: number;
-    fixedFee: number;
-    apiKey?: string;
-    secret?: string;
-  }[];
+  methods: PaymentMethodConfig[];
+}
+
+export interface SectionOverride {
+  autoApproveThreshold?: number;
+  dailyLimit?: number;
 }
 
 export interface WalletWithdrawalSettings {
@@ -69,6 +120,7 @@ export interface WalletWithdrawalSettings {
   monthlyWithdrawalLimit: number;
   minBalanceToWithdraw: number;
   processingTime: "instant" | "t1";
+  perSectionOverrides?: Partial<Record<AtlasSection, SectionOverride>>;
 }
 
 export interface SupportSettings {
@@ -86,25 +138,50 @@ export interface LocalizationSettings {
   timeFormat: string;
 }
 
+export type BackupFrequency = "daily" | "weekly" | "monthly";
+
+export interface StructuredSchedule {
+  frequency: BackupFrequency;
+  hour: number;
+  minute: number;
+  dayOfWeek?: number;
+}
+
 export interface DataComplianceSettings {
   auditLogRetentionDays: number;
   dataExportEnabled: boolean;
   dataDeleteEnabled: boolean;
-  backupSchedule: string;
+  backupSchedule: StructuredSchedule;
+}
+
+export interface Webhook {
+  id: string;
+  event: string;
+  url: string;
+  enabled: boolean;
+  secretSet?: boolean;
 }
 
 export interface WebhookSettings {
-  webhooks: {
-    id: string;
-    event: string;
-    url: string;
-    enabled: boolean;
-  }[];
+  webhooks: Webhook[];
+}
+
+export interface RoleDefinition {
+  name: string;
+  permissions: string[];
 }
 
 export interface AdminRolePermissions {
-  roles: {
-    name: string;
-    permissions: string[];
-  }[];
+  roles: RoleDefinition[];
+}
+
+export interface SettingsAuditEntry {
+  id: string;
+  tab: SettingsTab;
+  field: string;
+  previousValue: string;
+  newValue: string;
+  actorId: string;
+  actorName: string;
+  at: string;
 }

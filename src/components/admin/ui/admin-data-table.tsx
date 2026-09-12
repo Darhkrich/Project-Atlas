@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "./skeleton";
 import { EmptyState } from "./empty-state";
@@ -12,8 +11,12 @@ export interface Column<T> {
   key: string;
   header: string;
   cell: (item: T) => ReactNode;
+  dataIndex?: keyof T;
+  sortFn?: (a: T, b: T) => number;
   sortable?: boolean;
   className?: string;
+  headerClassName?: string;
+  cellClassName?: string;
 }
 
 interface AdminDataTableProps<T> {
@@ -29,6 +32,13 @@ interface AdminDataTableProps<T> {
   totalCount?: number;
   rowKey: (item: T) => string;
   onRowClick?: (item: T) => void;
+  caption?: string;
+}
+
+type SortDirection = "asc" | "desc";
+interface SortConfig {
+  key: string;
+  direction: SortDirection;
 }
 
 export function AdminDataTable<T>({
@@ -44,34 +54,46 @@ export function AdminDataTable<T>({
   totalCount,
   rowKey,
   onRowClick,
+  caption,
 }: AdminDataTableProps<T>) {
-  const [sortConfig, setSortConfig] = useState<{
-    key: string;
-    direction: "asc" | "desc";
-  } | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const isServerPaginated = typeof totalCount === "number";
 
   const sortedData = useMemo(() => {
     if (!sortConfig) return data;
-    const { key, direction } = sortConfig;
-    return [...data].sort((a: any, b: any) => {
-      if (a[key] < b[key]) return direction === "asc" ? -1 : 1;
-      if (a[key] > b[key]) return direction === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [data, sortConfig]);
+    const col = columns.find((c) => c.key === sortConfig.key);
+    if (!col) return data;
 
-  const totalPages = totalCount
-    ? Math.ceil(totalCount / pageSize)
-    : Math.ceil(data.length / pageSize);
+    return [...data].sort((a, b) => {
+      let result = 0;
+      if (col.sortFn) {
+        result = col.sortFn(a, b);
+      } else if (col.dataIndex) {
+        const av = a[col.dataIndex];
+        const bv = b[col.dataIndex];
+        if (av == null && bv == null) result = 0;
+        else if (av == null) result = 1;
+        else if (bv == null) result = -1;
+        else if (av < bv) result = -1;
+        else if (av > bv) result = 1;
+      }
+      return sortConfig.direction === "asc" ? result : -result;
+    });
+  }, [data, sortConfig, columns]);
+
+  const totalPages = isServerPaginated
+    ? Math.max(1, Math.ceil((totalCount as number) / pageSize))
+    : Math.max(1, Math.ceil(data.length / pageSize));
+
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const displayData = isServerPaginated
+    ? sortedData
+    : sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSort = (key: string) => {
     setSortConfig((current) => {
-      if (!current || current.key !== key) {
-        return { key, direction: "asc" };
-      }
-      if (current.direction === "asc") {
-        return { key, direction: "desc" };
-      }
+      if (!current || current.key !== key) return { key, direction: "asc" };
+      if (current.direction === "asc") return { key, direction: "desc" };
       return null;
     });
   };
@@ -91,47 +113,73 @@ export function AdminDataTable<T>({
   }
 
   if (!data || data.length === 0) {
-    return <EmptyState title={emptyMessage} />;
+    return <EmptyState title={emptyMessage} variant={"no_data"} />;
   }
 
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" aria-label={caption}>
+          {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50">
-              {columns.map((col) => (
-                <th
-                  key={col.key}
-                  className={cn(
-                    "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400",
-                    col.sortable && "cursor-pointer select-none hover:text-neutral-700 dark:hover:text-neutral-300",
-                    col.className
-                  )}
-                  onClick={() => col.sortable && handleSort(col.key)}
-                >
-                  <div className="flex items-center gap-1">
-                    {col.header}
-                    {col.sortable && sortConfig?.key === col.key && (
-                      <span>{sortConfig.direction === "asc" ? "↑" : "↓"}</span>
+              {columns.map((col) => {
+                const isSorted = sortConfig?.key === col.key;
+                const ariaSort = isSorted
+                  ? sortConfig.direction === "asc"
+                    ? ("ascending" as const)
+                    : ("descending" as const)
+                  : undefined;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={col.sortable ? ariaSort : undefined}
+                    className={cn(
+                      "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400",
+                      col.sortable &&
+                        "cursor-pointer select-none hover:text-neutral-700 dark:hover:text-neutral-300",
+                      col.headerClassName,
+                      col.className
                     )}
-                  </div>
-                </th>
-              ))}
+                    onClick={() => col.sortable && handleSort(col.key)}
+                  >
+                    <div className="flex items-center gap-1">
+                      {col.header}
+                      {col.sortable && isSorted && (
+                        <span aria-hidden="true">
+                          {sortConfig.direction === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {sortedData.map((item) => (
+            {displayData.map((item) => (
               <tr
                 key={rowKey(item)}
+                tabIndex={onRowClick ? 0 : undefined}
+                role={onRowClick ? "button" : undefined}
+                aria-label={onRowClick ? `Open details` : undefined}
                 className={cn(
                   "border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50",
-                  onRowClick && "cursor-pointer"
+                  onRowClick &&
+                    "cursor-pointer focus:outline-none focus-visible:bg-neutral-100 dark:focus-visible:bg-neutral-800"
                 )}
                 onClick={() => onRowClick?.(item)}
+                onKeyDown={(e) => {
+                  if (!onRowClick) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onRowClick(item);
+                  }
+                }}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className="px-4 py-3">
+                  <td key={col.key} className={cn("px-4 py-3", col.cellClassName)}>
                     {col.cell(item)}
                   </td>
                 ))}
@@ -141,26 +189,26 @@ export function AdminDataTable<T>({
         </table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
           <span className="text-xs text-neutral-500">
-            Page {currentPage} of {totalPages}
+            Page {safePage} of {totalPages}
+            {isServerPaginated && ` · ${totalCount} total`}
           </span>
           <div className="flex gap-1">
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => onPageChange?.(currentPage - 1)}
+              disabled={safePage <= 1}
+              onClick={() => onPageChange?.(safePage - 1)}
             >
               Previous
             </Button>
             <Button
               variant="outline"
               size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => onPageChange?.(currentPage + 1)}
+              disabled={safePage >= totalPages}
+              onClick={() => onPageChange?.(safePage + 1)}
             >
               Next
             </Button>

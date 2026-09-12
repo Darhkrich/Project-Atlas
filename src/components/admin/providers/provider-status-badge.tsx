@@ -1,13 +1,22 @@
+"use client";
+
 import { Badge } from "@/components/admin/ui/badge";
+import type { Provider } from "@/lib/admin/types/provider";
+import { providerOperationalState } from "@/lib/admin/providers/state";
 
-const variantMap = {
-  active: "success",
-  degraded: "warning",
-  offline: "danger",
-  disabled: "neutral",
-  maintenance: "info",
-} as const;
+interface ProviderStatusBadgeProps {
+  provider: Provider;
+  size?: "sm" | "md" | "lg";
+}
 
-export function ProviderStatusBadge({ status }: { status: keyof typeof variantMap }) {
-  return <Badge variant={variantMap[status]}>{status}</Badge>;
+export function ProviderStatusBadge({
+  provider,
+  size = "md",
+}: ProviderStatusBadgeProps) {
+  const state = providerOperationalState(provider);
+  return (
+    <Badge variant={state.badgeVariant} size={size}>
+      {state.label}
+    </Badge>
+  );
 }

@@ -1,160 +1,199 @@
+// components/admin/services/service-category-card.tsx
 "use client";
 
-import { ServiceCategory } from "@/lib/services-page-data";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+import { StatusDot } from "@/components/admin/ui/status-dot";
+import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import type { ServiceCategory } from "@/lib/services-page-data";
+import {
+  FILTER_GROUP_LABEL,
+  SECTION_LABEL,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+} from "@/lib/admin/services/constants";
+import {
+  networkCount,
+  planCountFor,
+  sectionsFor,
+  serviceStatus,
+} from "@/lib/admin/services/helpers";
+import { resolveServiceIcon } from "@/lib/admin/services/icon-catalog";
 
 interface ServiceCategoryCardProps {
   category: ServiceCategory;
-  onEdit: (category: ServiceCategory) => void;
+  isSelected: boolean;
+  isFocused: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onToggleSelect: (id: string) => void;
+  onOpen: (id: string) => void;
+  onFocus: (id: string) => void;
   onToggleAvailable: (id: string) => void;
   onDuplicate: (category: ServiceCategory) => void;
-  isSelected?: boolean;
-  onToggleSelect?: () => void;
+  onMoveUp: (id: string) => void;
+  onMoveDown: (id: string) => void;
 }
 
 export function ServiceCategoryCard({
   category,
-  onEdit,
+  isSelected,
+  isFocused,
+  canMoveUp,
+  canMoveDown,
+  onToggleSelect,
+  onOpen,
+  onFocus,
   onToggleAvailable,
   onDuplicate,
-  isSelected,
-  onToggleSelect,
+  onMoveUp,
+  onMoveDown,
 }: ServiceCategoryCardProps) {
-  const showNetworks =
-    category.filterGroup === "airtime" || category.filterGroup === "data";
-
-  const networkCount = category.networkOptions?.length ?? 0;
-  const planCount = category.formConfig?.plans?.length ?? 0;
-
-  const statusVariant = category.available
-    ? "success"
-    : category.comingSoon
-    ? "warning"
-    : "neutral";
-
-  const statusLabel = category.available
-    ? "Available"
-    : category.comingSoon
-    ? "Coming Soon"
-    : "Inactive";
+  const checkboxId = `service-select-${category.id}`;
+  const status = serviceStatus(category);
+  const icon = resolveServiceIcon(category.icon);
+  const plans = planCountFor(category);
+  const networks = networkCount(category);
+  const sections = sectionsFor(category);
 
   return (
     <div
+      data-service-id={category.id}
+      onMouseEnter={() => onFocus(category.id)}
       className={cn(
-        "relative flex flex-col rounded-xl border bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md dark:bg-neutral-900",
-        isSelected
-          ? "border-brand-500 ring-2 ring-brand-500"
-          : "border-neutral-200 dark:border-neutral-700"
+        "relative flex flex-col rounded-xl border bg-white transition-all dark:bg-neutral-900",
+        "border-neutral-200 hover:-translate-y-0.5 hover:shadow-md dark:border-neutral-700",
+        isSelected &&
+          "border-brand-500 ring-2 ring-brand-500 dark:bg-brand-900/20",
+        isFocused && !isSelected && "ring-1 ring-brand-300 dark:ring-brand-800"
       )}
     >
-      {/* Selection checkbox */}
-      {onToggleSelect && (
+      <label
+        htmlFor={checkboxId}
+        className="absolute left-3 top-3 z-10 flex h-4 w-4 cursor-pointer items-center justify-center"
+        aria-label={`Select ${category.name}`}
+      >
         <input
+          id={checkboxId}
           type="checkbox"
-          className="absolute left-3 top-3 z-10 h-4 w-4"
           checked={isSelected}
-          onChange={onToggleSelect}
-          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect(category.id)}
+          className="h-4 w-4"
         />
-      )}
+      </label>
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-md bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
-            <AtlasIcon name={category.icon as AtlasIconName} className="h-5 w-5" />
+      <button
+        type="button"
+        onClick={() => onOpen(category.id)}
+        className="w-full rounded-t-xl p-4 pl-10 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
+            <AtlasIcon name={icon} className="h-5 w-5" />
           </span>
-          <div>
-            <h3 className="text-base font-semibold">{category.name}</h3>
-            <p className="text-xs text-neutral-500">{category.description}</p>
-          </div>
-        </div>
-        <Badge variant={statusVariant}>{statusLabel}</Badge>
-      </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  {category.name}
+                </h3>
+                <p className="mt-0.5 line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {category.description}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <StatusDot
+                  tone={
+                    status === "available"
+                      ? "success"
+                      : status === "coming_soon"
+                      ? "warning"
+                      : "neutral"
+                  }
+                  size="sm"
+                />
+                <Badge variant={STATUS_VARIANT[status]} size="sm">
+                  {STATUS_LABEL[status]}
+                </Badge>
+              </div>
+            </div>
 
-      {/* Meta */}
-      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <p className="text-neutral-500">Filter Group</p>
-          <p className="font-medium capitalize">{category.filterGroup}</p>
-        </div>
-        <div>
-          <p className="text-neutral-500">
-            {showNetworks ? "Networks" : "Plans"}
-          </p>
-          <p className="font-medium">
-            {showNetworks ? networkCount : planCount}
-          </p>
-        </div>
-      </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Badge variant="neutral" size="sm">
+                {FILTER_GROUP_LABEL[category.filterGroup]}
+              </Badge>
+              {sections.map((section) => (
+                <Badge key={section} variant="brand" size="sm">
+                  {SECTION_LABEL[section]}
+                </Badge>
+              ))}
+            </div>
 
-      {/* Networks preview */}
-      {showNetworks && networkCount > 0 && (
-        <div className="mt-3">
-          <p className="mb-1 text-xs text-neutral-500">Network Options</p>
-          <div className="flex flex-wrap gap-1">
-            {category.networkOptions?.slice(0, 4).map((net) => (
-              <span
-                key={net}
-                className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800"
-              >
-                {net}
-              </span>
-            ))}
-            {networkCount > 4 && (
-              <span className="text-xs text-neutral-500">
-                +{networkCount - 4}
-              </span>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-neutral-500 dark:text-neutral-400">
+                  Plans
+                </p>
+                <p className="font-semibold text-neutral-900 dark:text-neutral-100">
+                  {plans > 0 ? plans : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-neutral-500 dark:text-neutral-400">
+                  Networks
+                </p>
+                <p className="font-semibold text-neutral-900 dark:text-neutral-100">
+                  {networks > 0 ? networks : "—"}
+                </p>
+              </div>
+            </div>
+
+            {category.comingSoon && category.comingSoonReason && (
+              <p className="mt-2 text-xs text-warning-700 dark:text-warning-300">
+                {category.comingSoonReason}
+              </p>
             )}
           </div>
         </div>
-      )}
+      </button>
 
-      {/* Plans preview */}
-      {!showNetworks && planCount > 0 && (
-        <div className="mt-3">
-          <p className="mb-1 text-xs text-neutral-500">Plans</p>
-          <div className="flex flex-wrap gap-1">
-            {category.formConfig?.plans?.slice(0, 3).map((plan) => (
-              <span
-                key={plan.id}
-                className="rounded bg-neutral-100 px-2 py-0.5 text-xs dark:bg-neutral-800"
-              >
-                {plan.name}
-              </span>
-            ))}
-            {planCount > 3 && (
-              <span className="text-xs text-neutral-500">
-                +{planCount - 3}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-3 dark:border-neutral-800">
-        <Button variant="outline" size="sm" onClick={() => onEdit(category)}>
-          Edit
-        </Button>
+      <div className="flex flex-wrap items-center gap-2 border-t border-neutral-100 px-4 py-2 dark:border-neutral-800">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => onToggleAvailable(category.id)}
         >
-          {category.available ? "Disable" : "Enable"}
+          {status === "available" ? "Disable" : "Enable"}
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="ml-auto"
           onClick={() => onDuplicate(category)}
         >
           Duplicate
         </Button>
+
+        <div className="ml-auto flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canMoveUp}
+            onClick={() => onMoveUp(category.id)}
+            aria-label={`Move ${category.name} up`}
+          >
+            ↑
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!canMoveDown}
+            onClick={() => onMoveDown(category.id)}
+            aria-label={`Move ${category.name} down`}
+          >
+            ↓
+          </Button>
+        </div>
       </div>
     </div>
   );

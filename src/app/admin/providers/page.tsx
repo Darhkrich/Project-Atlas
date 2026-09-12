@@ -1,366 +1,546 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
+import type {
+  Provider,
+  ProviderCapability,
+  ProviderStatus,
+  ProviderType,
+} from "@/lib/admin/types/provider";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { ProvidersSummary } from "@/components/admin/providers/providers-summary";
-import { ProviderFilters } from "@/components/admin/providers/provider-filters";
+import { Button } from "@/components/admin/ui/button";
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { ExportMenu } from "@/components/admin/ui/export-menu";
+import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
+import {
+  ProvidersSummary,
+  type ProviderSummaryFilter,
+} from "@/components/admin/providers/providers-summary";
+import {
+  ProviderFilters,
+  type ProviderFilterValues,
+} from "@/components/admin/providers/provider-filters";
 import { ProvidersToolbar } from "@/components/admin/providers/providers-toolbar";
 import { ProviderCard } from "@/components/admin/providers/provider-card";
 import { ProviderHealthAlert } from "@/components/admin/providers/provider-health-alert";
-import { AddProviderDialog } from "@/components/admin/providers/add-provider-dialog";
-import { TestProviderDialog } from "@/components/admin/providers/test-provider-dialog";
-import { MaintenanceDialog } from "@/components/admin/providers/maintenance-dialog";
-import { Button } from "@/components/admin/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { AtlasIcon } from "@/components/atlas/icons";
 import {
-  getProviders,
+  AddProviderDialog,
+  type AddProviderDraft,
+  MaintenanceDialog,
+} from "@/components/admin/providers/provider-modals";
+import { useProviders } from "@/lib/admin/hooks/use-providers";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
+import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
+import { providersToCsv } from "@/lib/admin/providers/csv-export";
+import { providerOperationalState } from "@/lib/admin/providers/state";
+import { affectedPlans } from "@/lib/admin/providers/impact";
+import { servicesCategories } from "@/lib/services-page-data";
+import {
   addProvider,
-  updateProvider,
+  setProviderStatus,
+  startMaintenance,
+  endMaintenance,
+  type MutationContext,
 } from "@/lib/admin/mock/providers-store";
-import { Provider } from "@/lib/admin/types/provider";
+import type { ProviderEnvironment } from "@/lib/admin/types/provider";
+import type { RoutingPriority } from "@/lib/admin/types/provider";
 
-interface AuditEntry {
-  id: string;
-  timestamp: string;
-  admin: string;
-  action: string;
+interface ProviderListFilters extends ProviderFilterValues {
+  view: ProviderSummaryFilter;
+}
+
+const DEFAULT_FILTERS: ProviderListFilters = {
+  q: "",
+  status: "",
+  capability: "",
+  type: "",
+  view: "all",
+};
+
+interface Toast {
+  kind: "success" | "error";
+  text: string;
+}
+
+interface BulkConfirm {
+  kind: "enable" | "disable" | "maintenance";
+  ids: string[];
 }
 
 export default function ProvidersPage() {
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [testProvider, setTestProvider] = useState<Provider | null>(null);
-  const [maintenanceProvider, setMaintenanceProvider] = useState<Provider | null>(null);
-  const [showHealthAlert, setShowHealthAlert] = useState(true);
+  return (
+    <Suspense fallback={<ProvidersSkeleton />}>
+      <ProvidersPageInner />
+    </Suspense>
+  );
+}
+
+function ProvidersSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-72 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ProvidersPageInner() {
+  const admin = useCurrentAdmin();
+  const { providers, loading, error } = useProviders();
+
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<ProviderListFilters>(DEFAULT_FILTERS);
+  const debouncedSearch = useDebouncedValue(filters.q, 300);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
-  const [bulkAction, setBulkAction] = useState<"enable" | "disable" | "maintenance" | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [maintenanceTarget, setMaintenanceTarget] = useState<Provider | null>(
+    null
+  );
+  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirm | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
 
-  const [filters, setFilters] = useState<{
-    search: string;
-    status: string;
-    service: string;
-    type: string;
-  }>({
-    search: "",
-    status: "",
-    service: "",
-    type: "",
-  });
+  const mutationCtx: MutationContext = useMemo(
+    () => ({
+      actor: admin
+        ? { name: admin.name, email: admin.email }
+        : { name: "System", email: "system@atlas.com" },
+    }),
+    [admin]
+  );
 
-  // Load providers
-  useEffect(() => {
-    setTimeout(() => {
-      setProviders(getProviders());
-      setLoading(false);
-    }, 500);
-  }, []);
-
-  const refreshProviders = () => {
-    setProviders(getProviders());
-  };
-
-  // Audit logging
-  const addAudit = (action: string) => {
-    setAuditLog((prev) => [
-      {
-        id: `AUD-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        admin: "current_admin@atlas.com",
-        action,
-      },
-      ...prev,
-    ]);
-  };
-
-  // Filtered providers
-  const filteredProviders = useMemo(() => {
+  const filtered = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return providers.filter((p) => {
-      if (
-        filters.search &&
-        !p.name.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !p.code.toLowerCase().includes(filters.search.toLowerCase())
-      )
-        return false;
+      if (q) {
+        const hay = `${p.name} ${p.code}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
       if (filters.status && p.status !== filters.status) return false;
       if (
-        filters.service &&
-        !p.services.some((s) => s.serviceCategory === filters.service)
-      )
+        filters.capability &&
+        !p.services.some((s) => s.capability === filters.capability)
+      ) {
         return false;
+      }
       if (filters.type && p.type !== filters.type) return false;
+      if (filters.view !== "all") {
+        const state = providerOperationalState(p);
+        if (
+          filters.view === "attention" &&
+          state.kind !== "impaired" &&
+          state.kind !== "down"
+        ) {
+          return false;
+        }
+        if (
+          filters.view === "paused" &&
+          state.kind !== "disabled" &&
+          state.kind !== "maintenance"
+        ) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [providers, filters]);
+  }, [providers, debouncedSearch, filters]);
 
-  // Handlers
-  const handleAddProvider = (newProvider: Provider) => {
-    addProvider(newProvider);
-    refreshProviders();
-    addAudit(`Created provider ${newProvider.name}`);
-  };
+  const affectedCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of providers) {
+      map.set(p.id, affectedPlans(p, servicesCategories).length);
+    }
+    return map;
+  }, [providers]);
 
-  const handleToggleStatus = (providerId: string) => {
-    const provider = providers.find((p) => p.id === providerId);
-    if (!provider) return;
-    const newStatus = provider.status === "active" ? "disabled" : "active";
-    updateProvider(providerId, {
-      status: newStatus,
-      enabled: newStatus === "active",
-    });
-    refreshProviders();
-    addAudit(
-      `${newStatus === "active" ? "Enabled" : "Disabled"} provider ${provider.name}`
-    );
-  };
-
-  const handleTestConnection = (provider: Provider) => {
-    setTestProvider(provider);
-  };
-
-  const handleSetMaintenance = (provider: Provider) => {
-    setMaintenanceProvider(provider);
-  };
-
-  const handleSaveMaintenance = (
-    providerId: string,
-    reason: string,
-    duration: string
-  ) => {
-    const provider = providers.find((p) => p.id === providerId);
-    updateProvider(providerId, {
-      status: "maintenance",
-      maintenanceMode: true,
-    });
-    refreshProviders();
-    addAudit(
-      `Set maintenance mode for ${provider?.name ?? providerId} — ${reason}`
-    );
-    setMaintenanceProvider(null);
-  };
-
-  const toggleSelected = (id: string) => {
+  const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  }, []);
+
+  const handleAdd = (draft: AddProviderDraft) => {
+    const now = new Date().toISOString();
+    const provider: Provider = {
+      id: `prv-${crypto.randomUUID()}`,
+      name: draft.name,
+      code: draft.code,
+      type: draft.type,
+      status: "disabled",
+      healthStatus: "unknown",
+      country: draft.country,
+      currency: draft.currency,
+      baseUrl: draft.baseUrl || undefined,
+      apiVersion: draft.apiVersion || undefined,
+      environment: draft.environment as ProviderEnvironment,
+      priority: draft.priority as RoutingPriority,
+      createdAt: now,
+      updatedAt: now,
+      lastHealthCheck: now,
+      averageResponseTime: 0,
+      successRate: 0,
+      transactionCountToday: 0,
+      services: [],
+      credentials: { hasApiKey: false, hasSecret: false, accountId: "" },
+      configuration: {
+        timeout: draft.timeout,
+        retryAttempts: draft.retryAttempts,
+        healthCheckInterval: draft.healthCheckInterval,
+        webhookEnabled: draft.webhookEnabled,
+        statusPollingEnabled: draft.statusPollingEnabled,
+      },
+      failover: {
+        enabled: false,
+        triggerFailureRate: 10,
+        triggerResponseTime: 3000,
+        triggerConsecutiveFailures: 3,
+      },
+      sla: {
+        targetUptime: draft.slaTargetUptime,
+        targetLatencyMs: draft.slaTargetLatencyMs,
+        targetSuccessRate: draft.slaTargetSuccessRate,
+      },
+    };
+    addProvider(provider, mutationCtx);
+    setToast({ kind: "success", text: `${provider.name} created (disabled).` });
   };
 
-  // Bulk actions
-  const handleBulkActionConfirm = () => {
-    if (!bulkAction) return;
+  const handleToggleStatus = (provider: Provider) => {
+    const next: ProviderStatus =
+      provider.status === "enabled" ? "disabled" : "enabled";
+    setProviderStatus(provider.id, next, mutationCtx);
+    setToast({
+      kind: "success",
+      text: `${provider.name} ${next === "enabled" ? "enabled" : "disabled"}.`,
+    });
+  };
 
-    if (bulkAction === "enable") {
-      selectedIds.forEach((id) =>
-        updateProvider(id, { status: "active", enabled: true })
-      );
-      addAudit(`Bulk enabled ${selectedIds.length} providers`);
-    } else if (bulkAction === "disable") {
-      selectedIds.forEach((id) =>
-        updateProvider(id, { status: "disabled", enabled: false })
-      );
-      addAudit(`Bulk disabled ${selectedIds.length} providers`);
-    } else if (bulkAction === "maintenance") {
-      selectedIds.forEach((id) =>
-        updateProvider(id, { status: "maintenance", maintenanceMode: true })
-      );
-      addAudit(`Bulk set maintenance for ${selectedIds.length} providers`);
+  const handleEndMaintenance = (provider: Provider) => {
+    endMaintenance(provider.id, mutationCtx);
+    setToast({ kind: "success", text: `${provider.name} back in routing.` });
+  };
+
+  const handleMaintenanceSave = (input: {
+    until: string;
+    reason: string;
+  }) => {
+    if (!maintenanceTarget) return;
+    startMaintenance(maintenanceTarget.id, input, mutationCtx);
+    setToast({
+      kind: "success",
+      text: `${maintenanceTarget.name} set to maintenance.`,
+    });
+    setMaintenanceTarget(null);
+  };
+
+  const handleBulkConfirm = () => {
+    if (!bulkConfirm) return;
+    const ctx = { ...mutationCtx, reason: `Bulk ${bulkConfirm.kind}` };
+    for (const id of bulkConfirm.ids) {
+      if (bulkConfirm.kind === "enable") {
+        setProviderStatus(id, "enabled", ctx);
+      } else if (bulkConfirm.kind === "disable") {
+        setProviderStatus(id, "disabled", ctx);
+      } else {
+        startMaintenance(
+          id,
+          {
+            until: new Date(Date.now() + 60 * 60_000).toISOString(),
+            reason: "Bulk maintenance window",
+          },
+          ctx
+        );
+      }
     }
-
-    refreshProviders();
+    setToast({
+      kind: "success",
+      text: `${bulkConfirm.ids.length} provider${
+        bulkConfirm.ids.length === 1 ? "" : "s"
+      } updated.`,
+    });
     setSelectedIds([]);
-    setShowBulkConfirm(false);
-    setBulkAction(null);
+    setBulkConfirm(null);
   };
 
-  // Export
   const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export providers as ${format}`);
-    addAudit(`Exported providers as ${format}`);
-  };
-
-  // Filter shortcuts from summary cards
-  const filterByStatus = (status: string) => {
-    setFilters((prev) => ({ ...prev, status }));
-  };
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <AdminPageHeader
-          title="Providers"
-          description="Manage service providers, fulfillment connections, routing, and provider health across Atlas."
-        />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
-            />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-72 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
-            />
-          ))}
-        </div>
-      </div>
+    if (format !== "csv") return;
+    const csv = providersToCsv(filtered);
+    downloadCsv(
+      `atlas-providers-${new Date().toISOString().slice(0, 10)}.csv`,
+      csv
     );
-  }
+  };
+
+  const headerMeta = useMemo(() => {
+    let attention = 0;
+    let paused = 0;
+    let transactions = 0;
+    for (const p of providers) {
+      const s = providerOperationalState(p);
+      if (s.kind === "impaired" || s.kind === "down") attention += 1;
+      else if (s.kind === "disabled" || s.kind === "maintenance") paused += 1;
+      transactions += p.transactionCountToday;
+    }
+    return (
+      <>
+        <span>{providers.length} providers</span>
+        <span aria-hidden="true">·</span>
+        <span>{attention} need attention</span>
+        <span aria-hidden="true">·</span>
+        <span>{paused} paused</span>
+        <span aria-hidden="true">·</span>
+        <span>{transactions.toLocaleString()} transactions today</span>
+      </>
+    );
+  }, [providers]);
+
+  const selectedProviders = providers.filter((p) => selectedIds.includes(p.id));
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Providers"
-        description="Manage service providers, fulfillment connections, routing, and provider health across Atlas."
+        description="Service providers, fulfillment connections, routing, and provider health."
+        meta={headerMeta}
         actions={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHealthAlert(!showHealthAlert)}
-            >
-              <AtlasIcon name="activity" className="mr-1 h-4 w-4" />
-              {showHealthAlert ? "Hide Alerts" : "Show Alerts"}
-            </Button>
+            <ExportMenu onExport={handleExport} formats={["csv"]} />
+            <Can permission={PERMISSIONS.PROVIDERS_MANAGE}>
+              <Button size="sm" onClick={() => setAddOpen(true)}>
+                Add provider
+              </Button>
+            </Can>
           </>
         }
       />
 
-      <ProvidersSummary
-        providers={providers}
-        onFilterAll={() => filterByStatus("")}
-        onFilterActive={() => filterByStatus("active")}
-        onFilterDegraded={() => filterByStatus("degraded")}
-        onFilterOffline={() => filterByStatus("offline")}
-      />
-
-      {showHealthAlert && <ProviderHealthAlert providers={providers} />}
-
-      <ProviderFilters onFilterChange={setFilters} />
-
-      <ProvidersToolbar
-        selectedCount={selectedIds.length}
-        onEnable={() => {
-          setBulkAction("enable");
-          setShowBulkConfirm(true);
-        }}
-        onDisable={() => {
-          setBulkAction("disable");
-          setShowBulkConfirm(true);
-        }}
-        onMaintenance={() => {
-          setBulkAction("maintenance");
-          setShowBulkConfirm(true);
-        }}
-        onClearSelection={() => setSelectedIds([])}
-        onExport={handleExport}
-        onAddProvider={() => setShowAddDialog(true)}
-      />
-
-      {filteredProviders.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-          <AtlasIcon name="server" className="mx-auto h-8 w-8 text-neutral-400" />
-          <p className="mt-2 text-sm text-neutral-500">
-            No providers match your filters.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => setFilters({ search: "", status: "", service: "", type: "" })}
-          >
-            Clear filters
-          </Button>
+      {loading ? (
+        <ProvidersSkeleton />
+      ) : error ? (
+        <div className="rounded-lg border border-danger-200 bg-danger-50 p-4 text-sm text-danger-800 dark:border-danger-800 dark:bg-danger-900/20 dark:text-danger-200">
+          {error}
+        </div>
+      ) : providers.length === 0 ? (
+        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <EmptyState
+            variant="no_data"
+            title="No providers yet"
+            description="Add your first provider to start routing services through it."
+            action={
+              <Can permission={PERMISSIONS.PROVIDERS_MANAGE}>
+                <Button size="sm" onClick={() => setAddOpen(true)}>
+                  Add provider
+                </Button>
+              </Can>
+            }
+          />
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredProviders.map((provider) => (
-            <ProviderCard
-              key={provider.id}
-              provider={provider}
-              isSelected={selectedIds.includes(provider.id)}
-              onToggleSelect={() => toggleSelected(provider.id)}
-              onTest={() => handleTestConnection(provider)}
-              onToggleStatus={() => handleToggleStatus(provider.id)}
-              onSetMaintenance={() => handleSetMaintenance(provider)}
-            />
-          ))}
-        </div>
-      )}
+        <>
+          <ProvidersSummary
+            providers={providers}
+            activeFilter={filters.view}
+            onFilterAll={() => setFilters({ view: "all", status: "" })}
+            onFilterAttention={() =>
+              setFilters({ view: "attention", status: "" })
+            }
+            onFilterPaused={() => setFilters({ view: "paused", status: "" })}
+          />
 
-      {/* Audit log */}
-      {auditLog.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1">
-              {auditLog.slice(0, 8).map((entry) => (
-                <li
-                  key={entry.id}
-                  className="flex items-center justify-between text-xs"
-                >
-                  <span>{entry.action}</span>
-                  <span className="text-neutral-500">
-                    {new Date(entry.timestamp).toLocaleString()}
-                  </span>
+          <ProviderHealthAlert providers={providers} />
+
+          <ProviderFilters
+            value={filters}
+            onChange={(patch) => setFilters(patch)}
+            onClear={clearFilters}
+            hasActive={hasActive}
+            searchInputRef={searchInputRef}
+          />
+
+          <ProvidersToolbar
+            selectedCount={selectedIds.length}
+            onEnable={() =>
+              setBulkConfirm({ kind: "enable", ids: selectedIds })
+            }
+            onDisable={() =>
+              setBulkConfirm({ kind: "disable", ids: selectedIds })
+            }
+            onMaintenance={() =>
+              setBulkConfirm({ kind: "maintenance", ids: selectedIds })
+            }
+            onClearSelection={() => setSelectedIds([])}
+            onExport={handleExport}
+            onAddProvider={() => setAddOpen(true)}
+          />
+
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Showing {filtered.length} of {providers.length} provider
+            {providers.length === 1 ? "" : "s"}
+            {hasActive ? " (filtered)" : ""}
+          </p>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              <EmptyState
+                variant="no_results"
+                title="No providers match these filters"
+                description="Try a different search or clear the filters."
+                action={
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <ul
+              role="list"
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            >
+              {filtered.map((provider) => (
+                <li key={provider.id}>
+                  <ProviderCard
+                    provider={provider}
+                    isSelected={selectedIds.includes(provider.id)}
+                    onToggleSelect={() => handleToggleSelect(provider.id)}
+                    onTest={() => {
+                      window.location.href = `/admin/providers/${provider.id}?tab=health`;
+                    }}
+                    onToggleStatus={() => handleToggleStatus(provider)}
+                    onSetMaintenance={() => setMaintenanceTarget(provider)}
+                    onEndMaintenance={() => handleEndMaintenance(provider)}
+                    affectedPlanCount={affectedCounts.get(provider.id) ?? 0}
+                  />
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
+          )}
+        </>
       )}
 
-      {/* Dialogs */}
-      {showAddDialog && (
-        <AddProviderDialog
-          onClose={() => setShowAddDialog(false)}
-          onSave={handleAddProvider}
-        />
-      )}
-
-      {testProvider && (
-        <TestProviderDialog
-          provider={testProvider}
-          onClose={() => setTestProvider(null)}
-        />
-      )}
-
-      {maintenanceProvider && (
-        <MaintenanceDialog
-          provider={maintenanceProvider}
-          onClose={() => setMaintenanceProvider(null)}
-          onSave={handleSaveMaintenance}
-        />
-      )}
-
-      {/* Bulk confirm */}
-      <ConfirmDialog
-        open={showBulkConfirm}
-        title={`Confirm Bulk ${
-          bulkAction
-            ? bulkAction.charAt(0).toUpperCase() + bulkAction.slice(1)
-            : ""
-        }`}
-        description={`Are you sure you want to ${bulkAction} ${selectedIds.length} providers?`}
-        confirmLabel="Confirm"
-        danger={bulkAction === "disable"}
-        onConfirm={handleBulkActionConfirm}
-        onCancel={() => {
-          setShowBulkConfirm(false);
-          setBulkAction(null);
-        }}
+      <AddProviderDialog
+        open={addOpen}
+        existingCodes={providers.map((p) => p.code)}
+        onClose={() => setAddOpen(false)}
+        onSave={handleAdd}
       />
+
+      <MaintenanceDialog
+        open={maintenanceTarget !== null}
+        provider={
+          maintenanceTarget ?? {
+            id: "",
+            name: "",
+            code: "",
+            type: "api",
+            status: "enabled",
+            healthStatus: "unknown",
+            country: "Ghana",
+            currency: "GHS",
+            environment: "production",
+            priority: "primary",
+            createdAt: "",
+            updatedAt: "",
+            lastHealthCheck: "",
+            averageResponseTime: 0,
+            successRate: 0,
+            transactionCountToday: 0,
+            services: [],
+            credentials: { hasApiKey: false, hasSecret: false, accountId: "" },
+            configuration: {
+              timeout: 10,
+              retryAttempts: 2,
+              healthCheckInterval: 60,
+              webhookEnabled: false,
+              statusPollingEnabled: false,
+            },
+            failover: {
+              enabled: false,
+              triggerFailureRate: 10,
+              triggerResponseTime: 3000,
+              triggerConsecutiveFailures: 3,
+            },
+            sla: {
+              targetUptime: 99.5,
+              targetLatencyMs: 1000,
+              targetSuccessRate: 99.0,
+            },
+          }
+        }
+        onClose={() => setMaintenanceTarget(null)}
+        onConfirm={handleMaintenanceSave}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm !== null}
+        title={
+          bulkConfirm?.kind === "enable"
+            ? "Enable providers"
+            : bulkConfirm?.kind === "disable"
+            ? "Disable providers"
+            : "Set maintenance"
+        }
+        description={
+          bulkConfirm
+            ? `${bulkConfirm.kind === "enable"
+                ? "Enable"
+                : bulkConfirm.kind === "disable"
+                ? "Disable"
+                : "Set maintenance on"} ${bulkConfirm.ids.length} provider${
+                bulkConfirm.ids.length === 1 ? "" : "s"
+              }?`
+            : ""
+        }
+        confirmLabel={
+          bulkConfirm?.kind === "enable"
+            ? "Enable"
+            : bulkConfirm?.kind === "disable"
+            ? "Disable"
+            : "Start maintenance"
+        }
+        danger={bulkConfirm?.kind === "disable"}
+        onConfirm={handleBulkConfirm}
+        onCancel={() => setBulkConfirm(null)}
+      />
+
+      {selectedProviders.length > 0 && selectedIds.length === 1 && (
+        <p className="sr-only" aria-live="polite">
+          {selectedProviders[0].name} selected
+        </p>
+      )}
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }

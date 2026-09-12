@@ -13,9 +13,7 @@ interface DataPlansToolbarProps {
   onDisable: () => void;
   onClearSelection: () => void;
   onExport: (format: "csv" | "excel" | "pdf") => void;
-  onExportAudit: () => void;
   onImport: () => void;
-  onAddCategory: () => void;
 }
 
 export function DataPlansToolbar({
@@ -26,28 +24,41 @@ export function DataPlansToolbar({
   onDisable,
   onClearSelection,
   onExport,
-  onExportAudit,
   onImport,
-  onAddCategory,
 }: DataPlansToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="relative min-w-[220px] flex-1">
         <AtlasIcon
           name="search"
-          className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
         />
         <Input
-          placeholder="Search plans across all networks..."
+          aria-label="Search plans"
+          placeholder="Search plans on this network"
           className="pl-9"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
 
+      <div
+        role="status"
+        aria-live="polite"
+        className="text-xs text-neutral-500 dark:text-neutral-400"
+      >
+        {selectedCount > 0
+          ? `${selectedCount} plan${selectedCount === 1 ? "" : "s"} selected`
+          : ""}
+      </div>
+
       {selectedCount > 0 && (
-        <div className="flex items-center gap-2 rounded-md bg-neutral-50 p-1 dark:bg-neutral-900">
-          <span className="px-2 text-sm font-medium">{selectedCount} selected</span>
+        <div
+          role="group"
+          aria-label="Bulk actions"
+          className="flex items-center gap-2 rounded-md bg-neutral-50 p-1 dark:bg-neutral-900"
+        >
           <Button variant="outline" size="sm" onClick={onEnable}>
             Enable
           </Button>
@@ -60,18 +71,16 @@ export function DataPlansToolbar({
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div
+        role="group"
+        aria-label="Import and export"
+        className="flex items-center gap-2"
+      >
         <Button variant="outline" size="sm" onClick={onImport}>
           Import CSV
         </Button>
-        <Button variant="outline" size="sm" onClick={onExportAudit}>
-          Export Audit
-        </Button>
-        <ExportMenu onExport={onExport} />
-        <Button size="sm" onClick={onAddCategory}>
-          Add Category
-        </Button>
+        <ExportMenu onExport={onExport} formats={["csv"]} />
       </div>
     </div>
   );
-}
+} 

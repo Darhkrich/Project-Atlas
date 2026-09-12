@@ -1,54 +1,51 @@
+// components/admin/services/services-toolbar.tsx
 "use client";
 
 import { Button } from "@/components/admin/ui/button";
-import { ExportMenu } from "@/components/admin/ui/export-menu";
 
 interface ServicesToolbarProps {
   selectedCount: number;
   onEnable: () => void;
   onDisable: () => void;
+  onDuplicate: () => void;
   onClearSelection: () => void;
-  onExport: (format: "csv" | "excel" | "pdf") => void;
-  onAddService: () => void;
 }
 
 export function ServicesToolbar({
   selectedCount,
   onEnable,
   onDisable,
+  onDuplicate,
   onClearSelection,
-  onExport,
-  onAddService,
 }: ServicesToolbarProps) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {selectedCount > 0 ? (
-          <>
-            <span className="text-sm font-medium">
-              {selectedCount} selected
-            </span>
-            <Button variant="outline" size="sm" onClick={onEnable}>
-              Enable
-            </Button>
-            <Button variant="outline" size="sm" onClick={onDisable}>
-              Disable
-            </Button>
-            <Button variant="ghost" size="sm" onClick={onClearSelection}>
-              Clear
-            </Button>
-          </>
-        ) : (
-          <span className="text-sm text-neutral-500">
-            Select services to perform bulk actions
-          </span>
-        )}
-      </div>
+  if (selectedCount === 0) return null;
 
-      <div className="flex items-center gap-2">
-        <ExportMenu onExport={onExport} />
-        <Button size="sm" onClick={onAddService}>
-          Add Service
+  const noun = selectedCount === 1 ? "service" : "services";
+
+  return (
+    <div
+      role="region"
+      aria-label="Bulk service actions"
+      className="flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-2 dark:border-brand-800/60 dark:bg-brand-900/20"
+    >
+      <span
+        className="text-sm font-medium text-neutral-900 dark:text-neutral-100"
+        aria-live="polite"
+      >
+        {selectedCount} {noun} selected
+      </span>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onEnable}>
+          Enable
+        </Button>
+        <Button variant="outline" size="sm" onClick={onDisable}>
+          Disable
+        </Button>
+        <Button variant="outline" size="sm" onClick={onDuplicate}>
+          Duplicate
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onClearSelection}>
+          Clear
         </Button>
       </div>
     </div>

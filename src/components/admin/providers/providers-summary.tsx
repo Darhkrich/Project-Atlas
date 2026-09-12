@@ -3,106 +3,161 @@
 import { Card } from "@/components/admin/ui/card";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
-import { Provider } from "@/lib/admin/types/provider";
+import type { Provider } from "@/lib/admin/types/provider";
+import { providerOperationalState } from "@/lib/admin/providers/state";
+import { formatNumber } from "@/lib/admin/formatters";
+
+export type ProviderSummaryFilter = "all" | "attention" | "paused";
 
 interface ProvidersSummaryProps {
   providers: Provider[];
-  onFilterAll?: () => void;
-  onFilterActive?: () => void;
-  onFilterDegraded?: () => void;
-  onFilterOffline?: () => void;
+  activeFilter: ProviderSummaryFilter;
+  onFilterAll: () => void;
+  onFilterAttention: () => void;
+  onFilterPaused: () => void;
+}
+
+interface CardDef {
+  key: ProviderSummaryFilter | "transactions";
+  label: string;
+  value: number;
+  sub: string;
+  icon: AtlasIconName;
+  color: string;
+  bg: string;
+  highlight?: boolean;
+  onClick?: () => void;
+  pressed?: boolean;
+  interactive: boolean;
 }
 
 export function ProvidersSummary({
   providers,
+  activeFilter,
   onFilterAll,
-  onFilterActive,
-  onFilterDegraded,
-  onFilterOffline,
+  onFilterAttention,
+  onFilterPaused,
 }: ProvidersSummaryProps) {
   const total = providers.length;
-  const active = providers.filter((p) => p.status === "active").length;
-  const degraded = providers.filter((p) => p.status === "degraded").length;
-  const offline = providers.filter((p) => p.status === "offline").length;
-  const servicesCovered = new Set(
-    providers.flatMap((p) => p.services.map((s) => s.serviceCategory))
-  ).size;
+  let attention = 0;
+  let paused = 0;
+  let transactionsToday = 0;
 
-  const cards: {
-    label: string;
-    value: number | string;
-    sub: string;
-    icon: AtlasIconName;
-    color: string;
-    bg: string;
-    highlight?: boolean;
-    onClick?: () => void;
-  }[] = [
+  for (const p of providers) {
+    const s = providerOperationalState(p);
+    if (s.kind === "impaired" || s.kind === "down") attention += 1;
+    else if (s.kind === "disabled" || s.kind === "maintenance") paused += 1;
+    transactionsToday += p.transactionCountToday;
+  }
+
+  const cards: CardDef[] = [
     {
-      label: "Total Providers",
+      key: "all",
+      label: "Total providers",
       value: total,
-      sub: `${servicesCovered} services covered`,
+      sub: `${total - attention - paused} operating normally`,
       icon: "server",
       color: "text-brand-600",
       bg: "bg-brand-50 dark:bg-brand-900/20",
       onClick: onFilterAll,
+      pressed: activeFilter === "all",
+      interactive: true,
     },
     {
-      label: "Active",
-      value: active,
-      sub: "Operational",
-      icon: "check",
-      color: "text-success-600",
-      bg: "bg-success-50 dark:bg-success-900/20",
-      onClick: onFilterActive,
-    },
-    {
-      label: "Degraded",
-      value: degraded,
-      sub: "Needs attention",
+      key: "attention",
+      label: "Needs attention",
+      value: attention,
+      sub: attention === 0 ? "All healthy" : "Degraded or unreachable",
       icon: "alert",
       color: "text-warning-600",
       bg: "bg-warning-50 dark:bg-warning-900/20",
-      highlight: degraded > 0,
-      onClick: onFilterDegraded,
+      highlight: attention > 0,
+      onClick: onFilterAttention,
+      pressed: activeFilter === "attention",
+      interactive: true,
     },
     {
-      label: "Offline",
-      value: offline,
-      sub: "Unreachable",
-      icon: "x-circle",
-      color: "text-danger-600",
-      bg: "bg-danger-50 dark:bg-danger-900/20",
-      highlight: offline > 0,
-      onClick: onFilterOffline,
+      key: "paused",
+      label: "Paused",
+      value: paused,
+      sub: "Disabled or in maintenance",
+      icon: "clock",
+      color: "text-neutral-600",
+      bg: "bg-neutral-100 dark:bg-neutral-800",
+      onClick: onFilterPaused,
+      pressed: activeFilter === "paused",
+      interactive: true,
+    },
+    {
+      key: "transactions",
+      label: "Transactions today",
+      value: transactionsToday,
+      sub: "Across all providers",
+      icon: "receipt",
+      color: "text-info-600",
+      bg: "bg-info-50 dark:bg-info-900/20",
+      interactive: false,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card
-          key={card.label}
-          onClick={card.onClick}
-          className={cn(
-            "border-0 shadow-sm transition-all hover:shadow-md",
-            card.bg,
-            card.highlight && "ring-1 ring-danger-300 dark:ring-danger-800",
-            card.onClick && "cursor-pointer"
-          )}
-        >
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                {card.label}
+    <div
+      role="region"
+      aria-label="Provider summary"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+    >
+      {cards.map((card) => {
+        const inner = (
+          <Card
+            className={cn(
+              "h-full border-0 shadow-sm transition-all",
+              card.bg,
+              card.highlight &&
+                "ring-1 ring-warning-300 dark:ring-warning-800",
+              card.interactive && "hover:shadow-md",
+              card.pressed &&
+                "ring-2 ring-brand-400 dark:ring-brand-500"
+            )}
+          >
+            <div className="p-4 text-left">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                  {card.label}
+                </p>
+                <AtlasIcon
+                  name={card.icon}
+                  aria-hidden="true"
+                  className={cn("h-4 w-4", card.color)}
+                />
+              </div>
+              <p className="mt-2 text-2xl font-bold" aria-live="polite">
+                {card.key === "transactions"
+                  ? formatNumber(card.value)
+                  : card.value}
               </p>
-              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                {card.sub}
+              </p>
             </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-            <p className="text-xs text-neutral-500">{card.sub}</p>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        );
+
+        if (!card.interactive || !card.onClick) {
+          return <div key={card.key}>{inner}</div>;
+        }
+
+        return (
+          <button
+            key={card.key}
+            type="button"
+            onClick={card.onClick}
+            aria-pressed={card.pressed ?? false}
+            className="rounded-xl text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            {inner}
+          </button>
+        );
+      })}
     </div>
   );
 }

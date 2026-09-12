@@ -1,85 +1,150 @@
+// components/admin/analytics/analytics-summary-cards.tsx
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
-import { formatCurrency } from "@/lib/admin/formatters";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import { COMPARISON_LABEL } from "@/lib/admin/analytics/contants";
+import type { AnalyticsSummary, DateRangeKey } from "@/lib/admin/types/analytics";
+import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
 
-interface AnalyticsSummaryData {
-  totalRevenue: number;
-  totalOrders: number;
-  activeUsers: number;
-  successRate: number;
-  avgOrderValue: number;
-  comparison: {
-    totalRevenue: number;
-    totalOrders: number;
-    activeUsers: number;
-    successRate: number;
-    avgOrderValue: number;
-  };
+interface AnalyticsSummaryCardsProps {
+  data: AnalyticsSummary;
+  range: DateRangeKey;
+  onSelect: (target: string) => void;
 }
 
-export function AnalyticsSummaryCards({ data }: { data: AnalyticsSummaryData }) {
-  const cards = [
+interface CardConfig {
+  key: string;
+  label: string;
+  value: string;
+  icon: string;
+  color: string;
+  bg: string;
+  change: number;
+  anchor?: string;
+  higherIsBetter: boolean;
+}
+
+export function AnalyticsSummaryCards({
+  data,
+  range,
+  onSelect,
+}: AnalyticsSummaryCardsProps) {
+  const cards: CardConfig[] = [
     {
-      label: "Total Revenue",
+      key: "revenue",
+      label: "Total revenue",
       value: formatCurrency(data.totalRevenue),
       icon: "sales",
-      color: "text-brand-600",
+      color: "text-brand-600 dark:text-brand-400",
       bg: "bg-brand-50 dark:bg-brand-900/20",
       change: data.comparison.totalRevenue,
+      anchor: "revenue-trend",
+      higherIsBetter: true,
     },
     {
-      label: "Total Orders",
-      value: data.totalOrders.toLocaleString(),
+      key: "orders",
+      label: "Total orders",
+      value: formatNumber(data.totalOrders),
       icon: "orders",
-      color: "text-info-600",
+      color: "text-info-600 dark:text-info-400",
       bg: "bg-info-50 dark:bg-info-900/20",
       change: data.comparison.totalOrders,
+      anchor: "order-volume",
+      higherIsBetter: true,
     },
     {
-      label: "Active Users",
-      value: data.activeUsers.toLocaleString(),
+      key: "users",
+      label: "Active users",
+      value: formatNumber(data.activeUsers),
       icon: "users",
-      color: "text-success-600",
+      color: "text-success-600 dark:text-success-400",
       bg: "bg-success-50 dark:bg-success-900/20",
       change: data.comparison.activeUsers,
+      anchor: "user-growth",
+      higherIsBetter: true,
     },
     {
-      label: "Success Rate",
+      key: "success",
+      label: "Success rate",
       value: `${data.successRate}%`,
       icon: "check",
-      color: "text-warning-600",
+      color: "text-warning-600 dark:text-warning-400",
       bg: "bg-warning-50 dark:bg-warning-900/20",
       change: data.comparison.successRate,
+      anchor: "provider-performance",
+      higherIsBetter: true,
     },
     {
-      label: "Avg Order Value",
+      key: "aov",
+      label: "Avg order value",
       value: formatCurrency(data.avgOrderValue),
       icon: "receipt",
-      color: "text-neutral-600",
+      color: "text-neutral-600 dark:text-neutral-300",
       bg: "bg-neutral-100 dark:bg-neutral-800",
       change: data.comparison.avgOrderValue,
+      anchor: "revenue-trend",
+      higherIsBetter: true,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      {cards.map(card => (
-        <Card key={card.label} className={cn("border-0 shadow-sm", card.bg)}>
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{card.label}</p>
-              <AtlasIcon name={card.icon as any} className={cn("h-5 w-5", card.color)} />
-            </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-            <p className={cn("text-xs mt-1", card.change >= 0 ? "text-success-600" : "text-danger-600")}>
-              {card.change >= 0 ? "▲" : "▼"} {Math.abs(card.change)}% vs previous period
-            </p>
-          </div>
-        </Card>
-      ))}
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {cards.map((card) => {
+        const isPositive = card.change >= 0;
+        const isGood = card.higherIsBetter ? isPositive : !isPositive;
+        return (
+          <button
+            key={card.key}
+            type="button"
+            onClick={() => card.anchor && onSelect(card.anchor)}
+            className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+          >
+            <Card
+              className={cn(
+                "border-0 shadow-sm transition-shadow hover:shadow-md",
+                card.bg
+              )}
+            >
+              <div className="p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                    {card.label}
+                  </p>
+                  <AtlasIcon
+                    name={card.icon}
+                    className={cn("h-5 w-5", card.color)}
+                  />
+                </div>
+                <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+                  {card.value}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 flex items-center gap-1 text-xs",
+                    isGood
+                      ? "text-success-700 dark:text-success-300"
+                      : "text-danger-700 dark:text-danger-300"
+                  )}
+                >
+                  <span aria-hidden="true">
+                    {isPositive ? "▲" : "▼"}
+                  </span>
+                  <span>{Math.abs(card.change).toFixed(1)}%</span>
+                  <span className="sr-only">
+                    {isPositive ? "increase" : "decrease"} of{" "}
+                    {Math.abs(card.change).toFixed(1)} percent
+                  </span>
+                  <span className="text-neutral-500 dark:text-neutral-400">
+                    {COMPARISON_LABEL[range]}
+                  </span>
+                </p>
+              </div>
+            </Card>
+          </button>
+        );
+      })}
     </div>
   );
 }
