@@ -1,123 +1,130 @@
 "use client";
 
+import { Suspense } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell
-} from "recharts";
+import { AnalyticsSummaryCards } from "@/components/admin/resellers/analytics-summary-cards";
+import { AnalyticsCharts } from "@/components/admin/resellers/analytics-charts";
+import { AnalyticsTopResellersTable } from "@/components/admin/resellers/analytics-top-resellers-table";
+import { useResellerAnalytics } from "@/lib/admin/hooks/use-reseller-analytics";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { formatCurrency } from "@/lib/admin/formatters";
+import { cn } from "@/lib/utils";
 
-const revenueByReseller = [
-  { name: "Kwame Store", revenue: 45000 },
-  { name: "Adjoa Ventures", revenue: 38000 },
-  { name: "Yaw Enterprises", revenue: 32000 },
-  { name: "Efua Trading", revenue: 28000 },
-  { name: "Kojo & Sons", revenue: 20000 },
-];
+interface AnalyticsFilters {
+  top: string;
+}
 
-const commissionTrend = [
-  { month: "Jan", commissions: 1200 },
-  { month: "Feb", commissions: 1800 },
-  { month: "Mar", commissions: 2200 },
-  { month: "Apr", commissions: 2100 },
-  { month: "May", commissions: 2600 },
-  { month: "Jun", commissions: 3000 },
-];
+const DEFAULT_FILTERS: AnalyticsFilters = {
+  top: "10",
+};
 
-const serviceDistribution = [
-  { name: "Data", value: 45 },
-  { name: "Airtime", value: 30 },
-  { name: "Bills", value: 15 },
-  { name: "TV", value: 7 },
-  { name: "Results", value: 3 },
-];
-
-const COLORS = ["#166e59", "#3b82f6", "#f59e0b", "#22c55e", "#8b5cf6"];
+const TOP_OPTIONS = [5, 10, 20] as const;
 
 export default function ResellerAnalyticsPage() {
   return (
+    <Suspense fallback={<AnalyticsSkeleton />}>
+      <ResellerAnalyticsPageInner />
+    </Suspense>
+  );
+}
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-80 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResellerAnalyticsPageInner() {
+  const { filters, setFilters } = useUrlFilters<AnalyticsFilters>(
+    DEFAULT_FILTERS
+  );
+
+  const parsedTop = Number(filters.top);
+  const topN = (TOP_OPTIONS as readonly number[]).includes(parsedTop)
+    ? parsedTop
+    : 10;
+
+  const { summary, revenueByReseller, revenueByTier, byVerification, loading } =
+    useResellerAnalytics(topN);
+
+  const meta = (
+    <>
+      <span>{summary.totalCount} resellers</span>
+      <span aria-hidden="true">·</span>
+      <span>{formatCurrency(summary.totalRevenue)} revenue</span>
+      <span aria-hidden="true">·</span>
+      <span>{summary.effectiveRatePercent.toFixed(1)}% effective rate</span>
+    </>
+  );
+
+  return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Reseller Analytics"
-        description="Performance and revenue insights across the reseller channel."
+        title="Reseller analytics"
+        description="Revenue, tier, and verification performance across the reseller channel."
+        meta={meta}
+        actions={
+          <div
+            role="group"
+            aria-label="Number of resellers to show"
+            className="flex gap-1"
+          >
+            {TOP_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-pressed={topN === n}
+                onClick={() => setFilters({ top: String(n) })}
+                className={cn(
+                  "h-8 rounded-md px-3 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                  topN === n
+                    ? "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+                    : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                )}
+              >
+                Top {n}
+              </button>
+            ))}
+          </div>
+        }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Revenue by Reseller */}
-        <Card>
-          <CardHeader><CardTitle>Revenue by Reseller</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={revenueByReseller} layout="vertical" margin={{ left: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} width={100} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Bar dataKey="revenue" fill="#166e59" radius={[0,4,4,0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      <AnalyticsSummaryCards summary={summary} loading={loading} />
 
-        {/* Commission Trend */}
-        <Card>
-          <CardHeader><CardTitle>Commission Trend</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={commissionTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                <Line type="monotone" dataKey="commissions" stroke="#166e59" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Service Distribution */}
-        <Card>
-          <CardHeader><CardTitle>Service Distribution</CardTitle></CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie data={serviceDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2}>
-                  {serviceDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Top Resellers Table */}
-        <Card>
-          <CardHeader><CardTitle>Top Resellers</CardTitle></CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-neutral-500">
-                  <th className="py-1">Reseller</th>
-                  <th>Revenue</th>
-                  <th>Commissions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {revenueByReseller.map(r => (
-                  <tr key={r.name} className="border-t border-neutral-100">
-                    <td className="py-2">{r.name}</td>
-                    <td>{formatCurrency(r.revenue)}</td>
-                    <td className="text-success-600">{formatCurrency(r.revenue * 0.05)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="space-y-4 lg:col-span-2">
+          <AnalyticsCharts
+            revenueByReseller={revenueByReseller}
+            revenueByTier={revenueByTier}
+            byVerification={byVerification}
+            topN={topN}
+            loading={loading}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <AnalyticsTopResellersTable
+            rows={revenueByReseller}
+            loading={loading}
+          />
+        </div>
       </div>
     </div>
   );

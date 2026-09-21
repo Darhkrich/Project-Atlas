@@ -41,7 +41,6 @@ export interface StoreHero {
   featuredServices?: string[];
   promoBadge?: string;
   promoEnds?: string;
-  // Legacy fields
   buttonText?: string;
   buttonAction?: string;
 }
@@ -81,10 +80,14 @@ export interface StorePublication {
 }
 
 export interface StorefrontConfig {
+  ownerId: string;
   id: string;
+  /** Cross-references the storefront record in the admin catalog. */
+  storefrontId: string;
   store: {
     name: string;
     slug: string;
+    /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
     subdomain?: string;
     description: string;
     logo?: string;

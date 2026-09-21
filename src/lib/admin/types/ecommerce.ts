@@ -1,37 +1,16 @@
-export type SubscriptionStatus = "active" | "past_due" | "cancelled" | "expired";
+import type { PlanCode } from "@/config/subscription-plans";
 
-export interface EcommerceSummary {
-  totalMerchants: number;
-  activeSubscriptions: number;
-  mrr: number;
-  totalOrders: number;
-  totalSalesVolume: number;
-  pendingSupportTickets: number;
-}
-
-export interface EcommerceRevenueTrendPoint {
-  date: string;
-  revenue: number;
-  orders: number;
-}
-
-export interface PlanDistribution {
-  plan: string;
-  count: number;
-}
-
-export interface TopMerchant {
-  id: string;
-  name: string;
-  sales: number;
-  orders: number;
-}
+export type SubscriptionStatus =
+  | "active"
+  | "past_due"
+  | "cancelled"
+  | "expired";
 
 export interface MerchantSubscription {
   id: string;
   merchantId: string;
   merchantName: string;
-  planCode: string;
+  planCode: PlanCode;
   planName: string;
   status: SubscriptionStatus;
   startDate: string;
@@ -39,12 +18,24 @@ export interface MerchantSubscription {
   billingCycle: "monthly" | "annual";
   amountPaid: number;
   lastPaymentDate: string;
+  currency: string;
+  discountPercent?: number;
+  nextBillingDate: string;
 }
+
+export type InvoiceStatus = "paid" | "unpaid" | "void";
 
 export interface Invoice {
   id: string;
   subscriptionId: string;
+  merchantId: string;
+  merchantName: string;
   amount: number;
+  currency: string;
   date: string;
-  status: "paid" | "unpaid" | "void";
+  dueDate: string;
+  paidAt?: string;
+  status: InvoiceStatus;
+  periodStart: string;
+  periodEnd: string;
 }

@@ -373,92 +373,13 @@ export const mockTransactionSummary: MockTransactionSummary = {
   successfulCount: 32,
 };
 
-/* ------------------- Reseller Specific Data (Modified for Mockup) ------------------- */
-export type ResellerStats = {
-  totalSales: string;
-  totalCommissions: string;
-  totalOrders: number;
-  totalCustomers: number;
-};
-
-export const mockResellerStats: ResellerStats = {
-  totalSales: "GHS 1,245.00",
-  totalCommissions: "GHS 184.75",
-  totalOrders: 186,
-  totalCustomers: 89,
-};
-
-export type ResellerKpi = {
-  label: string;
-  value: string;
-  change?: string;
-  trend?: "up" | "down";
-};
-
-// Values matched exactly to the Mockup image
-export const mockResellerKpis: ResellerKpi[] = [
-  { label: "Wallet Balance", value: "GHS 2,680.50", change: "", trend: "up" },
-  { label: "Today's Sales", value: "GHS 1,245.00", change: "+12.5%", trend: "up" },
-  { label: "Total Transactions", value: "186", change: "+8.1%", trend: "up" },
-  { label: "Your Commission", value: "GHS 184.75", change: "+10.2%", trend: "up" },
-];
-
-export type ResellerServiceProduct = {
-  id: string;
-  name: string;
-  atlasPrice: string;
-  sellingPrice: string;
-  margin: string;
-  enabled: boolean;
-};
-
-export type ResellerService = {
-  id: string;
-  name: string;
-  description: string;
-  icon: AtlasIconName;
-  enabled: boolean;
-  products: ResellerServiceProduct[];
-};
-
-export const mockResellerServices: ResellerService[] = [
-  {
-    id: "airtime", name: "Airtime", description: "Top up any mobile network", icon: "phone", enabled: true,
-    products: [
-      { id: "airtime-mtn-5", name: "MTN GHS 5", atlasPrice: "GHS 5.00", sellingPrice: "GHS 5.50", margin: "GHS 0.50", enabled: true },
-      { id: "airtime-mtn-10", name: "MTN GHS 10", atlasPrice: "GHS 10.00", sellingPrice: "GHS 10.50", margin: "GHS 0.50", enabled: true },
-      { id: "airtime-telecel-10", name: "Telecel GHS 10", atlasPrice: "GHS 10.00", sellingPrice: "GHS 10.50", margin: "GHS 0.50", enabled: true },
-    ],
-  },
-  {
-    id: "data", name: "Data", description: "Sell mobile data bundles", icon: "globe", enabled: true,
-    products: [
-      { id: "data-mtn-1gb", name: "MTN 1GB", atlasPrice: "GHS 6.00", sellingPrice: "GHS 7.00", margin: "GHS 1.00", enabled: true },
-      { id: "data-mtn-5gb", name: "MTN 5GB", atlasPrice: "GHS 25.00", sellingPrice: "GHS 27.00", margin: "GHS 2.00", enabled: true },
-      { id: "data-telecel-2gb", name: "Telecel 2GB", atlasPrice: "GHS 10.00", sellingPrice: "GHS 11.00", margin: "GHS 1.00", enabled: true },
-    ],
-  },
-  {
-    id: "electricity", name: "Electricity", description: "ECG prepaid and postpaid", icon: "zap", enabled: true,
-    products: [
-      { id: "ecg-50", name: "ECG GHS 50", atlasPrice: "GHS 50.00", sellingPrice: "GHS 52.00", margin: "GHS 2.00", enabled: true },
-      { id: "ecg-100", name: "ECG GHS 100", atlasPrice: "GHS 100.00", sellingPrice: "GHS 104.00", margin: "GHS 4.00", enabled: true },
-    ],
-  },
-  {
-    id: "tv", name: "TV Subscriptions", description: "DSTV, GOtv, StarTimes", icon: "tv", enabled: true,
-    products: [
-      { id: "dstv-compact", name: "DSTV Compact", atlasPrice: "GHS 120.00", sellingPrice: "GHS 125.00", margin: "GHS 5.00", enabled: true },
-      { id: "gotv-max", name: "GOtv Max", atlasPrice: "GHS 80.00", sellingPrice: "GHS 84.00", margin: "GHS 4.00", enabled: true },
-    ],
-  },
-  {
-    id: "results", name: "Results Checker", description: "WAEC, JAMB, NECO", icon: "graduation", enabled: false,
-    products: [
-      { id: "waec-2025", name: "WAEC 2025", atlasPrice: "GHS 20.00", sellingPrice: "GHS 22.00", margin: "GHS 2.00", enabled: true },
-    ],
-  },
-];
+/* ------------------- Reseller Specific Data -------------------
+ *
+ * Only the order type and seed survive here. They are consumed by
+ * contexts/reseller-data-context.tsx and components/reseller/reseller-orders-list.tsx.
+ * Both are repointed in Batch B, at which point these two exports move into
+ * lib/domains/orders/ and this file stops carrying any reseller data.
+ */
 
 export type ResellerOrder = {
   id: string;
@@ -476,7 +397,6 @@ export type ResellerOrder = {
   iconBg?: string;
 };
 
-// Orders matching the mockup image's table exactly
 export const mockResellerOrders: ResellerOrder[] = [
   {
     id: "ro1", orderNumber: "R-1001", service: "MTN Data 50GB", category: "Data", customer: "024 123 4567", amount: "GHS 45.00", commission: "GHS 4.50", date: "10:24 AM", status: "Successful", statusVariant: "success", image: "/mtn1.png",
@@ -492,27 +412,5 @@ export const mockResellerOrders: ResellerOrder[] = [
   },
   {
     id: "ro5", orderNumber: "R-1005", service: "Internet Bundle", category: "Internet", customer: "024 567 8901", amount: "GHS 50.00", commission: "GHS 2.50", date: "08:12 AM", status: "Pending", statusVariant: "warning", image: "/glo.png",
-  },
-];
-
-export type MockWithdrawalTransaction = {
-  id: string;
-  method: string;
-  amount: string;
-  date: string;
-  status: "Successful" | "Pending" | "Failed";
-  statusVariant: "success" | "warning" | "danger";
-  icon: AtlasIconName;
-};
-
-export const mockWithdrawalHistory: MockWithdrawalTransaction[] = [
-  {
-    id: "wd1", method: "Bank Transfer", amount: "GHS 500.00", date: "Aug 18, 2025", status: "Successful", statusVariant: "success", icon: "bank",
-  },
-  {
-    id: "wd2", method: "Mobile Money", amount: "GHS 200.00", date: "Aug 15, 2025", status: "Successful", statusVariant: "success", icon: "mobile",
-  },
-  {
-    id: "wd3", method: "Bank Transfer", amount: "GHS 300.00", date: "Aug 10, 2025", status: "Pending", statusVariant: "warning", icon: "bank",
   },
 ];

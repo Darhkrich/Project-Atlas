@@ -1,7 +1,6 @@
+// components/admin/dashboard/active-users-card.tsx
 "use client";
 
-import { DashboardCard } from "./dashboard-card";
-import { SubCardWithChart } from "./sub-card-with-chart";
 import {
   PieChart,
   Pie,
@@ -11,10 +10,13 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { mockDashboardData } from "@/lib/admin/mock/dashboard";
-import { formatCurrency } from "@/lib/admin/formatters";
-
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b"];
+import { DashboardCard } from "./dashboard-card";
+import { SubCardWithChart } from "./sub-card-with-chart";
+import {
+  mockDashboardData,
+  dashboardTrends,
+} from "@/lib/admin/mock/dashboard";
+import { ACCOUNT_COLORS, ACTIVE_USERS_DONUT_COLORS } from "@/lib/admin/dashboard/chart-palette";
 
 export function ActiveUsersCard() {
   const distribution = mockDashboardData.activeUsersDistribution;
@@ -27,8 +29,9 @@ export function ActiveUsersCard() {
       title="Active Users"
       value={mockDashboardData.activeUsers.total.toLocaleString()}
       icon="users"
-      trend={5.6}
-      trendLabel="vs last month"
+      delta={dashboardTrends.activeUsers}
+      deltaLabel="vs last month"
+      href="/admin/customers"
       mainChart={
         <ResponsiveContainer width="100%" height={180}>
           <PieChart>
@@ -44,7 +47,10 @@ export function ActiveUsersCard() {
               stroke="none"
             >
               {distribution.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                <Cell
+                  key={"cell-" + index}
+                  fill={ACTIVE_USERS_DONUT_COLORS[index % ACTIVE_USERS_DONUT_COLORS.length]}
+                />
               ))}
             </Pie>
             <Tooltip />
@@ -59,7 +65,7 @@ export function ActiveUsersCard() {
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <BarChart data={[{ value: resellers }]}>
-                  <Bar dataKey="value" fill="#3b82f6" />
+                  <Bar dataKey="value" fill={ACCOUNT_COLORS.resellers} />
                 </BarChart>
               </ResponsiveContainer>
             }
@@ -70,7 +76,7 @@ export function ActiveUsersCard() {
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <BarChart data={[{ value: customers }]}>
-                  <Bar dataKey="value" fill="#22c55e" />
+                  <Bar dataKey="value" fill={ACCOUNT_COLORS.customers} />
                 </BarChart>
               </ResponsiveContainer>
             }
@@ -81,7 +87,7 @@ export function ActiveUsersCard() {
             chart={
               <ResponsiveContainer width="100%" height={30}>
                 <BarChart data={[{ value: merchants }]}>
-                  <Bar dataKey="value" fill="#f59e0b" />
+                  <Bar dataKey="value" fill={ACCOUNT_COLORS.merchants} />
                 </BarChart>
               </ResponsiveContainer>
             }

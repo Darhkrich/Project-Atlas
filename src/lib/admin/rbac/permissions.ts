@@ -1,5 +1,3 @@
-// lib/admin/rbac/permissions.ts
-
 export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers:view",
   CUSTOMERS_EDIT: "customers:edit",
@@ -8,15 +6,19 @@ export const PERMISSIONS = {
   CUSTOMERS_REVEAL_PII: "customers:reveal_pii",
   CUSTOMERS_NOTIFY: "customers:notify",
 
+
   RESELLERS_VIEW: "resellers:view",
   RESELLERS_EDIT: "resellers:edit",
   RESELLERS_SUSPEND: "resellers:suspend",
   RESELLERS_VERIFY: "resellers:verify",
   RESELLERS_WALLET: "resellers:wallet",
+  RESELLERS_WALLET_CONFIG: "resellers:wallet_config",
+  RESELLERS_WITHDRAWALS_APPROVE: "resellers:withdrawals_approve",
   RESELLERS_TIER: "resellers:tier",
   RESELLERS_STOREFRONT_TOGGLE: "resellers:storefront_toggle",
   RESELLERS_NOTIFY: "resellers:notify",
-
+  RESELLERS_PROMOTIONS_MANAGE: "resellers:promotions_manage",
+  
   MERCHANTS_VIEW: "merchants:view",
   MERCHANTS_EDIT: "merchants:edit",
   MERCHANTS_SUSPEND: "merchants:suspend",
@@ -43,17 +45,33 @@ export const PERMISSIONS = {
   TRANSACTIONS_REFUND: "transactions:refund",
   TRANSACTIONS_EXPORT: "transactions:export",
 
-  PAYMENTS_VIEW: "payments:view",
-  PAYMENTS_REFUND: "payments:refund",
-  PAYMENTS_EXPORT: "payments:export",
-
   REFUNDS_VIEW: "refunds:view",
   REFUNDS_APPROVE: "refunds:approve",
   REFUNDS_REJECT: "refunds:reject",
   REFUNDS_PROCESS: "refunds:process",
 
+  DOMAINS_VIEW: "domains:view",
+  DOMAINS_MANAGE: "domains:manage",
   WALLETS_VIEW: "wallets:view",
   WALLETS_ADJUST: "wallets:adjust",
+  WALLETS_WITHDRAWALS_APPROVE: "wallets:withdrawals_approve",
+  WALLETS_CONFIG: "wallets:config",
+
+  TREASURY_VIEW: "treasury:view",
+  TREASURY_MANAGE: "treasury:manage",
+  TREASURY_APPROVE: "treasury:approve",
+  TREASURY_FUND: "treasury:fund",
+  TREASURY_CONFIG: "treasury:config",
+
+  PAYMENTS_VIEW: "payments:view",
+  PAYMENTS_REFUND: "payments:refund",
+  PAYMENTS_EXPORT: "payments:export",
+  PAYMENTS_WITHDRAWALS_APPROVE: "payments:withdrawals_approve",
+  PAYMENTS_CONFIG: "payments:config",
+  PAYMENTS_RECONCILE: "payments:reconcile",
+  PAYMENTS_FLAG: "payments:flag",
+
+  ECOMMERCE_PAYMENTS_VIEW: "ecommerce_payments:view",
 
   SERVICES_VIEW: "services:view",
   SERVICES_MANAGE: "services:manage",
@@ -64,11 +82,22 @@ export const PERMISSIONS = {
   PROVIDERS_VIEW: "providers:view",
   PROVIDERS_MANAGE: "providers:manage",
 
+  PROMOTIONS_VIEW: "promotions:view",
+  PROMOTIONS_MANAGE: "promotions:manage",
+
+
+  SUBSCRIPTIONS_VIEW: "subscriptions:view",
+  SUBSCRIPTIONS_MANAGE: "subscriptions:manage",
+
+
   PRICING_VIEW: "pricing:view",
   PRICING_MANAGE: "pricing:manage",
 
   COMMISSIONS_VIEW: "commissions:view",
   COMMISSIONS_MANAGE: "commissions:manage",
+
+  TEMPLATES_VIEW: "templates:view",
+  TEMPLATES_MANAGE: "templates:manage",
 
   STOREFRONTS_VIEW: "storefronts:view",
   STOREFRONTS_MANAGE: "storefronts:manage",
@@ -99,6 +128,7 @@ export const PERMISSIONS = {
 
   EXPORT: "export:run",
   RESET_SECURITY: "security:reset",
+
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -134,14 +164,79 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
       { value: PERMISSIONS.RESELLERS_SUSPEND, label: "Suspend resellers" },
       { value: PERMISSIONS.RESELLERS_VERIFY, label: "Verify resellers" },
       { value: PERMISSIONS.RESELLERS_WALLET, label: "Adjust wallet" },
+      {
+        value: PERMISSIONS.RESELLERS_WALLET_CONFIG,
+        label: "Configure withdrawal threshold",
+      },
+      {
+        value: PERMISSIONS.RESELLERS_WITHDRAWALS_APPROVE,
+        label: "Approve or reject withdrawals",
+      },
       { value: PERMISSIONS.RESELLERS_TIER, label: "Change tier" },
       {
         value: PERMISSIONS.RESELLERS_STOREFRONT_TOGGLE,
         label: "Toggle storefront",
       },
       { value: PERMISSIONS.RESELLERS_NOTIFY, label: "Send notifications" },
+      {
+        value: PERMISSIONS.RESELLERS_PROMOTIONS_MANAGE,
+        label: "Manage reseller promotions",
+      },
     ],
   },
+
+ {
+    module: "payments",
+    label: "Payments",
+    description: "Payment gateway activity.",
+    permissions: [
+      { value: PERMISSIONS.PAYMENTS_VIEW, label: "View payments" },
+      {
+        value: PERMISSIONS.PAYMENTS_REFUND,
+        label: "Refund customer wallet payments (non-ecommerce)",
+      },
+      { value: PERMISSIONS.PAYMENTS_EXPORT, label: "Export payments" },
+      {
+        value: PERMISSIONS.PAYMENTS_WITHDRAWALS_APPROVE,
+        label: "Approve or reject merchant withdrawals",
+      },
+      {
+        value: PERMISSIONS.PAYMENTS_CONFIG,
+        label: "Configure withdrawal auto-approve rules",
+      },
+      {
+        value: PERMISSIONS.PAYMENTS_RECONCILE,
+        label: "Reconcile payment records with providers",
+      },
+      {
+        value: PERMISSIONS.PAYMENTS_FLAG,
+        label: "Flag payment records for review",
+      },
+    ],
+  },
+  {
+    module: "ecommerce_payments",
+    label: "Ecommerce payments",
+    description:
+      "Merchant money flows: plan billing, storefront sales, refunds, withdrawals.",
+    permissions: [
+      {
+        value: PERMISSIONS.ECOMMERCE_PAYMENTS_VIEW,
+        label: "View ecommerce payments",
+      },
+    ],
+  },
+
+{
+    module: "subscriptions",
+    label: "Subscriptions",
+    description: "Merchant subscription plans, billing, and lifecycle.",
+    permissions: [
+      { value: PERMISSIONS.SUBSCRIPTIONS_VIEW, label: "View subscriptions" },
+      { value: PERMISSIONS.SUBSCRIPTIONS_MANAGE, label: "Manage subscriptions" },
+    ],
+  },
+
   {
     module: "merchants",
     label: "Merchants",
@@ -154,8 +249,20 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
       { value: PERMISSIONS.MERCHANTS_STORE_TOGGLE, label: "Toggle store" },
       { value: PERMISSIONS.MERCHANTS_CONTRACT_MRR, label: "Contract MRR" },
       { value: PERMISSIONS.MERCHANTS_NOTIFY, label: "Send notifications" },
+    
     ],
   },
+
+  {
+    module: "templates",
+    label: "Templates",
+    description: "Ecommerce storefront templates and plan assignments.",
+    permissions: [
+      { value: PERMISSIONS.TEMPLATES_VIEW, label: "View templates" },
+      { value: PERMISSIONS.TEMPLATES_MANAGE, label: "Manage templates" },
+    ],
+  },
+
   {
     module: "storefront_users",
     label: "Storefront users",
@@ -195,16 +302,7 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
       { value: PERMISSIONS.TRANSACTIONS_EXPORT, label: "Export transactions" },
     ],
   },
-  {
-    module: "payments",
-    label: "Payments",
-    description: "Payment gateway activity.",
-    permissions: [
-      { value: PERMISSIONS.PAYMENTS_VIEW, label: "View payments" },
-      { value: PERMISSIONS.PAYMENTS_REFUND, label: "Refund payments" },
-      { value: PERMISSIONS.PAYMENTS_EXPORT, label: "Export payments" },
-    ],
-  },
+
   {
     module: "refunds",
     label: "Refunds",
@@ -216,15 +314,49 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
       { value: PERMISSIONS.REFUNDS_PROCESS, label: "Process refunds" },
     ],
   },
+
   {
+    module: "domains",
+    label: "Domains",
+    description: "Storefront subdomains and custom domain verification.",
+    permissions: [
+      { value: PERMISSIONS.DOMAINS_VIEW, label: "View domains" },
+      { value: PERMISSIONS.DOMAINS_MANAGE, label: "Manage domains" },
+    ],
+  },
+{
     module: "wallets",
     label: "Wallets",
-    description: "Wallet balances and adjustments.",
+    description:
+      "Atlas customer and reseller storefront user wallets, funding, and withdrawal approvals.",
     permissions: [
       { value: PERMISSIONS.WALLETS_VIEW, label: "View wallets" },
       { value: PERMISSIONS.WALLETS_ADJUST, label: "Adjust balances" },
+      {
+        value: PERMISSIONS.WALLETS_WITHDRAWALS_APPROVE,
+        label: "Approve or reject wallet withdrawals",
+      },
+      {
+        value: PERMISSIONS.WALLETS_CONFIG,
+        label: "Configure wallet withdrawal rules",
+      },
     ],
   },
+
+{
+    module: "treasury",
+    label: "Treasury",
+    description:
+      "Platform cash account. Inflows, outflows, liability coverage, and reconciliation.",
+    permissions: [
+      { value: PERMISSIONS.TREASURY_VIEW, label: "View treasury" },
+      { value: PERMISSIONS.TREASURY_MANAGE, label: "Create adjustments and settle outbound" },
+      { value: PERMISSIONS.TREASURY_APPROVE, label: "Approve outbound as second admin" },
+      { value: PERMISSIONS.TREASURY_FUND, label: "Fund treasury" },
+      { value: PERMISSIONS.TREASURY_CONFIG, label: "Configure thresholds and reserve floor" },
+    ],
+  },
+
   {
     module: "services",
     label: "Services",
@@ -250,6 +382,15 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
     permissions: [
       { value: PERMISSIONS.PROVIDERS_VIEW, label: "View providers" },
       { value: PERMISSIONS.PROVIDERS_MANAGE, label: "Manage providers" },
+    ],
+  },
+  {
+    module: "promotions",
+    label: "Promotions",
+    description: "Cross-audience discount, cashback, and points campaigns.",
+    permissions: [
+      { value: PERMISSIONS.PROMOTIONS_VIEW, label: "View promotions" },
+      { value: PERMISSIONS.PROMOTIONS_MANAGE, label: "Manage promotions" },
     ],
   },
   {

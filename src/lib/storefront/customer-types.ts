@@ -1,15 +1,17 @@
 export type StorefrontCustomer = {
   id: string;
-  resellerSlug: string; // scopes customer to reseller
+  resellerSlug: string;
+  storefrontId?: string;
   name: string;
   email: string;
-  phone?: string;
+  phone: string;
+  twoFactorEnabled?: boolean;
   savedDetails?: {
     phoneNumber?: string;
     meterNumber?: string;
     smartCardNumber?: string;
   };
-  preferredPaymentMethod?: string; // payment method id
+  preferredPaymentMethod?: string;
   orders: StorefrontOrder[];
   createdAt: string;
 };
@@ -20,14 +22,21 @@ export type StorefrontOrder = {
   plan: string;
   recipient: string;
   amount: number;
-  date: string;
-  status: "Successful" | "Pending" | "Failed";
-  paymentMethod: string;
+  createdAt: string;
+  status: "successful" | "pending" | "failed";
+  paymentMethodId: string;
+  paidFromWallet?: boolean;
+  walletTransactionId?: string;
+  failureReason?: string;
+  /**
+   * @deprecated Use createdAt.
+   */
+  date?: string;
 };
 
 export type CustomerAuthForm = {
   email: string;
   password: string;
   name?: string;
-  phone?: string;
+  phone: string;
 };

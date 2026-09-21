@@ -1,21 +1,8 @@
 import type { StorefrontConfig } from "./types";
 
-/**
- * Default storefront configuration used when a new reseller starts.
- * All values can be overridden in the management dashboard.
- */
-
-
-/**
- * Mock storefront configurations used for development and testing.
- * In production, this will be replaced by API/database data.
- */
-
-
-
-
 export const defaultStorefrontConfig: StorefrontConfig = {
   id: "reseller-default",
+  storefrontId: "SF-RS-001",
   store: {
     name: "My Storefront",
     slug: "my-storefront",
@@ -76,7 +63,7 @@ export const defaultStorefrontConfig: StorefrontConfig = {
   footer: {
     enabled: true,
     description: "Your trusted partner for digital services.",
-    copyright: `© ${new Date().getFullYear()} My Storefront`,
+    copyright: `©️ ${new Date().getFullYear()} My Storefront`,
   },
   publication: {
     isPublished: false,
@@ -87,6 +74,7 @@ export const mockStorefronts: Record<string, StorefrontConfig> = {
   "techvault-connect": {
     ...defaultStorefrontConfig,
     id: "reseller-techvault",
+    storefrontId: "SF-RS-002",
     store: {
       name: "TechVault Connect",
       slug: "techvault-connect",
@@ -116,12 +104,8 @@ export const mockStorefronts: Record<string, StorefrontConfig> = {
       publishedAt: "2026-08-20T12:00:00Z",
     },
   },
-  // Keep other mocks as-is but ensure they inherit defaults
-  // Add missing pricing and hero if needed
 };
 
 export function getMockStorefrontBySlug(slug: string): StorefrontConfig | undefined {
   return mockStorefronts[slug];
 }
-
-

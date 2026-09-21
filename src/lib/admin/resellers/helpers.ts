@@ -1,9 +1,6 @@
- // lib/admin/resellers/helpers.ts
-
-import {
-  mockResellerCommissions,
-  mockResellerTiers,
-} from "@/lib/admin/mock/commissions";
+// lib/admin/resellers/helpers.ts
+import { mockResellerCommissions } from "@/lib/admin/mock/commission-seed";
+import { getTiers } from "@/lib/admin/mock/reseller-tier-store";
 import type {
   ResellerCommission,
   ResellerTier,
@@ -49,12 +46,12 @@ export function tierByName(
   name: string | undefined
 ): ResellerTier | undefined {
   if (!name) return undefined;
-  return mockResellerTiers.find((t) => t.name === name);
+  return getTiers().find((t) => t.name === name);
 }
 
 export function tierById(id: string | undefined): ResellerTier | undefined {
   if (!id) return undefined;
-  return mockResellerTiers.find((t) => t.id === id);
+  return getTiers().find((t) => t.id === id);
 }
 
 export interface TierDelta {
@@ -69,6 +66,10 @@ function avg(nums: number[]): number {
   return round2(nums.reduce((s, n) => s + n, 0) / nums.length);
 }
 
+/**
+ * Compares two tiers on the average of their six percent rates, plus the
+ * extra-cut percentage. All rates are percentages of order value.
+ */
 export function commissionDeltaForTier(
   fromName: string | undefined,
   toName: string | undefined

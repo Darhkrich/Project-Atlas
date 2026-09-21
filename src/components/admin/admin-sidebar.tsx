@@ -44,6 +44,7 @@ const navGroups: NavGroup[] = [
       { label: "Transactions", href: "/admin/transactions", icon: "transactions", permission: "transactions.read" },
       { label: "Payments", href: "/admin/payments", icon: "credit-card", permission: "payments.read" },
       { label: "Refunds", href: "/admin/refunds", icon: "receipt", permission: "refunds.read" },
+      { label: "Domains", href: "/admin/domains", icon: "globe", permission: "domains.read" },
     ],
   },
   {
@@ -62,7 +63,6 @@ const navGroups: NavGroup[] = [
     label: "Resellers",
     items: [
       { label: "Reseller Dashboard", href: "/admin/resellers/dashboard", icon: "sales", permission: "resellers.dashboard.read" },
-      { label: "Commissions", href: "/admin/resellers/commissions", icon: "percent", permission: "resellers.commissions.read" },
       { label: "Commission Wallets", href: "/admin/resellers/commission-wallets", icon: "wallet", permission: "resellers.commissions.read" },
       { label: "Analytics", href: "/admin/resellers/analytics", icon: "bar-chart", permission: "resellers.analytics.read" },
       { label: "Tiers", href: "/admin/resellers/tiers", icon: "star", permission: "resellers.tiers.read" },
@@ -87,11 +87,14 @@ const navGroups: NavGroup[] = [
   {
     label: "Financial",
     items: [
+      { label: "Treasury", href: "/admin/treasury", icon: "wallet", permission: "treasury.view" },
+   
       { label: "Wallets", href: "/admin/wallets", icon: "wallet", permission: "wallets.read" },
       { label: "Revenue", href: "/admin/revenue", icon: "trending-up", permission: "revenue.read" },
       { label: "Commissions", href: "/admin/commissions", icon: "percent", permission: "commissions.read" },
       { label: "Pricing", href: "/admin/pricing", icon: "price", permission: "pricing.read" },
-    ],
+      { label: "Promotions", href: "/admin/promotions", icon: "gift", permission: "promotions.read" },
+     ],
   },
   {
     label: "Services",
@@ -149,10 +152,6 @@ export function AdminSidebar() {
     [providers]
   );
 
-  /**
-   * Live badges keyed by href. Populated from stores that notify subscribers.
-   * Additional entries are added here as more sections surface a live count.
-   */
   const liveBadges = useMemo<Record<string, LiveBadge>>(() => {
     const map: Record<string, LiveBadge> = {};
     if (providerCounts.attention > 0) {

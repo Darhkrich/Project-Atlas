@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 // components/admin/resellers/reseller-detail-drawer.tsx
 "use client";
 
@@ -5,7 +6,7 @@ import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import type { Reseller } from "@/lib/admin/types/reseller";
 import { mockStorefronts } from "@/lib/admin/mock/storefronts";
-import { mockResellerCommissions } from "@/lib/admin/mock/commissions";
+import { useCommissions } from "@/lib/admin/hooks/use-commissions";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { StatusDot } from "@/components/admin/ui/status-dot";
@@ -58,6 +59,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 interface ResellerDetailDrawerProps {
   reseller: Reseller | null;
+  walletBalance: number;
   onClose: () => void;
   onAdjustWallet: (
     id: string,
@@ -81,11 +83,10 @@ interface ResellerDetailDrawerProps {
 
 export function ResellerDetailDrawer({
   reseller,
-  onClose,
   ...rest
 }: ResellerDetailDrawerProps) {
   const isOpen = reseller !== null;
-  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, rest.onClose);
   const titleId = useId();
 
   if (!reseller) return null;
@@ -100,27 +101,28 @@ export function ResellerDetailDrawer({
     >
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={rest.onClose}
         aria-hidden="true"
       />
       <ResellerDetailBody
         key={reseller.id}
         reseller={reseller}
         titleId={titleId}
-        onClose={onClose}
         {...rest}
       />
     </div>
   );
 }
 
-interface BodyProps extends Omit<ResellerDetailDrawerProps, "reseller"> {
+interface BodyProps
+  extends Omit<ResellerDetailDrawerProps, "reseller"> {
   reseller: Reseller;
   titleId: string;
 }
 
 function ResellerDetailBody({
   reseller,
+  walletBalance,
   titleId,
   onClose,
   onAdjustWallet,
@@ -134,6 +136,7 @@ function ResellerDetailBody({
   onResetSecurity,
 }: BodyProps) {
   const now = useNow();
+  const commissionState = useCommissions();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   const [walletOpen, setWalletOpen] = useState(false);
@@ -154,8 +157,10 @@ function ResellerDetailBody({
 
   const commissions = useMemo(
     () =>
-      mockResellerCommissions.filter((c) => c.resellerId === reseller.id),
-    [reseller.id]
+      commissionState.commissions.filter(
+        (c) => c.resellerId === reseller.id
+      ),
+    [commissionState.commissions, reseller.id]
   );
 
   const totals = useMemo(
@@ -271,7 +276,6 @@ function ResellerDetailBody({
         {reseller.tierName && (
           <Badge variant="info">{reseller.tierName} tier</Badge>
         )}
-        <Badge variant="neutral">{reseller.commissionRate}% commission</Badge>
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
@@ -452,7 +456,7 @@ function ResellerDetailBody({
                   Wallet
                 </p>
                 <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                  {formatCurrency(reseller.walletBalance)}
+                  {formatCurrency(walletBalance)}
                 </p>
               </div>
             </div>
@@ -490,7 +494,10 @@ function ResellerDetailBody({
                 Wallet balance
               </p>
               <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                {formatCurrency(reseller.walletBalance)}
+                {formatCurrency(walletBalance)}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                Derived from the reseller's wallet ledger.
               </p>
               <Can permission={PERMISSIONS.RESELLERS_WALLET}>
                 <Button
@@ -509,15 +516,16 @@ function ResellerDetailBody({
                 Commission summary
               </p>
               <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
-                Computed from the individual commission rows below.
+                Computed from the individual commission rows below. Rates come
+                from the reseller's assigned tier.
               </p>
               <div className="mt-2 grid grid-cols-3 gap-3">
                 <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Rate
+                    Tier
                   </p>
                   <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                    {reseller.commissionRate}%
+                    {reseller.tierName ?? "—"}
                   </p>
                 </div>
                 <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
@@ -590,6 +598,8 @@ function ResellerDetailBody({
                                 ? "success"
                                 : c.status === "pending"
                                 ? "warning"
+                                : c.status === "reversed"
+                                ? "danger"
                                 : "neutral"
                             }
                             size="sm"
@@ -869,7 +879,7 @@ function ResellerDetailBody({
       <ResellerWalletAdjustModal
         open={walletOpen}
         resellerName={reseller.businessName}
-        currentBalance={reseller.walletBalance}
+        currentBalance={walletBalance}
         onClose={() => setWalletOpen(false)}
         onConfirm={(amount, reason, method) => {
           onAdjustWallet(reseller.id, amount, reason, method);

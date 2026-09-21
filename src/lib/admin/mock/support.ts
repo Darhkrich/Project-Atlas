@@ -118,6 +118,7 @@ export const mockSupportConversations: SupportConversation[] = [
   /* ---------------------- Digital services — customers ------------------- */
   {
     id: "SUP-1001",
+    ticketRef: "SUP-1001",
     userType: "customer",
     userId: "CUST-001",
     userName: "Ama Serwaa",
@@ -218,6 +219,7 @@ export const mockSupportConversations: SupportConversation[] = [
 
   {
     id: "SUP-1002",
+    ticketRef: "SUP-1002",
     userType: "customer",
     userId: "CUST-002",
     userName: "Kwesi Owusu",
@@ -335,16 +337,14 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1003-1",
         sender: "user",
-        content:
-          "I paid GHS 100 for ECG prepaid but the token I received says INVALID. Meter: 4511223344.",
+        content: "I paid GHS 100 for ECG prepaid but the token I received says INVALID. Meter: 4511223344.",
         timestamp: min(20),
         readByAdmin: true,
       },
       {
         id: "m-1003-2",
         sender: "system",
-        content:
-          "Escalated to ECG Direct. Reference ESC-2026-0417. Provider marked DEGRADED.",
+        content: "Escalated to ECG Direct. Reference ESC-2026-0417. Provider marked DEGRADED.",
         timestamp: min(3),
         readByAdmin: true,
       },
@@ -361,11 +361,11 @@ export const mockSupportConversations: SupportConversation[] = [
         id: "n-1003-1",
         admin: "kofi.asante@atlas.com",
         adminId: "usr-003",
-        content:
-          "ECG Direct degraded since 09:00. Other affected tickets: SUP-1007, SUP-1011. Considering incident grouping.",
+        content: "ECG Direct degraded since 09:00. Other affected tickets: SUP-1007, SUP-1011. Considering incident grouping.",
         timestamp: min(3),
       },
     ],
+    ticketRef: undefined
   },
 
   {
@@ -414,8 +414,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1004-1",
         sender: "user",
-        content:
-          "I renewed my DSTV Compact for GHS 150 this morning. Still showing expired on the decoder.",
+        content: "I renewed my DSTV Compact for GHS 150 this morning. Still showing expired on the decoder.",
         timestamp: hr(5),
         readByAdmin: true,
       },
@@ -424,13 +423,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-004",
         authorName: "Efua Owusu",
-        content:
-          "Thanks for reaching out. The transaction is still being processed by the provider. DSTV renewals can take up to 4 hours. I'll check back if it doesn't confirm shortly.",
+        content: "Thanks for reaching out. The transaction is still being processed by the provider. DSTV renewals can take up to 4 hours. I'll check back if it doesn't confirm shortly.",
         timestamp: hr(4),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -475,8 +474,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1005-1",
         sender: "user",
-        content:
-          "I bought a WAEC result checker pin over 3 hours ago and haven't received it.",
+        content: "I bought a WAEC result checker pin over 3 hours ago and haven't received it.",
         timestamp: hr(3),
         readByAdmin: true,
       },
@@ -485,8 +483,7 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-001",
         authorName: "Yaw Mensah",
-        content:
-          "Thank you for your patience. Our provider for WAEC pins is currently offline. We're working to restore service and will deliver your pin as soon as possible.",
+        content: "Thank you for your patience. Our provider for WAEC pins is currently offline. We're working to restore service and will deliver your pin as soon as possible.",
         timestamp: hr(2),
         readByAdmin: true,
       },
@@ -500,6 +497,7 @@ export const mockSupportConversations: SupportConversation[] = [
         timestamp: hr(2),
       },
     ],
+    ticketRef: undefined
   },
 
   {
@@ -553,13 +551,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-001",
         authorName: "Yaw Mensah",
-        content:
-          "Thanks for flagging. Occasionally provider confirmations are delayed, but the data did arrive successfully. If it happens again on the same number, let us know and we'll investigate further.",
+        content: "Thanks for flagging. Occasionally provider confirmations are delayed, but the data did arrive successfully. If it happens again on the same number, let us know and we'll investigate further.",
         timestamp: hr(26),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -608,8 +606,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1007-1",
         sender: "user",
-        content:
-          "I renewed my GOTV Jolli (GHS 60) about 6 hours ago. IUC 4029381199. Not showing on the decoder.",
+        content: "I renewed my GOTV Jolli (GHS 60) about 6 hours ago. IUC 4029381199. Not showing on the decoder.",
         timestamp: hr(6),
         readByAdmin: true,
       },
@@ -618,13 +615,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-004",
         authorName: "Efua Owusu",
-        content:
-          "Thanks for the details. I can see the transaction is still pending with the provider. I'll monitor and confirm once it settles.",
+        content: "Thanks for the details. I can see the transaction is still pending with the provider. I'll monitor and confirm once it settles.",
         timestamp: hr(5),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -668,8 +665,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1008-1",
         sender: "user",
-        content:
-          "I just bought a WASSCE result checker pin and it says 'already used'. This is my first attempt. Please help.",
+        content: "I just bought a WASSCE result checker pin and it says 'already used'. This is my first attempt. Please help.",
         timestamp: min(35),
         readByAdmin: true,
       },
@@ -682,6 +678,7 @@ export const mockSupportConversations: SupportConversation[] = [
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -725,8 +722,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1009-1",
         sender: "user",
-        content:
-          "I sent airtime to the wrong number by mistake. Can I reverse it?",
+        content: "I sent airtime to the wrong number by mistake. Can I reverse it?",
         timestamp: day(1),
         readByAdmin: true,
       },
@@ -735,13 +731,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-004",
         authorName: "Efua Owusu",
-        content:
-          "Unfortunately airtime deliveries are final once the provider confirms them. We recommend double-checking numbers before confirming. If the recipient is reachable, we can help you coordinate directly.",
+        content: "Unfortunately airtime deliveries are final once the provider confirms them. We recommend double-checking numbers before confirming. If the recipient is reachable, we can help you coordinate directly.",
         timestamp: day(1),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   /* ------------------------------ Resellers ------------------------------ */
@@ -784,8 +780,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1010-1",
         sender: "user",
-        content:
-          "I have not received commission for order ATX-983821. It's been 3 days.",
+        content: "I have not received commission for order ATX-983821. It's been 3 days.",
         timestamp: hr(4),
         readByAdmin: false,
       },
@@ -795,11 +790,11 @@ export const mockSupportConversations: SupportConversation[] = [
         id: "n-1010-1",
         admin: "akosua.boateng@atlas.com",
         adminId: "usr-002",
-        content:
-          "Order is settled. Commission sits in pending queue for next payout run (Friday). Nothing to fix — will confirm with reseller.",
+        content: "Order is settled. Commission sits in pending queue for next payout run (Friday). Nothing to fix — will confirm with reseller.",
         timestamp: hr(3),
       },
     ],
+    ticketRef: undefined
   },
 
   {
@@ -841,8 +836,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1011-1",
         sender: "user",
-        content:
-          "Our payout hasn't landed this cycle. We have GHS 1,240 due. What's going on?",
+        content: "Our payout hasn't landed this cycle. We have GHS 1,240 due. What's going on?",
         timestamp: hr(8),
         readByAdmin: true,
       },
@@ -851,13 +845,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-002",
         authorName: "Akosua Boateng",
-        content:
-          "Thanks for your patience. Your account has a KYC document under review which has placed the payout on hold. Once it clears, the full balance releases in the next cycle.",
+        content: "Thanks for your patience. Your account has a KYC document under review which has placed the payout on hold. Once it clears, the full balance releases in the next cycle.",
         timestamp: hr(7),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -888,8 +882,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1012-1",
         sender: "user",
-        content:
-          "My downstream pricing for Telecel data is showing the old rate. I changed it an hour ago.",
+        content: "My downstream pricing for Telecel data is showing the old rate. I changed it an hour ago.",
         timestamp: hr(2),
         readByAdmin: true,
       },
@@ -898,13 +891,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-001",
         authorName: "Yaw Mensah",
-        content:
-          "Thanks for flagging. Pricing changes usually propagate within 15 minutes. Let me check the sync on your account and confirm shortly.",
+        content: "Thanks for flagging. Pricing changes usually propagate within 15 minutes. Let me check the sync on your account and confirm shortly.",
         timestamp: hr(1),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -935,8 +928,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1013-1",
         sender: "user",
-        content:
-          "My custom domain swift-topup.com is not resolving to my Atlas storefront. DNS was pointed 24 hours ago.",
+        content: "My custom domain swift-topup.com is not resolving to my Atlas storefront. DNS was pointed 24 hours ago.",
         timestamp: day(2),
         readByAdmin: true,
       },
@@ -945,13 +937,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-004",
         authorName: "Efua Owusu",
-        content:
-          "Thanks for the details. We can see the CNAME is set correctly, but propagation may still be underway from your registrar. We'll re-check in a few hours and confirm.",
+        content: "Thanks for the details. We can see the CNAME is set correctly, but propagation may still be underway from your registrar. We'll re-check in a few hours and confirm.",
         timestamp: day(1),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -982,8 +974,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1014-1",
         sender: "user",
-        content:
-          "I was upgraded to Gold tier last week but my commission rate is still Silver.",
+        content: "I was upgraded to Gold tier last week but my commission rate is still Silver.",
         timestamp: day(3),
         readByAdmin: true,
       },
@@ -992,13 +983,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-001",
         authorName: "Yaw Mensah",
-        content:
-          "Apologies for the delay. Your tier is now correctly applied at Gold. The commission rate should reflect immediately on new orders.",
+        content: "Apologies for the delay. Your tier is now correctly applied at Gold. The commission rate should reflect immediately on new orders.",
         timestamp: day(2),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   /* ------------------------------ Merchants ------------------------------ */
@@ -1040,8 +1031,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1015-1",
         sender: "user",
-        content:
-          "My Growth subscription renewal was declined. My card should be fine. Can you check?",
+        content: "My Growth subscription renewal was declined. My card should be fine. Can you check?",
         timestamp: hr(3),
         readByAdmin: true,
       },
@@ -1050,13 +1040,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-002",
         authorName: "Akosua Boateng",
-        content:
-          "Thanks for flagging. We see the renewal was declined by your bank. Please update your payment method, or reply here and we can raise a manual invoice.",
+        content: "Thanks for flagging. We see the renewal was declined by your bank. Please update your payment method, or reply here and we can raise a manual invoice.",
         timestamp: hr(2),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -1097,8 +1087,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1016-1",
         sender: "user",
-        content:
-          "Our storefront went offline an hour ago. No warning, no email. This is our busiest day. Please help.",
+        content: "Our storefront went offline an hour ago. No warning, no email. This is our busiest day. Please help.",
         timestamp: min(50),
         readByAdmin: true,
       },
@@ -1107,8 +1096,7 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-003",
         authorName: "Kofi Asante",
-        content:
-          "Apologies for the disruption. We're checking what triggered the suspension on our side and will update you within the hour.",
+        content: "Apologies for the disruption. We're checking what triggered the suspension on our side and will update you within the hour.",
         timestamp: min(40),
         readByAdmin: true,
       },
@@ -1118,11 +1106,11 @@ export const mockSupportConversations: SupportConversation[] = [
         id: "n-1016-1",
         admin: "kofi.asante@atlas.com",
         adminId: "usr-003",
-        content:
-          "Auto-suspended by fraud heuristic at 14:12. Reviewing transaction pattern with compliance.",
+        content: "Auto-suspended by fraud heuristic at 14:12. Reviewing transaction pattern with compliance.",
         timestamp: min(20),
       },
     ],
+    ticketRef: undefined
   },
 
   {
@@ -1163,8 +1151,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1017-1",
         sender: "user",
-        content:
-          "Is there a way to change the hero section to a video background on the Modern template?",
+        content: "Is there a way to change the hero section to a video background on the Modern template?",
         timestamp: day(1),
         readByAdmin: true,
       },
@@ -1173,13 +1160,13 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-004",
         authorName: "Efua Owusu",
-        content:
-          "Thanks for reaching out. Video backgrounds aren't supported on the Modern template yet, but I've logged it as a feature request. In the meantime, a looping image carousel is the closest option.",
+        content: "Thanks for reaching out. Video backgrounds aren't supported on the Modern template yet, but I've logged it as a feature request. In the meantime, a looping image carousel is the closest option.",
         timestamp: hr(6),
         readByAdmin: true,
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 
   {
@@ -1220,8 +1207,7 @@ export const mockSupportConversations: SupportConversation[] = [
       {
         id: "m-1018-1",
         sender: "user",
-        content:
-          "My last invoice is GHS 20 higher than usual. Can you break down the charges?",
+        content: "My last invoice is GHS 20 higher than usual. Can you break down the charges?",
         timestamp: day(5),
         readByAdmin: true,
       },
@@ -1230,8 +1216,7 @@ export const mockSupportConversations: SupportConversation[] = [
         sender: "admin",
         authorId: "usr-002",
         authorName: "Akosua Boateng",
-        content:
-          "Happy to help. The difference is the SMS notification add-on you enabled mid-cycle. It's now part of your recurring subscription. Let me know if you'd like it removed.",
+        content: "Happy to help. The difference is the SMS notification add-on you enabled mid-cycle. It's now part of your recurring subscription. Let me know if you'd like it removed.",
         timestamp: day(4),
         readByAdmin: true,
       },
@@ -1244,5 +1229,6 @@ export const mockSupportConversations: SupportConversation[] = [
       },
     ],
     internalNotes: [],
+    ticketRef: undefined
   },
 ];

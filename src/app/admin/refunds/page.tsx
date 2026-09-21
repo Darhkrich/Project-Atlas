@@ -1,394 +1,348 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { RefundSummaryCards } from "@/components/admin/refunds/refund-summary-cards";
-import { RefundPipeline } from "@/components/admin/refunds/refund-pipeline";
-import { PendingRefundsQueue } from "@/components/admin/refunds/pending-refunds-queue";
-import { RefundAnalytics } from "@/components/admin/refunds/refund-analytics";
-import { RefundDetailDrawer } from "@/components/admin/refunds/refund-detail-drawer";
-import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
 import { Button } from "@/components/admin/ui/button";
-import { Badge } from "@/components/admin/ui/badge";
-import { Input } from "@/components/admin/ui/input";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockRefunds, mockRefundRules } from "@/lib/admin/mock/refunds";
-import { formatCurrency } from "@/lib/admin/formatters";
+import { ErrorState } from "@/components/admin/ui/error-state";
+import { Can, useCan } from "@/lib/admin/rbac/can";
+import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
+import { useCurrentAdmin } from "@/lib/admin/rbac/context";
+import { useRefunds } from "@/lib/admin/hooks/use-refunds";
 import {
+  filterRefunds,
+} from "@/lib/admin/refunds/refunds-projection";
+import { exportRefundsCsv } from "@/lib/admin/refunds/refunds-csv-export";
+import { OrderRefundsSummaryCards } from "@/components/admin/refunds/order-refunds-summary-cards";
+import { OrderRefundsPipeline } from "@/components/admin/refunds/order-refunds-pipeline";
+import { OrderRefundsTable } from "@/components/admin/refunds/order-refunds-table";
+import { OrderRefundsFilters } from "@/components/admin/refunds/order-refunds-filters";
+import { OrderRefundsEmptyState } from "@/components/admin/refunds/order-refunds-empty-state";
+import { OrderRefundDetailDrawer } from "@/components/admin/refunds/order-refund-detail-drawer";
+import { OrderRefundCreateModal } from "@/components/admin/refunds/order-refund-create-modal";
+import { OrderRefundApproveModal } from "@/components/admin/refunds/order-refund-approve-modal";
+import { OrderRefundRejectModal } from "@/components/admin/refunds/order-refund-reject-modal";
+import { OrderRefundProcessModal } from "@/components/admin/refunds/order-refund-process-modal";
+import {
+  approveRefund,
+  createRequestedRefund,
+  processRefund,
+  rejectRefund,
+} from "@/lib/admin/mock/refunds-mutations";
+import type {
   Refund,
-  REFUND_REASONS,
-  REFUND_STATUS_LABELS,
+  RefundActor,
+  RefundLedgerFilters,
+  RefundReason,
   RefundStatus,
-  RefundRule,
 } from "@/lib/admin/types/refund";
+import type { Order } from "@/lib/admin/types/orders";
+import { DEFAULT_REFUNDS_PAGE_SIZE } from "@/lib/admin/refunds/refunds-constants";
 
-const statusVariantMap: Record<RefundStatus, "warning" | "info" | "success" | "danger" | "neutral"> = {
-  requested: "warning",
-  under_review: "info",
-  approved: "success",
-  rejected: "danger",
-  processed: "neutral",
-};
+function parseFilters(params: URLSearchParams): RefundLedgerFilters {
+  const filters: RefundLedgerFilters = {};
+  const search = params.get("q");
+  if (search) filters.search = search;
+  const type = params.get("type");
+  if (type) filters.type = type as RefundLedgerFilters["type"];
+  const audience = params.get("audience");
+  if (audience) filters.audience = audience as RefundLedgerFilters["audience"];
+  const status = params.get("status");
+  if (status) filters.status = status as RefundStatus;
+  const reason = params.get("reason");
+  if (reason) filters.reason = reason as RefundReason;
+  const from = params.get("from");
+  if (from) filters.dateFrom = from;
+  const to = params.get("to");
+  if (to) filters.dateTo = to;
+  return filters;
+}
 
-export default function RefundsPage() {
-  const [refunds, setRefunds] = useState<Refund[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRefund, setSelectedRefund] = useState<Refund | null>(null);
-  const [filters, setFilters] = useState<any>({});
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const [pipelineStage, setPipelineStage] = useState<RefundStatus | null>(null);
-  const [showRulesModal, setShowRulesModal] = useState(false);
-  const [rules, setRules] = useState<RefundRule[]>(mockRefundRules);
-  const [bulkAction, setBulkAction] = useState<"approve" | "reject" | "export" | null>(null);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+function filtersToParams(filters: RefundLedgerFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("q", filters.search);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.audience) params.set("audience", filters.audience);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.reason) params.set("reason", filters.reason);
+  if (filters.dateFrom) params.set("from", filters.dateFrom);
+  if (filters.dateTo) params.set("to", filters.dateTo);
+  return params;
+}
 
-  const allColumns = [
-    { key: "id", header: "Refund ID", cell: (r: Refund) => <span className="font-medium">{r.id}</span> },
-    { key: "order", header: "Order", cell: (r: Refund) => r.orderId },
-    { key: "customer", header: "Customer", cell: (r: Refund) => r.customer.name },
-    { key: "reseller", header: "Reseller", cell: (r: Refund) => r.reseller?.name ?? "—" },
-    { key: "amount", header: "Amount", cell: (r: Refund) => formatCurrency(r.amount) },
-    {
-      key: "reason",
-      header: "Reason",
-      cell: (r: Refund) => REFUND_REASONS.find((x) => x.value === r.reason)?.label,
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (r: Refund) => (
-        <Badge variant={statusVariantMap[r.status]}>{REFUND_STATUS_LABELS[r.status]}</Badge>
-      ),
-    },
-    {
-      key: "requested",
-      header: "Requested",
-      cell: (r: Refund) => new Date(r.requestedAt).toLocaleDateString(),
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (r: Refund) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedRefund(r);
-          }}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
-
-  useEffect(() => {
-    setVisibleColumns(allColumns.map((c) => c.key));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setRefunds(mockRefunds);
-      setLoading(false);
-    }, 500);
-  }, []);
-
-  const pipelineData = [
-    {
-      status: "requested" as RefundStatus,
-      icon: "file-text" as const,
-      color: "text-warning-500",
-      count: refunds.filter((r) => r.status === "requested").length,
-      amount: refunds.filter((r) => r.status === "requested").reduce((s, r) => s + r.amount, 0),
-    },
-    {
-      status: "under_review" as RefundStatus,
-      icon: "clock" as const,
-      color: "text-info-500",
-      count: refunds.filter((r) => r.status === "under_review").length,
-      amount: refunds.filter((r) => r.status === "under_review").reduce((s, r) => s + r.amount, 0),
-    },
-    {
-      status: "approved" as RefundStatus,
-      icon: "check" as const,
-      color: "text-success-500",
-      count: refunds.filter((r) => r.status === "approved").length,
-      amount: refunds.filter((r) => r.status === "approved").reduce((s, r) => s + r.amount, 0),
-    },
-    {
-      status: "rejected" as RefundStatus,
-      icon: "x-circle" as const,
-      color: "text-danger-500",
-      count: refunds.filter((r) => r.status === "rejected").length,
-      amount: refunds.filter((r) => r.status === "rejected").reduce((s, r) => s + r.amount, 0),
-    },
-    {
-      status: "processed" as RefundStatus,
-      icon: "receipt" as const,
-      color: "text-neutral-500",
-      count: refunds.filter((r) => r.status === "processed").length,
-      amount: refunds.filter((r) => r.status === "processed").reduce((s, r) => s + r.amount, 0),
-    },
-  ];
-
-  const filteredRefunds = refunds.filter((refund) => {
-    if (pipelineStage && refund.status !== pipelineStage) return false;
-    if (
-      filters.search &&
-      !refund.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !refund.customer.name.toLowerCase().includes(filters.search.toLowerCase())
-    )
-      return false;
-    if (filters.reason && refund.reason !== filters.reason) return false;
-    if (filters.status && refund.status !== filters.status) return false;
-    return true;
-  });
-
-  const columns = allColumns.filter((c) => visibleColumns.includes(c.key));
-
-  const summaryData = {
-    pendingCount: refunds.filter((r) => r.status === "requested" || r.status === "under_review").length,
-    pendingAmount: refunds
-      .filter((r) => r.status === "requested" || r.status === "under_review")
-      .reduce((s, r) => s + r.amount, 0),
-    approvedToday: refunds.filter(
-      (r) => r.status === "approved" && new Date(r.updatedAt).toDateString() === new Date().toDateString()
-    ).length,
-    rejectedToday: refunds.filter(
-      (r) => r.status === "rejected" && new Date(r.updatedAt).toDateString() === new Date().toDateString()
-    ).length,
-    totalRefunded: refunds.filter((r) => r.status === "processed").reduce((s, r) => s + r.amount, 0),
-    avgProcessingHours: 4.2,
-    highRiskCount: refunds.filter(
-      (r) => r.riskLevel === "high" && (r.status === "requested" || r.status === "under_review")
-    ).length,
+function actorFrom(admin: { name?: string; email?: string; id?: string } | null): RefundActor | null {
+  if (!admin) return null;
+  if (!admin.name || !admin.email) return null;
+  return {
+    id: admin.id ?? admin.email,
+    name: admin.name,
+    email: admin.email,
   };
+}
 
-  const handleBulkAction = () => {
-    console.log(`${bulkAction} for`, selectedRowKeys);
-    setShowBulkConfirm(false);
-    setBulkAction(null);
-    setSelectedRowKeys([]);
-  };
+export default function OrderRefundsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const canView = useCan(PERMISSIONS.REFUNDS_VIEW);
+  const currentAdmin = useCurrentAdmin();
+  const actor = useMemo(() => actorFrom(currentAdmin), [currentAdmin]);
 
-  const toggleRule = (id: string) => {
-    setRules((prev) =>
-      prev.map((rule) => (rule.id === id ? { ...rule, enabled: !rule.enabled } : rule))
+  const { refunds, treasury, rows, summary, pipeline, isLoading, error, nowMs } =
+    useRefunds();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [approveTarget, setApproveTarget] = useState<Refund | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Refund | null>(null);
+  const [processTarget, setProcessTarget] = useState<Refund | null>(null);
+
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  const currentPage = useMemo(() => {
+    const raw = Number(searchParams.get("page") ?? "1");
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+  }, [searchParams]);
+  const pipelineStatus = useMemo<RefundStatus | null>(() => {
+    const raw = searchParams.get("stage");
+    return raw ? (raw as RefundStatus) : null;
+  }, [searchParams]);
+  const selectedRefundId = searchParams.get("refund");
+
+  const selectedRefund = useMemo(
+    () => (selectedRefundId ? refunds.find((r) => r.id === selectedRefundId) ?? null : null),
+    [refunds, selectedRefundId]
+  );
+
+  const filteredRows = useMemo(() => {
+    const base = filterRefunds(rows, filters);
+    if (!pipelineStatus) return base;
+    return base.filter((r) => r.status === pipelineStatus);
+  }, [rows, filters, pipelineStatus]);
+
+  const pageSize = DEFAULT_REFUNDS_PAGE_SIZE;
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
+
+  const hasFilters = Object.keys(filters).length > 0 || pipelineStatus !== null;
+
+  const setParam = useCallback(
+    (key: string, value: string | undefined) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (value === undefined || value === "") next.delete(key);
+      else next.set(key, value);
+      if (key !== "page") next.delete("page");
+      router.replace("/admin/refunds?" + next.toString());
+    },
+    [router, searchParams]
+  );
+
+  const handleFiltersChange = useCallback(
+    (next: RefundLedgerFilters) => {
+      const params = filtersToParams(next);
+      const stage = pipelineStatus;
+      if (stage) params.set("stage", stage);
+      router.replace("/admin/refunds?" + params.toString());
+    },
+    [router, pipelineStatus]
+  );
+
+  const handleFiltersReset = useCallback(() => {
+    router.replace("/admin/refunds");
+  }, [router]);
+
+  const handlePipelineChange = useCallback(
+    (status: RefundStatus | null) => {
+      setParam("stage", status ?? undefined);
+    },
+    [setParam]
+  );
+
+  const handlePageChange = useCallback(
+    (page: number) => {
+      setParam("page", String(page));
+    },
+    [setParam]
+  );
+
+  const handleRowClick = useCallback(
+    (refundId: string) => {
+      setParam("refund", refundId);
+    },
+    [setParam]
+  );
+
+  const handleCloseDrawer = useCallback(() => {
+    setParam("refund", undefined);
+  }, [setParam]);
+
+  const handleExport = useCallback(() => {
+    const toExport = refunds.filter((r) => filteredRows.some((row) => row.id === r.id));
+    exportRefundsCsv(toExport);
+  }, [refunds, filteredRows]);
+
+  const handleCreateSubmit = useCallback(
+    (input: {
+      order: Order;
+      reason: RefundReason;
+      amount: number;
+      reasonNote?: string;
+      supportTicketId?: string;
+    }) => {
+      if (!actor) return;
+      const result = createRequestedRefund(input, actor);
+      if (result.ok && result.refund) {
+        setCreateOpen(false);
+        setParam("refund", result.refund.id);
+      }
+    },
+    [actor, setParam]
+  );
+
+  const handleApproveConfirm = useCallback(
+    (refundId: string) => {
+      if (!actor) return;
+      approveRefund(refundId, actor);
+      setApproveTarget(null);
+    },
+    [actor]
+  );
+
+  const handleRejectConfirm = useCallback(
+    (refundId: string, reason: string) => {
+      if (!actor) return;
+      rejectRefund(refundId, reason, actor);
+      setRejectTarget(null);
+    },
+    [actor]
+  );
+
+  const handleProcessConfirm = useCallback(
+    (refundId: string) => {
+      if (!actor) return;
+      processRefund(refundId, actor);
+      setProcessTarget(null);
+    },
+    [actor]
+  );
+
+  if (!canView) {
+    return (
+      <ErrorState
+        title="You do not have access to order refunds"
+        description="Ask an administrator to grant you the refunds:view permission."
+      />
     );
-  };
+  }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Refunds"
-        description="Refund Operations Center for managing refund requests and processing."
+        title="Order Refunds"
+        description="Order refunds across direct customers, reseller customers, and resellers. Automatic refunds fire on retry exhaustion. Requested refunds require approval."
+        meta={
+          <>
+            <span>{refunds.length} total</span>
+            <span className="text-neutral-400">·</span>
+            <span>{filteredRows.length} after filters</span>
+            {treasury && (
+              <>
+                <span className="text-neutral-400">·</span>
+                <span>Treasury {treasury.currency} {treasury.balance.toLocaleString()}</span>
+              </>
+            )}
+          </>
+        }
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => setShowRulesModal(true)}>
-              Refund Rules
-            </Button>
+            <Can permission={PERMISSIONS.EXPORT}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={filteredRows.length === 0}
+              >
+                Export CSV
+              </Button>
+            </Can>
+            <Can permission={PERMISSIONS.REFUNDS_PROCESS}>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateOpen(true)}
+                disabled={!actor}
+              >
+                New refund
+              </Button>
+            </Can>
           </>
         }
       />
 
-      <RefundSummaryCards data={summaryData} />
+      {error ? (
+        <ErrorState title="Could not load refunds" description={error.message} />
+      ) : (
+        <>
+          <OrderRefundsSummaryCards summary={summary} />
 
-      <RefundPipeline
-        stages={pipelineData}
-        activeStage={pipelineStage}
-        onStageClick={setPipelineStage}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <PendingRefundsQueue
-            refunds={refunds}
-            onRefundClick={setSelectedRefund}
-            onApprove={(id) => console.log("Approve", id)}
-            onReject={(id) => console.log("Reject", id)}
+          <OrderRefundsPipeline
+            pipeline={pipeline}
+            activeStatus={pipelineStatus}
+            onStatusChange={handlePipelineChange}
           />
-        </div>
-        <RefundAnalytics />
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Input
-          placeholder="Search refunds..."
-          className="max-w-xs"
-          value={filters.search || ""}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-        />
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filters.reason || ""}
-          onChange={(e) => setFilters({ ...filters, reason: e.target.value })}
-        >
-          <option value="">All Reasons</option>
-          {REFUND_REASONS.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filters.status || ""}
-          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-        >
-          <option value="">All Statuses</option>
-          {Object.entries(REFUND_STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
+          <OrderRefundsFilters
+            filters={filters}
+            onChange={handleFiltersChange}
+            onReset={handleFiltersReset}
+          />
 
-      {/* Column visibility */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Rows per page:</span>
-          <select
-            className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Columns:</span>
-          {allColumns
-            .filter((c) => c.key !== "actions")
-            .map((col) => (
-              <label key={col.key} className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.includes(col.key)}
-                  onChange={(e) => {
-                    if (e.target.checked) setVisibleColumns((prev) => [...prev, col.key]);
-                    else setVisibleColumns((prev) => prev.filter((k) => k !== col.key));
-                  }}
-                  className="h-3 w-3"
-                />
-                {col.header}
-              </label>
-            ))}
-        </div>
-      </div>
-
-      {/* Bulk actions */}
-      {selectedRowKeys.length > 0 && (
-        <div className="flex items-center gap-2 rounded-md bg-neutral-50 p-2 dark:bg-neutral-900">
-          <span className="text-sm">{selectedRowKeys.length} selected</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("approve");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Approve
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("reject");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Reject
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("export");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Export
-          </Button>
-        </div>
+          {filteredRows.length === 0 && !isLoading ? (
+            <OrderRefundsEmptyState hasFilters={hasFilters} />
+          ) : (
+            <OrderRefundsTable
+              rows={paginatedRows}
+              isLoading={isLoading}
+              page={currentPage}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onRowClick={handleRowClick}
+            />
+          )}
+        </>
       )}
 
-      <AdminDataTable
-        columns={columns}
-        data={filteredRefunds}
-        isLoading={loading}
-        rowKey={(refund) => refund.id}
-        onRowClick={(refund) => setSelectedRefund(refund)}
-        pageSize={pageSize}
-        currentPage={page}
-        onPageChange={setPage}
-        emptyMessage="No refunds found."
+      <OrderRefundDetailDrawer
+        refund={selectedRefund}
+        now={nowMs}
+        onClose={handleCloseDrawer}
+        onApprove={setApproveTarget}
+        onReject={setRejectTarget}
+        onProcess={setProcessTarget}
       />
 
-      <RefundDetailDrawer refund={selectedRefund} onClose={() => setSelectedRefund(null)} />
+      <OrderRefundCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateSubmit}
+      />
 
-      {/* Refund Rules Modal */}
-      {showRulesModal && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowRulesModal(false)} />
-          <div className="relative w-full max-w-lg rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">Automated Refund Rules</h3>
-            <div className="mt-4 space-y-2">
-              {rules.map((rule) => (
-                <div
-                  key={rule.id}
-                  className="flex items-center justify-between rounded-md border border-neutral-200 p-3 dark:border-neutral-700"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{rule.name}</p>
-                    <p className="text-xs text-neutral-500">{rule.condition}</p>
-                    <p className="text-xs text-neutral-400">
-                      Action: {rule.action.replace("_", " ")}
-                    </p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      checked={rule.enabled}
-                      onChange={() => toggleRule(rule.id)}
-                      className="peer sr-only"
-                    />
-                    <div className="h-5 w-9 rounded-full bg-neutral-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:border after:border-neutral-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-brand-600 peer-checked:after:translate-x-full dark:bg-neutral-700"></div>
-                  </label>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setShowRulesModal(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <OrderRefundApproveModal
+        refund={approveTarget}
+        onClose={() => setApproveTarget(null)}
+        onConfirm={handleApproveConfirm}
+      />
 
-      <ConfirmDialog
-        open={showBulkConfirm}
-        title={`Confirm ${bulkAction ?? ""}`}
-        description={`Are you sure you want to ${bulkAction} ${selectedRowKeys.length} refunds?`}
-        confirmLabel="Confirm"
-        danger={bulkAction === "reject"}
-        onConfirm={handleBulkAction}
-        onCancel={() => {
-          setShowBulkConfirm(false);
-          setBulkAction(null);
-        }}
+      <OrderRefundRejectModal
+        refund={rejectTarget}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={handleRejectConfirm}
+      />
+
+      <OrderRefundProcessModal
+        refund={processTarget}
+        treasuryBalance={treasury?.balance ?? 0}
+        onClose={() => setProcessTarget(null)}
+        onConfirm={handleProcessConfirm}
       />
     </div>
   );

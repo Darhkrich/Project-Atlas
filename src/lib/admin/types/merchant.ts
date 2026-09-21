@@ -29,6 +29,9 @@ export interface StoreConfig {
 }
 
 export interface Subscription {
+  lastPaymentDate: string;
+  discountPercent?: number;
+  amountPaid: number;
   planId: SubscriptionPlan;
   status: SubscriptionStatus;
   startDate: string;
@@ -138,19 +141,54 @@ export function parsePlanPrice(price: string): number {
   return parseFloat(match[0].replace(/,/g, ""));
 }
 
-export function getPlanMonthlyPriceGHS(code: SubscriptionPlan): number {
+export function getPlanMonthlyPriceGHS(
+  code: SubscriptionPlan
+): number | "custom" {
   const plan = subscriptionPlans.find((p) => p.code === code);
-  return plan ? parsePlanPrice(plan.monthlyPrice) : 0;
+  if (!plan) return 0;
+  return plan.monthlyPriceGHS;
+}
+
+export function getPlanAnnualPriceGHS(
+  code: SubscriptionPlan
+): number | "custom" {
+  const plan = subscriptionPlans.find((p) => p.code === code);
+  if (!plan) return 0;
+  return plan.annualPriceGHS;
 }
 
 export function getMerchantMrr(m: Merchant): number {
   if (m.subscription.planId === "enterprise") {
     return m.contractMrr ?? 0;
   }
-  return getPlanMonthlyPriceGHS(m.subscription.planId);
+  const v = getPlanMonthlyPriceGHS(m.subscription.planId);
+  return typeof v === "number" ? v : 0;
 }
 
-export function daysUntilRenewal(m: Merchant): number {
-  const ms = new Date(m.subscription.endDate).getTime() - Date.now();
+export function getNextChargeAmount(m: Merchant): number | "custom" {
+  if (m.subscription.planId === "enterprise") {
+    const mrr = m.contractMrr ?? 0;
+    if (mrr === 0) return "custom";
+    return m.subscription.billingCycle === "annual" ? mrr * 12 : mrr;
+  }
+  const base =
+    m.subscription.billingCycle === "annual"
+      ? getPlanAnnualPriceGHS(m.subscription.planId)
+      : getPlanMonthlyPriceGHS(m.subscription.planId);
+  if (base === "custom") return "custom";
+  const discount = m.subscription.discountPercent ?? 0;
+  if (discount <= 0) return base;
+  return Math.round(base * (1 - discount / 100) * 100) / 100;
+}
+
+export function daysUntilRenewalAt(m: Merchant, nowMs: number): number {
+  const ms = new Date(m.subscription.endDate).getTime() - nowMs;
   return Math.floor(ms / 86_400_000);
+}
+
+/**
+ * @deprecated Use daysUntilRenewalAt with a useNow() value.
+ */
+export function daysUntilRenewal(m: Merchant): number {
+  return daysUntilRenewalAt(m, Date.now());
 }

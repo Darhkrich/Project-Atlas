@@ -1,474 +1,305 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import {
-  ResellerCommissionSummaryCards,
-  PlatformMarginSummaryCards,
-} from "@/components/admin/commissions/commission-summary-cards";
-import { ResellerCommissionDetailDrawer } from "@/components/admin/commissions/reseller-commission-detail-drawer";
+import { ExportMenu } from "@/components/admin/ui/export-menu";
 import { PlatformMarginView } from "@/components/admin/commissions/platform-margin-view";
 import { PayoutRunsView } from "@/components/admin/commissions/payout-runs-view";
-import { CommissionRulesView } from "@/components/admin/commissions/commission-rules-view";
-import { TierConfigView } from "@/components/admin/commissions/tier-config-view";
-import { AdminDataTable, type Column } from "@/components/admin/ui/admin-data-table";
-import { Button } from "@/components/admin/ui/button";
-import { Badge } from "@/components/admin/ui/badge";
-import { Input } from "@/components/admin/ui/input";
-import { ExportMenu } from "@/components/admin/ui/export-menu";
-import { SavedViews, type SavedView } from "@/components/admin/ui/saved-views";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockResellerCommissions } from "@/lib/admin/mock/commissions";
+import { CommissionLedgerPanel } from "@/components/admin/commissions/commission-ledger-panel";
+import { ResellerCommissionDetailDrawer } from "@/components/admin/commissions/reseller-commission-detail-drawer";
+import { CommissionCancelModal } from "@/components/admin/commissions/commission-cancel-modal";
+import { useCommissions } from "@/lib/admin/hooks/use-commissions";
+import { useNow } from "@/lib/shared/hooks/use-now";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useCurrentAdmin } from "@/lib/admin/rbac";
+import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
 import {
-  ResellerCommission,
-  COMMISSION_STATUS_LABELS,
-} from "@/lib/admin/types/commission";
-import { formatCurrency } from "@/lib/admin/formatters";
-import { cn } from "@/lib/utils";
+  commissionsToCsv,
+  marginsToCsv,
+  payoutRunsToCsv,
+} from "@/lib/admin/commissions/commission-csv-export";
+import {
+  COMMISSION_TABS,
+  COMMISSION_TAB_LABELS,
+  DEFAULT_COMMISSION_FILTERS,
+  type CommissionFilters,
+} from "@/lib/admin/commissions/commission-constants";
+import { bulkCancelCommissions } from "@/lib/admin/commissions/commission-mutations";
+import type { ResellerCommission } from "@/lib/admin/types/commission";
 
-type Tab = "reseller" | "margin" | "payouts_rules";
+interface Toast {
+  kind: "success" | "error";
+  text: string;
+}
 
-const statusVariantMap: Record<string, "success" | "warning" | "danger" | "neutral"> = {
-  pending: "warning",
-  paid: "success",
-  cancelled: "neutral",
-  reversed: "danger",
-};
+type CancelIntent = { ids: string[] } | null;
 
 export default function CommissionsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("reseller");
-  const [commissions, setCommissions] = useState<ResellerCommission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCommission, setSelectedCommission] = useState<ResellerCommission | null>(null);
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkAction, setBulkAction] = useState<"pay" | "cancel" | "export" | null>(null);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <CommissionsPageInner />
+    </Suspense>
+  );
+}
 
-  const allColumns: Column<ResellerCommission>[] = [
-    {
-      key: "__select__",
-      header: "Select",
-      cell: (c) => (
-        <input
-          type="checkbox"
-          checked={selectedIds.includes(c.id)}
-          onChange={(e) => {
-            if (e.target.checked) setSelectedIds((prev) => [...prev, c.id]);
-            else setSelectedIds((prev) => prev.filter((id) => id !== c.id));
-          }}
-          className="h-4 w-4"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ),
-    },
-    {
-      key: "id",
-      header: "Commission ID",
-      cell: (c) => <span className="font-mono text-xs">{c.id}</span>,
-    },
-    { key: "reseller", header: "Reseller", cell: (c) => c.resellerName },
-    { key: "order", header: "Order", cell: (c) => c.orderId },
-    { key: "service", header: "Service", cell: (c) => c.service },
-    { key: "tier", header: "Tier", cell: (c) => c.tierName || "—" },
-    {
-      key: "rate",
-      header: "Rate",
-      cell: (c) =>
-        c.serviceCategory === "data" ? "Custom" : `${c.commissionRate}%`,
-    },
-    {
-      key: "commission",
-      header: "Commission",
-      cell: (c) => (
-        <span className="font-semibold">{formatCurrency(c.totalCommission)}</span>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (c) => (
-        <Badge variant={statusVariantMap[c.status]}>
-          {COMMISSION_STATUS_LABELS[c.status]}
-        </Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (c) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedCommission(c);
-          }}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CommissionsPageInner() {
+  const admin = useCurrentAdmin();
+  const nowMs = useNow();
+  const state = useCommissions();
+
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<CommissionFilters>(DEFAULT_COMMISSION_FILTERS);
+
+  const [selectedCommission, setSelectedCommission] =
+    useState<ResellerCommission | null>(null);
+  const [cancelIntent, setCancelIntent] = useState<CancelIntent>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
 
   useEffect(() => {
-    setVisibleColumns(
-      allColumns.map((c) => c.key).filter((k) => k !== "__select__")
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
-  useEffect(() => {
-    setTimeout(() => {
-      setCommissions(mockResellerCommissions);
-      setLoading(false);
-    }, 500);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("atlas-commission-views");
-      if (stored) setSavedViews(JSON.parse(stored));
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("atlas-commission-views", JSON.stringify(savedViews));
-  }, [savedViews]);
-
-  const filteredCommissions = commissions.filter((c) => {
-    if (
-      search &&
-      !c.resellerName.toLowerCase().includes(search.toLowerCase()) &&
-      !c.orderId.toLowerCase().includes(search.toLowerCase())
-    )
-      return false;
-    if (statusFilter && c.status !== statusFilter) return false;
-    return true;
-  });
-
-  const displayColumns = allColumns.filter(
-    (c) => c.key === "__select__" || visibleColumns.includes(c.key)
+  const actor = useMemo(
+    () =>
+      admin
+        ? {
+            id: admin.id ?? admin.email,
+            name: admin.name,
+            email: admin.email,
+          }
+        : null,
+    [admin]
   );
 
-  const summaryData = {
-    totalCommissions: commissions.reduce((sum, c) => sum + c.totalCommission, 0),
-    pendingCommissions: commissions
-      .filter((c) => c.status === "pending")
-      .reduce((sum, c) => sum + c.totalCommission, 0),
-    paidCommissions: commissions
-      .filter((c) => c.status === "paid")
-      .reduce((sum, c) => sum + c.totalCommission, 0),
-    todayCommissions: commissions
-      .filter(
-        (c) => new Date(c.createdAt).toDateString() === new Date().toDateString()
-      )
-      .reduce((sum, c) => sum + c.totalCommission, 0),
-    avgRate: 4.5,
-    comparison: {
-      totalCommissions: 8.3,
-      pendingCommissions: -2.1,
-      paidCommissions: 12.5,
-      todayCommissions: 5.4,
-    },
-  };
-
-  const platformSummary = {
-    totalMargin: 46,
-    todayMargin: 1,
-    monthMargin: 46,
-    avgMarginPercent: 12,
-  };
-
-  const handleSaveView = (name: string) => {
-    setSavedViews((prev) => [
-      ...prev,
-      { name, filters: { search, statusFilter } },
-    ]);
-  };
-
-  const handleLoadView = (view: SavedView) => {
-    setSearch(view.filters.search || "");
-    setStatusFilter(view.filters.statusFilter || "");
-  };
-
-  const handleDeleteView = (name: string) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== name));
-  };
-
-  const handleMarkPaid = (id: string) => {
-    setCommissions((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              status: "paid" as const,
-              paidAt: new Date().toISOString(),
-              timeline: [
-                ...c.timeline,
-                {
-                  timestamp: new Date().toISOString(),
-                  label: "Paid",
-                  status: "success" as const,
-                },
-              ],
-            }
-          : c
-      )
-    );
+  const confirmCancel = (reason: string) => {
+    if (!cancelIntent || !actor) return;
+    setSubmitting(true);
+    const result = bulkCancelCommissions(cancelIntent.ids, reason, actor);
+    setSubmitting(false);
+    setToast({
+      kind: result.ok ? "success" : "error",
+      text: result.ok
+        ? "Cancelled " + result.updatedCount + " commissions."
+        : "Some commissions could not be cancelled.",
+    });
+    setCancelIntent(null);
     setSelectedCommission(null);
-  };
-
-  const handleCancelCommission = (id: string) => {
-    setCommissions((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              status: "cancelled" as const,
-              timeline: [
-                ...c.timeline,
-                {
-                  timestamp: new Date().toISOString(),
-                  label: "Cancelled",
-                  status: "danger" as const,
-                },
-              ],
-            }
-          : c
-      )
-    );
-    setSelectedCommission(null);
-  };
-
-  const handleBulkAction = () => {
-    if (bulkAction === "pay") {
-      setCommissions((prev) =>
-        prev.map((c) =>
-          selectedIds.includes(c.id)
-            ? {
-                ...c,
-                status: "paid" as const,
-                paidAt: new Date().toISOString(),
-              }
-            : c
-        )
-      );
-    } else if (bulkAction === "cancel") {
-      setCommissions((prev) =>
-        prev.map((c) =>
-          selectedIds.includes(c.id)
-            ? { ...c, status: "cancelled" as const }
-            : c
-        )
-      );
-    } else {
-      console.log("Export selected:", selectedIds);
-    }
-    setShowBulkConfirm(false);
-    setBulkAction(null);
-    setSelectedIds([]);
   };
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export commissions as ${format}`);
+    if (format !== "csv") return;
+    const date = new Date().toISOString().slice(0, 10);
+    if (filters.tab === "margin") {
+      downloadCsv(
+        "atlas-platform-margins-" + date + ".csv",
+        marginsToCsv(state.margins)
+      );
+      return;
+    }
+    if (filters.tab === "payouts") {
+      downloadCsv(
+        "atlas-payout-runs-" + date + ".csv",
+        payoutRunsToCsv(state.payoutRuns)
+      );
+      return;
+    }
+    downloadCsv(
+      "atlas-reseller-commissions-" + date + ".csv",
+      commissionsToCsv(state.commissionRows)
+    );
   };
+
+  const drawerAudit = useMemo(() => {
+    if (!selectedCommission) return [];
+    return state.audit
+      .filter((a) => a.commissionId === selectedCommission.id)
+      .sort(
+        (a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+  }, [selectedCommission, state.audit]);
+
+  const headerMeta = (
+    <>
+      <span>{formatNumber(state.commissionRows.length)} commissions</span>
+      <span aria-hidden="true">·</span>
+      <span>
+        {formatCurrency(state.commissionSummary.pendingCommission)} pending
+      </span>
+      <span aria-hidden="true">·</span>
+      <span>
+        {formatCurrency(
+          state.commissionSummary.atlasBaseMargin +
+            state.commissionSummary.atlasExtraCut
+        )}{" "}
+        Atlas revenue
+      </span>
+    </>
+  );
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Commissions"
-        description="Track reseller commissions, platform margin, and payout operations."
-        actions={<ExportMenu onExport={handleExport} />}
+        description="Reseller commissions, Atlas base margin, extra cut, and payout history. Commissions pay automatically on order settlement."
+        meta={headerMeta}
+        actions={<ExportMenu onExport={handleExport} formats={["csv"]} />}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-neutral-200 dark:border-neutral-800">
-        {[
-          { key: "reseller" as Tab, label: "Reseller Commissions" },
-          { key: "margin" as Tab, label: "Platform Margin" },
-          { key: "payouts_rules" as Tab, label: "Payouts & Rules" },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "border-b-2 px-4 py-2 text-sm font-medium",
-              activeTab === tab.key
-                ? "border-brand-600 text-brand-600"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div
+        role="tablist"
+        aria-label="Commissions views"
+        className="flex gap-2 border-b border-neutral-200 dark:border-neutral-800"
+      >
+        {COMMISSION_TABS.map((tab) => {
+          const selected = filters.tab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              id={"commissions-tab-" + tab}
+              aria-controls={"commissions-panel-" + tab}
+              onClick={() => setFilters({ tab, page: "1" })}
+              className={
+                "border-b-2 px-4 py-2 text-sm font-medium " +
+                (selected
+                  ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+                  : "border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200")
+              }
+            >
+              {COMMISSION_TAB_LABELS[tab]}
+            </button>
+          );
+        })}
       </div>
 
-      {activeTab === "reseller" && (
-        <>
-          <ResellerCommissionSummaryCards data={summaryData} />
-
-          <SavedViews
-            views={savedViews}
-            onLoad={handleLoadView}
-            onDelete={handleDeleteView}
-            onSave={handleSaveView}
-          />
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              placeholder="Search commissions..."
-              className="max-w-xs"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="reversed">Reversed</option>
-            </select>
-          </div>
-
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 rounded-md bg-neutral-50 p-2 dark:bg-neutral-900">
-              <span className="text-sm">{selectedIds.length} selected</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setBulkAction("pay");
-                  setShowBulkConfirm(true);
-                }}
-              >
-                Mark Paid
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setBulkAction("cancel");
-                  setShowBulkConfirm(true);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setBulkAction("export");
-                  setShowBulkConfirm(true);
-                }}
-              >
-                Export Selected
-              </Button>
-            </div>
-          )}
-
-          {/* Column visibility & page size */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs">Rows per page:</span>
-              <select
-                className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-              >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs">Columns:</span>
-              {allColumns
-                .filter((col) => col.key !== "__select__" && col.key !== "actions")
-                .map((col) => (
-                  <label
-                    key={col.key}
-                    className="flex items-center gap-1 text-xs"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns.includes(col.key)}
-                      onChange={(e) => {
-                        if (e.target.checked)
-                          setVisibleColumns((prev) => [...prev, col.key]);
-                        else
-                          setVisibleColumns((prev) =>
-                            prev.filter((k) => k !== col.key)
-                          );
-                      }}
-                      className="h-3 w-3"
-                    />
-                    {col.header}
-                  </label>
-                ))}
-            </div>
-          </div>
-
-          <AdminDataTable
-            columns={displayColumns}
-            data={filteredCommissions}
-            isLoading={loading}
-            rowKey={(c) => c.id}
-            onRowClick={(c) => setSelectedCommission(c)}
-            pageSize={pageSize}
-            currentPage={page}
-            onPageChange={setPage}
-            emptyMessage="No commissions found."
-          />
-        </>
+      {filters.tab === "reseller" && (
+        <div
+          role="tabpanel"
+          id="commissions-panel-reseller"
+          aria-labelledby="commissions-tab-reseller"
+        >
+          <CommissionLedgerPanel
+            rows={state.commissionRows}
+            summary={state.commissionSummary}
+            loading={state.loading}
+            filters={filters}
+            setFilters={setFilters}
+            clearFilters={clearFilters}
+            hasActive={hasActive}
+            onViewCommission={setSelectedCommission}
+            onBulkCancel={(ids) => setCancelIntent({ ids })} onBulkPay={function (ids: string[]): void {
+              throw new Error("Function not implemented.");
+            } }          />
+        </div>
       )}
 
-      {activeTab === "margin" && (
-        <>
-          <PlatformMarginSummaryCards data={platformSummary} />
-          <PlatformMarginView />
-        </>
+      {filters.tab === "margin" && (
+        <div
+          role="tabpanel"
+          id="commissions-panel-margin"
+          aria-labelledby="commissions-tab-margin"
+        >
+          <PlatformMarginView
+            margins={state.margins}
+            trend={state.platformTrend}
+            loading={state.loading}
+          />
+        </div>
       )}
 
-      {activeTab === "payouts_rules" && (
-        <>
-          <PayoutRunsView />
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <CommissionRulesView />
-            <TierConfigView />
+      {filters.tab === "payouts" && (
+        <div
+          role="tabpanel"
+          id="commissions-panel-payouts"
+          aria-labelledby="commissions-tab-payouts"
+          className="space-y-4"
+        >
+          <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  Reseller tier configuration
+                </p>
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  Commission rates and the extra cut percentage are set on the
+                  reseller tier editor.
+                </p>
+              </div>
+              <a
+                href="/admin/resellers/tiers"
+                className="inline-flex items-center justify-center rounded-md border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              >
+                Open tier editor
+              </a>
+            </div>
           </div>
-        </>
+
+          <PayoutRunsView
+            payoutRuns={state.payoutRuns}
+            summary={state.payoutSummary}
+            loading={state.loading}
+          />
+        </div>
       )}
 
       <ResellerCommissionDetailDrawer
-        commission={selectedCommission}
+        open={selectedCommission !== null}
         onClose={() => setSelectedCommission(null)}
-        onMarkPaid={handleMarkPaid}
-        onCancel={handleCancelCommission}
-      />
+        commission={selectedCommission}
+        audit={drawerAudit}
+        nowMs={nowMs}
+        canManage={Boolean(admin)}
+        onCancel={(c) => setCancelIntent({ ids: [c.id] })} onMarkPaid={function (commission: ResellerCommission): void {
+          throw new Error("Function not implemented.");
+        } }      />
 
-      <ConfirmDialog
-        open={showBulkConfirm}
-        title={`Confirm ${bulkAction ?? ""}`}
-        description={`Are you sure you want to ${bulkAction} ${selectedIds.length} commissions?`}
-        confirmLabel="Confirm"
-        danger={bulkAction === "cancel"}
-        onConfirm={handleBulkAction}
-        onCancel={() => {
-          setShowBulkConfirm(false);
-          setBulkAction(null);
+      <CommissionCancelModal
+        open={cancelIntent !== null}
+        commissionIds={cancelIntent?.ids ?? []}
+        submitting={submitting}
+        onSubmit={confirmCancel}
+        onClose={() => {
+          setCancelIntent(null);
+          setSelectedCommission(null);
         }}
       />
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }

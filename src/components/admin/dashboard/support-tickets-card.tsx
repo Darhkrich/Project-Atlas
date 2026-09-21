@@ -1,7 +1,6 @@
+// components/admin/dashboard/support-tickets-card.tsx
 "use client";
 
-import { DashboardCard } from "./dashboard-card";
-import { SubCardWithChart } from "./sub-card-with-chart";
 import {
   BarChart,
   Bar,
@@ -12,28 +11,42 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  AreaChart,
-  Area,
 } from "recharts";
+import { DashboardCard } from "./dashboard-card";
+import { SubCardWithChart } from "./sub-card-with-chart";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
+import { supportTicketTrendSeries } from "@/lib/admin/mock/dashboard-series";
+import { dashboardTrends } from "@/lib/admin/mock/dashboard-trends";
+import {
+  STREAM_COLORS,
+  STATUS_COLORS,
+  GRID_STROKE,
+  GRID_CLASS,
+} from "@/lib/admin/dashboard/chart-palette";
 
 export function SupportTicketsCard() {
-  const breakdown = mockDashboardData.supportTicketBreakdown;
+  const data = mockDashboardData.supportTicketBreakdown;
+  const open = mockDashboardData.supportTickets.open;
+  const pending = mockDashboardData.supportTickets.pending;
+  const urgent = mockDashboardData.supportTickets.urgent;
   const totalOpen = mockDashboardData.supportTickets.totalOpen;
 
   return (
     <DashboardCard
-      title="Total Support Tickets"
+      title="Support Tickets"
       value={totalOpen}
       icon="support"
+      delta={dashboardTrends.supportTickets}
+      deltaLabel="open vs last week"
+      href="/admin/ecommerce/support"
       mainChart={
         <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={breakdown} layout="vertical" margin={{ left: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
-            <XAxis type="number" tickLine={false} axisLine={false} fontSize={10} />
-            <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} fontSize={10} width={70} />
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} className={GRID_CLASS} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={10} />
+            <YAxis tickLine={false} axisLine={false} fontSize={10} />
             <Tooltip />
-            <Bar dataKey="value" fill="#166e59" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="value" fill={STATUS_COLORS.pending} radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       }
@@ -41,40 +54,37 @@ export function SupportTicketsCard() {
         <>
           <SubCardWithChart
             label="Open"
-            value={mockDashboardData.supportTickets.open}
+            value={open}
+            status={open > 0 ? "warning" : "success"}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <LineChart data={breakdown}>
-                  <Line type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={1} dot={false} />
+              <ResponsiveContainer width="100%" height={35}>
+                <LineChart data={supportTicketTrendSeries}>
+                  <Line type="monotone" dataKey="open" stroke={STATUS_COLORS.pending} strokeWidth={1.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Pending"
-            value={mockDashboardData.supportTickets.pending}
+            value={pending}
+            status="neutral"
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <LineChart data={breakdown}>
-                  <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={1} dot={false} />
+              <ResponsiveContainer width="100%" height={35}>
+                <LineChart data={supportTicketTrendSeries}>
+                  <Line type="monotone" dataKey="pending" stroke={STREAM_COLORS.reseller} strokeWidth={1.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Urgent"
-            value={mockDashboardData.supportTickets.urgent}
+            value={urgent}
+            status={urgent > 0 ? "danger" : "success"}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <AreaChart data={breakdown}>
-                  <defs>
-                    <linearGradient id="urgentSupportGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area type="monotone" dataKey="value" stroke="#ef4444" fill="url(#urgentSupportGrad)" strokeWidth={1} />
-                </AreaChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <LineChart data={supportTicketTrendSeries}>
+                  <Line type="monotone" dataKey="urgent" stroke={STATUS_COLORS.failed} strokeWidth={1.5} dot={false} />
+                </LineChart>
               </ResponsiveContainer>
             }
           />

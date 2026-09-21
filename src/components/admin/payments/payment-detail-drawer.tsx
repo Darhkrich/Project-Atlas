@@ -1,376 +1,393 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState } from "react";
-import { Payment } from "@/lib/admin/types/payment";
+import { ModalShell } from "@/components/admin/ui/model-shell";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { Input } from "@/components/admin/ui/input";
 import { formatCurrency } from "@/lib/admin/formatters";
-import { cn } from "@/lib/utils";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+import { formatAbsolute, formatRelative } from "@/lib/admin/support/format";
+import Link from "next/link";
+import type {
+  Payment,
+  PaymentFlag,
+  PaymentReconciliation,
+} from "@/lib/admin/types/payment";
+import {
+  PAYMENT_FLAG_REASON_LABEL,
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_SOURCE_LABEL,
+  PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_VARIANT,
+  WALLET_CREDIT_STATUS_LABEL,
+  WALLET_CREDIT_STATUS_VARIANT,
+  isPaymentRetryable,
+  retryBlockedReason,
+} from "@/lib/admin/payments/payments-labels";
 
-interface PaymentDetailDrawerProps {
-  payment: Payment | null;
+interface Props {
+  open: boolean;
   onClose: () => void;
-  onRetry?: (id: string) => void;
-  onRefund?: (id: string, amount: number) => void;
+  payment: Payment | null;
+  flags: PaymentFlag[];
+  reconciliations: PaymentReconciliation[];
+  nowMs: number | null;
+  canRetry: boolean;
+  canReconcile: boolean;
+  canFlag: boolean;
+  onRetry: (payment: Payment) => void;
+  onReconcile: (payment: Payment) => void;
+  onFlag: (payment: Payment) => void;
 }
 
-const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
-  pending: "warning",
-  processing: "info",
-  successful: "success",
-  failed: "danger",
-  refunded: "neutral",
-};
-
-const methodIconMap: Record<string, AtlasIconName> = {
-  wallet: "wallet",
-  momo: "mobile",
-  card: "card",
-  bank: "bank",
-  ussd: "phone",
-  atlas_points: "star",
-};
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-1.5">
+      <span className="text-xs text-neutral-500 dark:text-neutral-400">
+        {label}
+      </span>
+      <span className="text-right text-sm text-neutral-900 dark:text-neutral-100">
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export function PaymentDetailDrawer({
-  payment,
+  open,
   onClose,
+  payment,
+  flags,
+  reconciliations,
+  nowMs,
+  canRetry,
+  canReconcile,
+  canFlag,
   onRetry,
-  onRefund,
-}: PaymentDetailDrawerProps) {
-  const [refundAmount, setRefundAmount] = useState<number>(0);
-  const [showRefundConfirm, setShowRefundConfirm] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
-
+  onReconcile,
+  onFlag,
+}: Props) {
   if (!payment) return null;
 
-  const walletCreditStatus = (payment as Payment & { walletCreditStatus?: string }).walletCreditStatus;
-
-  const remainingRefundable =
-    payment.amount -
-    (payment.refundHistory?.reduce((sum, r) => sum + r.amount, 0) || 0);
-
-  const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 1500);
-  };
-
-  const handleRefund = () => {
-    if (onRefund) onRefund(payment.id, refundAmount);
-    setShowRefundConfirm(false);
-    setRefundAmount(0);
-    onClose();
-  };
+  const activeFlags = flags.filter((f) => !f.resolvedAt);
+  const resolvedFlags = flags.filter((f) => f.resolvedAt);
+  const retryable = isPaymentRetryable(payment);
+  const retryBlocked = retryBlockedReason(payment);
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute right-0 top-0 flex h-full w-full max-w-lg flex-col bg-white shadow-xl dark:bg-neutral-900">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300">
-              <AtlasIcon
-                name={methodIconMap[payment.methodId] || "credit-card"}
-                className="h-4 w-4"
-              />
-            </span>
-            <div>
-              <p className="text-sm font-semibold">{payment.id}</p>
-              <p className="text-xs capitalize text-neutral-500">{payment.methodId}</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-5">
-            {/* Status */}
-            <div className="flex items-center gap-2">
-              <Badge variant={statusVariantMap[payment.status]}>{payment.status}</Badge>
-              <Badge variant={payment.source === "reseller" ? "brand" : "info"}>
-                {payment.source}
+    <ModalShell open={open} onClose={onClose} title="Payment detail">
+      <div className="space-y-5">
+        <section aria-label="Payment">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={PAYMENT_STATUS_VARIANT[payment.status]}>
+              {PAYMENT_STATUS_LABEL[payment.status]}
+            </Badge>
+            <Badge variant="neutral">
+              {PAYMENT_SOURCE_LABEL[payment.source]}
+            </Badge>
+            {payment.walletCreditStatus && (
+              <Badge
+                variant={
+                  WALLET_CREDIT_STATUS_VARIANT[payment.walletCreditStatus]
+                }
+              >
+                {WALLET_CREDIT_STATUS_LABEL[payment.walletCreditStatus]}
               </Badge>
-              {payment.walletCreditStatus && (
-                <Badge
-                  variant={
-                    payment.walletCreditStatus === "credited"
-                      ? "success"
-                      : payment.walletCreditStatus === "pending"
-                      ? "warning"
-                      : "danger"
-                  }
-                >
-                  Wallet: {payment.walletCreditStatus}
-                </Badge>
-              )}
-            </div>
+            )}
+            {activeFlags.length > 0 && (
+              <Badge variant="warning">
+                {activeFlags.length} open flag
+                {activeFlags.length === 1 ? "" : "s"}
+              </Badge>
+            )}
+          </div>
 
-            {/* Reference */}
-            <div className="space-y-2 rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-              <div className="flex justify-between text-sm">
-                <span className="text-neutral-500">Reference</span>
-                <button
-                  className="flex items-center gap-1 text-brand-600 hover:underline"
-                  onClick={() => handleCopy(payment.reference, "ref")}
-                >
-                  {payment.reference}
-                  <AtlasIcon name="link" className="h-3 w-3" />
-                </button>
-              </div>
-              {copied === "ref" && (
-                <p className="text-xs text-success-600">Reference copied!</p>
-              )}
-            </div>
-
-            {/* Amounts */}
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-neutral-500">Amount</p>
-                <p className="font-semibold">{formatCurrency(payment.amount)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-neutral-500">Fee</p>
-                <p>{formatCurrency(payment.fee)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-neutral-500">Net</p>
-                <p>{formatCurrency(payment.netAmount)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-neutral-500">Currency</p>
-                <p>{payment.currency}</p>
-              </div>
-            </div>
-
-            {/* User */}
-            <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
-              <p className="text-xs font-medium text-neutral-500 mb-1">User</p>
-              <p className="text-sm font-medium">{payment.user.name}</p>
-              <p className="text-xs capitalize text-neutral-500">{payment.user.type}</p>
-            </div>
-
-            {/* Provider */}
+          <div className="mt-3">
+            <Row
+              label="Payment ID"
+              value={<span className="font-mono text-xs">{payment.id}</span>}
+            />
+            <Row
+              label="Reference"
+              value={
+                <span className="font-mono text-xs">{payment.reference}</span>
+              }
+            />
+            <Row label="User" value={payment.user.name} />
+            <Row label="User type" value={payment.user.type} />
+            <Row label="Amount" value={formatCurrency(payment.amount)} />
+            <Row label="Fee" value={formatCurrency(payment.fee)} />
+            <Row label="Net" value={formatCurrency(payment.netAmount)} />
+            <Row
+              label="Method"
+              value={PAYMENT_METHOD_LABEL[payment.methodId]}
+            />
             {payment.provider && (
-              <div>
-                <p className="text-xs text-neutral-500">Provider</p>
-                <p className="text-sm">{payment.provider}</p>
-              </div>
+              <Row label="Provider" value={payment.provider} />
             )}
-
-            {/* Related */}
-            {(payment.relatedOrderId || payment.relatedTransactionId) && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-neutral-500">Related</p>
-                {payment.relatedOrderId && (
-                  <Button variant="outline" size="sm" className="w-full justify-between">
-                    Order {payment.relatedOrderId}
-                    <AtlasIcon name="arrow-right" className="h-3 w-3" />
-                  </Button>
-                )}
-                {payment.relatedTransactionId && (
-                  <Button variant="outline" size="sm" className="w-full justify-between">
-                    Transaction {payment.relatedTransactionId}
-                    <AtlasIcon name="arrow-right" className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
+            <Row
+              label="Created"
+              value={
+                nowMs
+                  ? formatRelative(payment.createdAt, nowMs)
+                  : formatAbsolute(payment.createdAt)
+              }
+            />
+            <Row
+              label="Updated"
+              value={
+                nowMs
+                  ? formatRelative(payment.updatedAt, nowMs)
+                  : formatAbsolute(payment.updatedAt)
+              }
+            />
+            {payment.failureReason && (
+              <Row label="Failure reason" value={payment.failureReason} />
             )}
+          </div>
+        </section>
 
-            {/* Wallet credit */}
+        {(payment.relatedOrderId ||
+          payment.relatedTransactionId ||
+          payment.relatedMerchantId ||
+          payment.relatedResellerId ||
+          payment.walletId) && (
+          <section aria-label="Related">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Related
+            </h3>
+            {payment.relatedOrderId && (
+              <Row label="Order" value={payment.relatedOrderId} />
+            )}
+            {payment.relatedTransactionId && (
+              <Row label="Transaction" value={payment.relatedTransactionId} />
+            )}
+            {payment.relatedMerchantId && (
+              <Row label="Merchant" value={payment.relatedMerchantId} />
+            )}
+            {payment.relatedResellerId && (
+              <Row label="Reseller" value={payment.relatedResellerId} />
+            )}
             {payment.walletId && (
-              <div className="rounded-lg bg-info-50 p-3 dark:bg-info-900/20">
-                <p className="text-xs font-medium text-info-700 dark:text-info-300 mb-1">
-                  Wallet Credit
-                </p>
-                <p className="text-sm">
-                  Credited to wallet <span className="font-mono">{payment.walletId}</span>
-                </p>
-                {payment.walletCreditedAt && (
-                  <p className="text-xs text-info-600 dark:text-info-400">
-                    {new Date(payment.walletCreditedAt).toLocaleString()}
+              <Row
+                label="Wallet"
+                value={
+                  <span className="font-mono text-xs">
+                    {payment.walletId}
+                    {payment.walletStore ? " (" + payment.walletStore + ")" : ""}
+                  </span>
+                }
+              />
+            )}
+          </section>
+        )}
+
+        {(payment.refundStatus && payment.refundStatus !== "none") ||
+        (payment.refundHistory && payment.refundHistory.length > 0) ? (
+          <section aria-label="Refund record">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Refund record
+            </h3>
+            <Row
+              label="Refund status"
+              value={payment.refundStatus ?? "none"}
+            />
+            {payment.refundHistory?.map((r) => (
+              <div
+                key={r.timestamp + "-" + String(r.amount)}
+                className="rounded-md border border-neutral-200 p-2 text-xs dark:border-neutral-800"
+              >
+                <div className="flex justify-between">
+                  <span>{formatCurrency(r.amount)}</span>
+                  <span>{formatAbsolute(r.timestamp)}</span>
+                </div>
+                <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                  {r.admin.name} - {r.status}
+                </div>
+              </div>
+            ))}
+            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+              Refunds are managed on{" "}
+              <Link
+                href="/admin/refunds"
+                className="text-brand-600 hover:underline dark:text-brand-400"
+              >
+                the refunds page
+              </Link>
+              .
+            </p>
+          </section>
+        ) : null}
+
+        <section aria-label="Timeline">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Timeline
+          </h3>
+          <ol className="relative space-y-3 border-l border-neutral-200 pl-5 dark:border-neutral-700">
+            {payment.timeline.map((event, idx) => (
+              <li key={idx} className="relative">
+                <span
+                  aria-hidden="true"
+                  className={
+                    "absolute -left-[27px] mt-1 flex h-3 w-3 rounded-full border-2 border-white dark:border-neutral-900 " +
+                    (event.status === "success"
+                      ? "bg-success-500"
+                      : event.status === "warning"
+                      ? "bg-warning-500"
+                      : event.status === "danger"
+                      ? "bg-danger-500"
+                      : "bg-info-500")
+                  }
+                />
+                <p className="text-sm font-medium">{event.label}</p>
+                {event.description && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {event.description}
                   </p>
                 )}
-              </div>
-            )}
-
-            {/* Failure reason */}
-            {payment.failureReason && (
-              <div className="rounded-lg border border-danger-200 bg-danger-50 p-3 dark:border-danger-800 dark:bg-danger-900/20">
-                <p className="text-xs font-medium text-danger-700 dark:text-danger-300">
-                  Failure Reason
+                <p className="text-xs text-neutral-400">
+                  {formatAbsolute(event.timestamp)}
                 </p>
-                <p className="text-sm text-danger-700 dark:text-danger-300">
-                  {payment.failureReason}
-                </p>
-              </div>
-            )}
+              </li>
+            ))}
+          </ol>
+        </section>
 
-            {/* Timeline */}
-            <div>
-              <p className="text-xs font-medium text-neutral-500 mb-2">Timeline</p>
-              <ol className="relative space-y-4 border-l border-neutral-200 pl-6 dark:border-neutral-700">
-                {payment.timeline.map((event, idx) => (
-                  <li key={idx} className="relative">
-                    <span
-                      className={cn(
-                        "absolute -left-[29px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-white dark:border-neutral-900",
-                        event.status === "success"
-                          ? "bg-success-500"
-                          : event.status === "warning"
-                          ? "bg-warning-500"
-                          : event.status === "danger"
-                          ? "bg-danger-500"
-                          : "bg-info-500"
-                      )}
-                    >
-                      <AtlasIcon
-                        name={
-                          event.status === "success"
-                            ? "check"
-                            : event.status === "warning"
-                            ? "clock"
-                            : event.status === "danger"
-                            ? "x-circle"
-                            : "record"
-                        }
-                        className="h-2 w-2 text-white"
-                      />
-                    </span>
-                    <p className="text-sm font-medium">{event.label}</p>
-                    {event.description && (
-                      <p className="text-xs text-neutral-500">{event.description}</p>
-                    )}
-                    <p className="text-xs text-neutral-400">
-                      {new Date(event.timestamp).toLocaleString()}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            {/* Audit trail */}
-            {payment.auditTrail && payment.auditTrail.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-neutral-500 mb-2">Audit Trail</p>
-                <ul className="space-y-2">
-                  {payment.auditTrail.map((entry, idx) => (
-                    <li
-                      key={idx}
-                      className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
-                    >
-                      <div className="flex justify-between">
-                        <span className="font-medium">{entry.admin}</span>
-                        <span>{new Date(entry.timestamp).toLocaleString()}</span>
-                      </div>
-                      <p>{entry.action}</p>
-                      {entry.previousState && entry.newState && (
-                        <p className="text-neutral-500">
-                          {entry.previousState} → {entry.newState}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Refund management */}
-            {payment.status === "successful" && payment.refundStatus !== "completed" && (
-              <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-                <p className="text-sm font-medium">Refund Management</p>
-                <div className="mt-2 space-y-1 text-sm">
+        {reconciliations.length > 0 && (
+          <section aria-label="Reconciliations">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Reconciliations
+            </h3>
+            <ul role="list" className="space-y-2">
+              {reconciliations.map((rec) => (
+                <li
+                  key={rec.id}
+                  className="rounded-md border border-neutral-200 p-2 text-xs dark:border-neutral-800"
+                >
                   <div className="flex justify-between">
-                    <span className="text-neutral-500">Original Amount</span>
-                    <span>{formatCurrency(payment.amount)}</span>
+                    <span className="font-mono">{rec.providerReference}</span>
+                    <span>{formatAbsolute(rec.createdAt)}</span>
                   </div>
+                  <div className="mt-1 text-neutral-500 dark:text-neutral-400">
+                    {rec.admin.name}
+                  </div>
+                  {rec.note && <p className="mt-1">{rec.note}</p>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {(activeFlags.length > 0 || resolvedFlags.length > 0) && (
+          <section aria-label="Flags">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Flags
+            </h3>
+            <ul role="list" className="space-y-2">
+              {activeFlags.map((f) => (
+                <li
+                  key={f.id}
+                  className="rounded-md border border-warning-200 bg-warning-50 p-2 text-xs dark:border-warning-900/60 dark:bg-warning-900/20"
+                >
                   <div className="flex justify-between">
-                    <span className="text-neutral-500">Already Refunded</span>
+                    <span className="font-medium">
+                      {PAYMENT_FLAG_REASON_LABEL[f.reason]}
+                    </span>
+                    <span>{formatAbsolute(f.createdAt)}</span>
+                  </div>
+                  <div className="mt-1 text-neutral-600 dark:text-neutral-400">
+                    {f.admin.name}
+                  </div>
+                  {f.note && <p className="mt-1">{f.note}</p>}
+                </li>
+              ))}
+              {resolvedFlags.map((f) => (
+                <li
+                  key={f.id}
+                  className="rounded-md border border-neutral-200 p-2 text-xs dark:border-neutral-800"
+                >
+                  <div className="flex justify-between">
                     <span>
-                      {formatCurrency(
-                        payment.refundHistory?.reduce((sum, r) => sum + r.amount, 0) || 0
-                      )}
+                      {PAYMENT_FLAG_REASON_LABEL[f.reason]} - resolved
                     </span>
+                    <span>{formatAbsolute(f.resolvedAt ?? f.createdAt)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-500">Remaining Refundable</span>
-                    <span className="font-semibold">{formatCurrency(remainingRefundable)}</span>
-                  </div>
-                </div>
-                {remainingRefundable > 0 && (
-                  <div className="mt-3 flex gap-2">
-                    <Input
-                      type="number"
-                      min="0"
-                      max={remainingRefundable}
-                      value={refundAmount || ""}
-                      onChange={(e) => setRefundAmount(Number(e.target.value))}
-                      className="h-9 w-24"
-                      placeholder="Amount"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={refundAmount <= 0 || refundAmount > remainingRefundable}
-                      onClick={() => setShowRefundConfirm(true)}
-                    >
-                      Refund
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+                  {f.resolutionNote && (
+                    <p className="mt-1 text-neutral-500 dark:text-neutral-400">
+                      {f.resolutionNote}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {/* Actions */}
-        <div className="border-t border-neutral-200 p-4 dark:border-neutral-800">
+        {payment.auditTrail && payment.auditTrail.length > 0 && (
+          <section aria-label="Audit trail">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Audit trail
+            </h3>
+            <ul role="list" className="space-y-2">
+              {payment.auditTrail.map((entry, idx) => (
+                <li
+                  key={idx}
+                  className="rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                >
+                  <div className="flex justify-between">
+                    <span className="font-medium">{entry.admin}</span>
+                    <span>{formatAbsolute(entry.timestamp)}</span>
+                  </div>
+                  <p>{entry.action}</p>
+                  {entry.previousState && entry.newState && (
+                    <p className="text-neutral-500 dark:text-neutral-400">
+                      {entry.previousState} to {entry.newState}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <section
+          aria-label="Actions"
+          className="flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800"
+        >
+          {payment.status === "failed" && retryBlocked && (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              {retryBlocked}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
-            {payment.status === "failed" && onRetry && (
+            {canRetry && retryable && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  onRetry(payment.id);
-                  onClose();
-                }}
+                onClick={() => onRetry(payment)}
               >
                 Retry
               </Button>
             )}
-            {payment.status === "successful" && (
-              <Button variant="outline" size="sm">
-                View Order
+            {canReconcile && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onReconcile(payment)}
+              >
+                Reconcile
               </Button>
             )}
-            {payment.status === "successful" && (
-              <Button variant="outline" size="sm">
-                View Transaction
+            {canFlag && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onFlag(payment)}
+              >
+                Flag
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
-              Close
-            </Button>
           </div>
-        </div>
+        </section>
       </div>
-
-      <ConfirmDialog
-        open={showRefundConfirm}
-        title="Confirm Refund"
-        description={`Are you sure you want to refund ${formatCurrency(refundAmount)}?`}
-        confirmLabel="Refund"
-        danger
-        onConfirm={handleRefund}
-        onCancel={() => setShowRefundConfirm(false)}
-      />
-    </div>
+    </ModalShell>
   );
 }

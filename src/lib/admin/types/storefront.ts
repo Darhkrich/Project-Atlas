@@ -18,4 +18,6 @@ export interface UnifiedStorefront {
   publicUrl: string;
   primaryColor?: string;
   accentColor?: string;
+  statusReason?: string;
+  updatedAt?: string;
 }

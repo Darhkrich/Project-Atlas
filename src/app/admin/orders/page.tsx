@@ -1,356 +1,302 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/purity */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { OrdersWorkspaceNav, type OrdersView } from "@/components/admin/orders/orders-workspace-nav";
+import {
+  OrdersWorkspaceNav,
+  type OrdersView,
+} from "@/components/admin/orders/orders-workspace-nav";
 import { OrderLiveBoard } from "@/components/admin/orders/order-live-board";
 import { OrderAnalytics } from "@/components/admin/orders/order-analytics";
 import { OrderDetailDrawer } from "@/components/admin/orders/order-detail-drawer";
-import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
-import { OrderFilters } from "@/components/admin/orders/orders-filters";
+import { OrderCancelModal } from "@/components/admin/orders/order-cancel-modal";
+import { OrdersFilters } from "@/components/admin/orders/orders-filters";
+import { OrdersSummaryCards } from "@/components/admin/orders/orders-summary-cards";
+import { OrdersTable } from "@/components/admin/orders/orders-table";
+import { OrdersEmptyState } from "@/components/admin/orders/orders-empty-state";
 import { Button } from "@/components/admin/ui/button";
-import { Badge } from "@/components/admin/ui/badge";
-import { mockOrders } from "@/lib/admin/mock/orders";
-import { formatCurrency } from "@/lib/admin/formatters";
-import { Order } from "@/lib/admin/types/orders";
-import { cn } from "@/lib/utils";
+import { ErrorState } from "@/components/admin/ui/error-state";
+import { Can } from "@/lib/admin/rbac/can";
+import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
+import { useNow } from "@/lib/shared/hooks/use-now";
+import { useOrders } from "@/lib/admin/hooks/use-orders";
+import { cancelOrder } from "@/lib/admin/mock/orders-mutations";
+import { exportOrdersCsv } from "@/lib/admin/orders/orders-csv-export";
+import {
+  projectOrdersSummary,
+  projectLiveBoard,
+  projectHistory,
+  projectOrdersAnalytics,
+  type OrderFilters as OrderFiltersShape,
+  type OrdersAnalyticsRange,
+} from "@/lib/admin/orders/orders-projection";
+import type { Order } from "@/lib/admin/types/orders";
+import { DEFAULT_ORDERS_PAGE_SIZE } from "@/lib/admin/orders/orders-constants";
 
-const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
-  successful: "success",
-  failed: "danger",
-  cancelled: "neutral",
-  refunded: "neutral",
-};
+const VIEW_VALUES: OrdersView[] = ["live", "history", "analytics"];
+
+function parseView(raw: string | null): OrdersView {
+  if (raw && (VIEW_VALUES as string[]).includes(raw)) return raw as OrdersView;
+  return "live";
+}
+
+function parseFilters(params: URLSearchParams): OrderFiltersShape {
+  const filters: OrderFiltersShape = {};
+  const search = params.get("q");
+  if (search) filters.search = search;
+  const status = params.get("status");
+  if (status) filters.status = status as OrderFiltersShape["status"];
+  const audience = params.get("audience");
+  if (audience) filters.audience = audience as OrderFiltersShape["audience"];
+  const service = params.get("service");
+  if (service) filters.serviceId = service;
+  const network = params.get("network");
+  if (network) filters.networkId = network;
+  const from = params.get("from");
+  if (from) filters.dateFrom = from;
+  const to = params.get("to");
+  if (to) filters.dateTo = to;
+  return filters;
+}
+
+function filtersToParams(filters: OrderFiltersShape): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("q", filters.search);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.audience) params.set("audience", filters.audience);
+  if (filters.serviceId) params.set("service", filters.serviceId);
+  if (filters.networkId) params.set("network", filters.networkId);
+  if (filters.dateFrom) params.set("from", filters.dateFrom);
+  if (filters.dateTo) params.set("to", filters.dateTo);
+  return params;
+}
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [activeView, setActiveView] = useState<OrdersView>("live");
-  const [filters, setFilters] = useState<any>({});
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(30);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const now = useNow();
+  const { orders, isLoading, error } = useOrders();
 
-  // Define columns inside component so setSelectedOrder is in scope
-  const allColumns = [
-    {
-      key: "id",
-      header: "Order ID",
-      cell: (order: Order) => <span className="font-medium">{order.id}</span>,
-    },
-    {
-      key: "source",
-      header: "Source",
-      cell: (order: Order) => (
-        <Badge variant={order.source === "reseller" ? "brand" : "info"}>
-          {order.source === "reseller" ? "Reseller" : "Direct"}
-        </Badge>
-      ),
-    },
-    { key: "customer", header: "Customer", cell: (order: Order) => order.customer.name },
-    { key: "service", header: "Service", cell: (order: Order) => order.service },
-    { key: "network", header: "Network", cell: (order: Order) => order.network ?? "—" },
-    { key: "amount", header: "Amount", cell: (order: Order) => formatCurrency(order.amount) },
-    {
-      key: "commission",
-      header: "Commission",
-      cell: (order: Order) => formatCurrency(order.commission),
-    },
-    { key: "payment", header: "Payment", cell: (order: Order) => order.paymentMethod },
-    {
-      key: "status",
-      header: "Status",
-      cell: (order: Order) => (
-        <Badge variant={statusVariantMap[order.status]}>{order.status}</Badge>
-      ),
-    },
-    {
-      key: "created",
-      header: "Created",
-      cell: (order: Order) => new Date(order.createdAt).toLocaleDateString(),
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (order: Order) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedOrder(order);
-          }}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
+  const activeView = useMemo(
+    () => parseView(searchParams.get("view")),
+    [searchParams]
+  );
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  const currentPage = useMemo(() => {
+    const raw = Number(searchParams.get("page") ?? "1");
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+  }, [searchParams]);
+  const analyticsRange = useMemo<OrdersAnalyticsRange>(() => {
+    const raw = searchParams.get("range");
+    if (raw === "7d" || raw === "30d") return raw;
+    return "today";
+  }, [searchParams]);
 
-  // Initialize visible columns once allColumns is defined
-  useEffect(() => {
-    setVisibleColumns(allColumns.map((col) => col.key));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const selectedOrderId = searchParams.get("order");
 
-  // Load mock data
-  useEffect(() => {
-    setTimeout(() => {
-      setOrders(mockOrders);
-      setLoading(false);
-    }, 500);
-  }, []);
+  const [pendingCancel, setPendingCancel] = useState<Order | null>(null);
 
-  // Auto refresh
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      setLoading(true);
-      setTimeout(() => {
-        setOrders(mockOrders);
-        setLoading(false);
-      }, 500);
-    }, refreshInterval * 1000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval]);
-
-  // Derived data
-  const pendingOrders = orders.filter((o) => o.status === "pending");
-  const processingOrders = orders.filter((o) => o.status === "processing");
-  const todayFailedOrders = orders.filter((o) => {
-    const today = new Date();
-    const orderDate = new Date(o.createdAt);
-    return (
-      o.status === "failed" &&
-      orderDate.getDate() === today.getDate() &&
-      orderDate.getMonth() === today.getMonth() &&
-      orderDate.getFullYear() === today.getFullYear()
-    );
-  });
-
-  const historyOrders = orders.filter((o) =>
-    ["successful", "failed", "cancelled", "refunded"].includes(o.status)
+  const selectedOrder = useMemo(
+    () => (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) ?? null : null),
+    [orders, selectedOrderId]
   );
 
-  // Apply filters to history
-  const filteredHistory = historyOrders.filter((order) => {
-    if (
-      filters.search &&
-      !order.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !order.customer.name.toLowerCase().includes(filters.search.toLowerCase())
-    )
-      return false;
-    if (filters.status && order.status !== filters.status) return false;
-    if (filters.service && order.service !== filters.service) return false;
-    if (filters.source && order.source !== filters.source) return false;
-    if (filters.dateFrom) {
-      const from = new Date(filters.dateFrom);
-      if (new Date(order.createdAt) < from) return false;
+  const setParam = useCallback(
+    (key: string, value: string | undefined) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (value === undefined || value === "") next.delete(key);
+      else next.set(key, value);
+      if (key !== "page") next.delete("page");
+      router.replace("/admin/orders?" + next.toString());
+    },
+    [router, searchParams]
+  );
+
+  const handleViewChange = useCallback(
+    (view: OrdersView) => {
+      setParam("view", view);
+    },
+    [setParam]
+  );
+
+  const handleFiltersChange = useCallback(
+    (next: OrderFiltersShape) => {
+      const params = filtersToParams(next);
+      const view = activeView;
+      params.set("view", view);
+      router.replace("/admin/orders?" + params.toString());
+    },
+    [router, activeView]
+  );
+
+  const handleFiltersReset = useCallback(() => {
+    router.replace("/admin/orders?view=" + activeView);
+  }, [router, activeView]);
+
+  const handlePageChange = useCallback(
+    (page: number) => {
+      setParam("page", String(page));
+    },
+    [setParam]
+  );
+
+  const handleRowClick = useCallback(
+    (orderId: string) => {
+      setParam("order", orderId);
+    },
+    [setParam]
+  );
+
+  const handleCloseDrawer = useCallback(() => {
+    setParam("order", undefined);
+  }, [setParam]);
+
+  const handleCancelRequested = useCallback((order: Order) => {
+    setPendingCancel(order);
+  }, []);
+
+  const handleCancelConfirmed = useCallback(
+    (orderId: string, reason: string) => {
+      cancelOrder(orderId, reason);
+      setPendingCancel(null);
+      setParam("order", undefined);
+    },
+    [setParam]
+  );
+
+  const handleExport = useCallback(() => {
+    const { rows } = projectHistory(orders, filters);
+    const ids = new Set(rows.map((r) => r.id));
+    const toExport = orders.filter((o) => ids.has(o.id));
+    exportOrdersCsv(toExport);
+  }, [orders, filters]);
+
+  useEffect(() => {
+    if (!searchParams.get("view")) {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("view", "live");
+      router.replace("/admin/orders?" + next.toString());
     }
-    if (filters.dateTo) {
-      const to = new Date(filters.dateTo);
-      to.setHours(23, 59, 59, 999);
-      if (new Date(order.createdAt) > to) return false;
-    }
-    return true;
-  });
+  }, [router, searchParams]);
 
-  // Visible columns
-  const columns = allColumns.filter((col) => visibleColumns.includes(col.key));
+  const summary = useMemo(
+    () => projectOrdersSummary(orders, now ?? Date.now()),
+    [orders, now]
+  );
+  const liveView = useMemo(() => projectLiveBoard(orders), [orders]);
+  const history = useMemo(
+    () => projectHistory(orders, filters),
+    [orders, filters]
+  );
+  const analyticsView = useMemo(
+    () => projectOrdersAnalytics(orders, now ?? Date.now(), analyticsRange),
+    [orders, now, analyticsRange]
+  );
 
-  // Handlers
-  const exportOrders = (format: string) => {
-    console.log(`Exporting ${format}`);
-    setExportMenuOpen(false);
-  };
+  const pageSize = DEFAULT_ORDERS_PAGE_SIZE;
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return history.rows.slice(start, start + pageSize);
+  }, [history.rows, currentPage, pageSize]);
 
-  const handleRetry = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "processing" as const } : o))
-    );
-  };
-
-  const handleCancel = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "cancelled" as const } : o))
-    );
-  };
-
-  const handleRefund = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "refunded" as const } : o))
-    );
-  };
+  const hasFilters = Object.keys(filters).length > 0;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Orders"
-        description="Operational workspace for order management."
-        actions={
+        description="Read-only ledger of Atlas direct and reseller storefront orders. System failures retry automatically. Cancellation is the only admin action."
+        meta={
           <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={cn(
-                autoRefresh && "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
-              )}
-            >
-              Auto Refresh {autoRefresh ? "On" : "Off"}
-            </Button>
-            {autoRefresh && (
-              <select
-                className="h-8 rounded-md border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-800"
-                value={refreshInterval}
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-              >
-                <option value={30}>30s</option>
-                <option value={60}>1m</option>
-                <option value={300}>5m</option>
-              </select>
-            )}
+            <span>{orders.length} total</span>
+            <span className="text-neutral-400">·</span>
+            <span>{liveView.activeCount} active</span>
           </>
+        }
+        actions={
+          <Can permission={PERMISSIONS.ORDERS_EXPORT}>
+            <Button variant="outline" size="sm" onClick={handleExport}>
+              Export CSV
+            </Button>
+          </Can>
         }
       />
 
-      {/* Workspace Layout */}
-      <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Vertical Navigation */}
-        <OrdersWorkspaceNav activeView={activeView} onChange={setActiveView} />
+      {error ? (
+        <ErrorState
+          title="Could not load orders"
+          description={error.message}
+        />
+      ) : (
+        <>
+          <OrdersSummaryCards summary={summary} />
 
-        {/* Main Content Area */}
-        <div className="min-w-0 flex-1">
-          {activeView === "live" && (
-            <OrderLiveBoard
-              pendingOrders={pendingOrders}
-              processingOrders={processingOrders}
-              failedOrders={todayFailedOrders}
-              onOrderClick={setSelectedOrder}
+          <div className="flex flex-col gap-6 lg:flex-row">
+            <OrdersWorkspaceNav
+              activeView={activeView}
+              onChange={handleViewChange}
             />
-          )}
 
-          {activeView === "history" && (
-            <>
-              <OrderFilters onApplyFilters={setFilters} onReset={() => setFilters({})} />
+            <div className="min-w-0 flex-1">
+              {activeView === "live" && (
+                <OrderLiveBoard
+                  view={liveView}
+                  now={now}
+                  onOrderClick={(order) => handleRowClick(order.id)}
+                />
+              )}
 
-              {/* Toolbar */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-500">Rows per page:</span>
-                  <select
-                    className="h-8 rounded-md border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-neutral-800"
-                    value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
+              {activeView === "history" && (
+                <div className="space-y-4">
+                  <OrdersFilters
+                    filters={filters}
+                    onChange={handleFiltersChange}
+                    onReset={handleFiltersReset}
+                  />
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-neutral-500">Columns:</span>
-                  {allColumns
-                    .filter((col) => col.key !== "actions")
-                    .map((col) => (
-                      <label key={col.key} className="flex items-center gap-1 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={visibleColumns.includes(col.key)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setVisibleColumns((prev) => [...prev, col.key]);
-                            } else {
-                              setVisibleColumns((prev) =>
-                                prev.filter((k) => k !== col.key)
-                              );
-                            }
-                          }}
-                          className="h-3 w-3"
-                        />
-                        {col.header}
-                      </label>
-                    ))}
-                </div>
-
-                <div className="relative">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                  >
-                    Export
-                  </Button>
-                  {exportMenuOpen && (
-                    <div className="absolute right-0 z-10 mt-2 w-40 rounded-md border border-neutral-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
-                      <ul className="py-1">
-                        <li>
-                          <button
-                            className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            onClick={() => exportOrders("csv")}
-                          >
-                            CSV
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            onClick={() => exportOrders("excel")}
-                          >
-                            Excel
-                          </button>
-                        </li>
-                        <li>
-                          <button
-                            className="block w-full px-4 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            onClick={() => exportOrders("pdf")}
-                          >
-                            PDF
-                          </button>
-                        </li>
-                      </ul>
-                    </div>
+                  {history.rows.length === 0 ? (
+                    <OrdersEmptyState hasFilters={hasFilters} />
+                  ) : (
+                    <OrdersTable
+                      rows={paginatedRows}
+                      isLoading={isLoading}
+                      page={currentPage}
+                      pageSize={pageSize}
+                      onPageChange={handlePageChange}
+                      onRowClick={handleRowClick}
+                    />
                   )}
                 </div>
-              </div>
+              )}
 
-              {/* Data Table */}
-              <div className="mt-4">
-                <AdminDataTable
-                  columns={columns}
-                  data={filteredHistory}
-                  isLoading={loading}
-                  rowKey={(order) => order.id}
-                  onRowClick={(order) => setSelectedOrder(order)}
-                  pageSize={pageSize}
-                  currentPage={page}
-                  onPageChange={setPage}
-                  emptyMessage="No orders found."
+              {activeView === "analytics" && (
+                <OrderAnalytics
+                  view={analyticsView}
+                  range={analyticsRange}
+                  onRangeChange={(next) => setParam("range", next)}
                 />
-              </div>
-            </>
-          )}
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
-          {activeView === "analytics" && <OrderAnalytics />}
-        </div>
-      </div>
-
-      {/* Detail Drawer */}
       <OrderDetailDrawer
         order={selectedOrder}
-        onClose={() => setSelectedOrder(null)}
-        onRetry={handleRetry}
-        onCancel={handleCancel}
-        onRefund={handleRefund}
+        now={now}
+        onClose={handleCloseDrawer}
+        onCancel={handleCancelRequested}
       />
+
+      <Can permission={PERMISSIONS.ORDERS_MANAGE}>
+        <OrderCancelModal
+          order={pendingCancel}
+          onClose={() => setPendingCancel(null)}
+          onConfirm={handleCancelConfirmed}
+        />
+      </Can>
     </div>
   );
 }

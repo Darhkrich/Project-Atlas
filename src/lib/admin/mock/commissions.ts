@@ -3,56 +3,7 @@ import type {
   PlatformMargin,
   CommissionRule,
   PayoutRun,
-  ResellerTier,
 } from "../types/commission";
-
-export const mockResellerTiers: ResellerTier[] = [
-  {
-    id: "TIER-1",
-    name: "Bronze",
-    minMonthlySales: 0,
-    extraCutPercent: 30,
-    baseCommissionRates: {
-      data: 0.4,
-      airtime: 2,
-      bills: 3,
-      tv: 3,
-      exam_pins: 3,
-      other: 3,
-    },
-    perks: ["Standard support"],
-  },
-  {
-    id: "TIER-2",
-    name: "Silver",
-    minMonthlySales: 5000,
-    extraCutPercent: 25,
-    baseCommissionRates: {
-      data: 0.5,
-      airtime: 3,
-      bills: 4,
-      tv: 4,
-      exam_pins: 4,
-      other: 4,
-    },
-    perks: ["Priority support"],
-  },
-  {
-    id: "TIER-3",
-    name: "Gold",
-    minMonthlySales: 10000,
-    extraCutPercent: 20,
-    baseCommissionRates: {
-      data: 0.6,
-      airtime: 3.5,
-      bills: 4.5,
-      tv: 4.5,
-      exam_pins: 4.5,
-      other: 4.5,
-    },
-    perks: ["Priority support", "Lower withdrawal fees"],
-  },
-];
 
 export const mockResellerCommissions: ResellerCommission[] = [
   {
@@ -65,18 +16,22 @@ export const mockResellerCommissions: ResellerCommission[] = [
     providerCost: 4.0,
     atlasPrice: 5.0,
     resellerPrice: 6.0,
-    baseCommission: 0.6, // Gold tier base
+    baseCommission: 0.6,
     extraAmount: 1.0,
-    atlasExtraCut: 0.2, // Gold tier: 20% of extra
-    resellerExtraCut: 0.8, // 80% of extra
-    totalCommission: 1.4, // 0.6 + 0.8
+    atlasExtraCut: 0.2,
+    resellerExtraCut: 0.8,
+    totalCommission: 1.4,
     tierId: "TIER-3",
     tierName: "Gold",
     effectiveExtraCutPercent: 20,
     status: "pending",
     createdAt: new Date(Date.now() - 3600000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 3600000).toISOString(), label: "Commission earned", status: "info" },
+      {
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
     ],
     auditTrail: [],
   },
@@ -90,7 +45,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     providerCost: 100,
     atlasPrice: 120,
     resellerPrice: 120,
-    baseCommission: 4.0, // Silver tier: 4% of 120? Actually 4% = 4.8, but we use explicit value here.
+    baseCommission: 4.0,
     extraAmount: 0,
     atlasExtraCut: 0,
     resellerExtraCut: 0,
@@ -102,7 +57,11 @@ export const mockResellerCommissions: ResellerCommission[] = [
     status: "pending",
     createdAt: new Date(Date.now() - 7200000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 7200000).toISOString(), label: "Commission earned", status: "info" },
+      {
+        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
     ],
     auditTrail: [],
   },
@@ -129,11 +88,26 @@ export const mockResellerCommissions: ResellerCommission[] = [
     createdAt: new Date(Date.now() - 86400000).toISOString(),
     paidAt: new Date(Date.now() - 43200000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 86400000).toISOString(), label: "Commission earned", status: "info" },
-      { timestamp: new Date(Date.now() - 43200000).toISOString(), label: "Paid", status: "success" },
+      {
+        timestamp: new Date(Date.now() - 86400000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
+      {
+        timestamp: new Date(Date.now() - 43200000).toISOString(),
+        label: "Paid",
+        status: "success",
+      },
     ],
     auditTrail: [
-      { id: "AUD-1", admin: "finance@atlas.com", timestamp: new Date(Date.now() - 43200000).toISOString(), action: "Marked as paid", previousStatus: "pending", newStatus: "paid" },
+      {
+        id: "AUD-1",
+        admin: "finance@atlas.com",
+        timestamp: new Date(Date.now() - 43200000).toISOString(),
+        action: "Marked as paid",
+        previousStatus: "pending",
+        newStatus: "paid",
+      },
     ],
   },
   {
@@ -158,8 +132,16 @@ export const mockResellerCommissions: ResellerCommission[] = [
     status: "cancelled",
     createdAt: new Date(Date.now() - 172800000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 172800000).toISOString(), label: "Commission earned", status: "info" },
-      { timestamp: new Date(Date.now() - 129600000).toISOString(), label: "Order cancelled", status: "danger" },
+      {
+        timestamp: new Date(Date.now() - 172800000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
+      {
+        timestamp: new Date(Date.now() - 129600000).toISOString(),
+        label: "Order cancelled",
+        status: "danger",
+      },
     ],
     auditTrail: [],
   },
@@ -173,7 +155,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     providerCost: 40,
     atlasPrice: 50,
     resellerPrice: 50,
-    baseCommission: 2.25, // Gold tier: 4.5% of 50
+    baseCommission: 2.25,
     extraAmount: 0,
     atlasExtraCut: 0,
     resellerExtraCut: 0,
@@ -186,8 +168,16 @@ export const mockResellerCommissions: ResellerCommission[] = [
     createdAt: new Date(Date.now() - 259200000).toISOString(),
     paidAt: new Date(Date.now() - 172800000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 259200000).toISOString(), label: "Commission earned", status: "info" },
-      { timestamp: new Date(Date.now() - 172800000).toISOString(), label: "Paid", status: "success" },
+      {
+        timestamp: new Date(Date.now() - 259200000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
+      {
+        timestamp: new Date(Date.now() - 172800000).toISOString(),
+        label: "Paid",
+        status: "success",
+      },
     ],
     auditTrail: [],
   },
@@ -201,10 +191,10 @@ export const mockResellerCommissions: ResellerCommission[] = [
     providerCost: 8,
     atlasPrice: 10,
     resellerPrice: 12,
-    baseCommission: 0.5, // Silver tier base
+    baseCommission: 0.5,
     extraAmount: 2,
-    atlasExtraCut: 0.5, // 25% of 2
-    resellerExtraCut: 1.5, // 75%
+    atlasExtraCut: 0.5,
+    resellerExtraCut: 1.5,
     totalCommission: 2.0,
     tierId: "TIER-2",
     tierName: "Silver",
@@ -213,11 +203,26 @@ export const mockResellerCommissions: ResellerCommission[] = [
     createdAt: new Date(Date.now() - 345600000).toISOString(),
     reversedAt: new Date(Date.now() - 259200000).toISOString(),
     timeline: [
-      { timestamp: new Date(Date.now() - 345600000).toISOString(), label: "Commission earned", status: "info" },
-      { timestamp: new Date(Date.now() - 259200000).toISOString(), label: "Order refunded, commission reversed", status: "danger" },
+      {
+        timestamp: new Date(Date.now() - 345600000).toISOString(),
+        label: "Commission earned",
+        status: "info",
+      },
+      {
+        timestamp: new Date(Date.now() - 259200000).toISOString(),
+        label: "Order refunded, commission reversed",
+        status: "danger",
+      },
     ],
     auditTrail: [
-      { id: "AUD-2", admin: "system", timestamp: new Date(Date.now() - 259200000).toISOString(), action: "Reversed due to refund", previousStatus: "paid", newStatus: "reversed" },
+      {
+        id: "AUD-2",
+        admin: "system",
+        timestamp: new Date(Date.now() - 259200000).toISOString(),
+        action: "Reversed due to refund",
+        previousStatus: "paid",
+        newStatus: "reversed",
+      },
     ],
   },
 ];
@@ -266,10 +271,35 @@ export const mockPlatformMargins: PlatformMargin[] = [
 ];
 
 export const mockCommissionRules: CommissionRule[] = [
-  { id: "RULE-1", name: "Extra Amount Cut", description: "Atlas takes a percentage of any price increase above Atlas price", value: "Dynamic per tier", enabled: true },
-  { id: "RULE-2", name: "Base Data Commission", description: "Fixed commission for data products at Atlas price", value: "Dynamic per tier", enabled: true },
-  { id: "RULE-3", name: "Airtime Commission", description: "Percentage commission on airtime sales", value: "Dynamic per tier", enabled: true },
-  { id: "RULE-4", name: "Bills Commission", description: "Percentage commission on bill payments", value: "Dynamic per tier", enabled: true },
+  {
+    id: "RULE-1",
+    name: "Extra Amount Cut",
+    description:
+      "Atlas takes a percentage of any price increase above Atlas price",
+    value: "Dynamic per tier",
+    enabled: true,
+  },
+  {
+    id: "RULE-2",
+    name: "Base Data Commission",
+    description: "Fixed commission for data products at Atlas price",
+    value: "Dynamic per tier",
+    enabled: true,
+  },
+  {
+    id: "RULE-3",
+    name: "Airtime Commission",
+    description: "Percentage commission on airtime sales",
+    value: "Dynamic per tier",
+    enabled: true,
+  },
+  {
+    id: "RULE-4",
+    name: "Bills Commission",
+    description: "Percentage commission on bill payments",
+    value: "Dynamic per tier",
+    enabled: true,
+  },
 ];
 
 export const mockPayoutRuns: PayoutRun[] = [

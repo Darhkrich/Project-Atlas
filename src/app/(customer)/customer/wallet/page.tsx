@@ -1,12 +1,16 @@
 import { CustomerPageHeader } from "@/components/customer/customer-page-header";
-import { WalletOverview } from "@/components/customer/wallet-overview";
+import { WalletOverview } from "@/components/customer/wallet/wallet-overview";
 
 export default function WalletPage() {
   return (
     <>
       <CustomerPageHeader
         title="Wallet"
-        description="Manage your Atlas wallet, fund your account, and track your balance."
+        description="Fund your Atlas wallet, buy services, and refund back to your original payment method."
+        breadcrumbs={[
+          { label: "Dashboard", href: "/customer/dashboard" },
+          { label: "Wallet", current: true },
+        ]}
       />
       <WalletOverview />
     </>

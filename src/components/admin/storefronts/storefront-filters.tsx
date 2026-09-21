@@ -1,69 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import type { RefObject } from "react";
 import { Input } from "@/components/admin/ui/input";
 import { Button } from "@/components/admin/ui/button";
 import { AtlasIcon } from "@/components/atlas/icons";
+import {
+  ALL_STOREFRONT_TYPES,
+  STOREFRONT_STATUS_LABEL,
+  STOREFRONT_TYPE_LABEL,
+} from "@/lib/admin/storefronts/storefront-labels";
+import type { StorefrontStatus } from "@/lib/admin/types/storefront";
 
-interface StorefrontFiltersProps {
-  onFilterChange: (filters: {
-    search: string;
-    type: string;
-    status: string;
-  }) => void;
+export interface StorefrontFilterValues {
+  q: string;
+  type: string;
+  status: string;
 }
 
-const typeOptions = [
-  { value: "", label: "All Types" },
-  { value: "reseller", label: "Reseller" },
-  { value: "merchant", label: "Merchant" },
+interface StorefrontFiltersProps {
+  value: StorefrontFilterValues;
+  onChange: (patch: Partial<StorefrontFilterValues>) => void;
+  onClear: () => void;
+  hasActive: boolean;
+  searchInputRef: RefObject<HTMLInputElement>;
+}
+
+const STATUS_OPTIONS: { value: "" | StorefrontStatus; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "live", label: STOREFRONT_STATUS_LABEL.live },
+  { value: "pending", label: STOREFRONT_STATUS_LABEL.pending },
+  { value: "disabled", label: STOREFRONT_STATUS_LABEL.disabled },
 ];
 
-const statusOptions = [
-  { value: "", label: "All Statuses" },
-  { value: "live", label: "Live" },
-  { value: "pending", label: "Pending" },
-  { value: "disabled", label: "Disabled" },
-];
+export function StorefrontFilters({
+  value,
+  onChange,
+  onClear,
+  hasActive,
+  searchInputRef,
+}: StorefrontFiltersProps) {
+  const chips: { label: string; clear: () => void }[] = [];
 
-export function StorefrontFilters({ onFilterChange }: StorefrontFiltersProps) {
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState("");
-  const [status, setStatus] = useState("");
-
-  const applyChange = (
-    overrides: Partial<{ search: string; type: string; status: string }>
-  ) => {
-    onFilterChange({
-      search: overrides.search ?? search,
-      type: overrides.type ?? type,
-      status: overrides.status ?? status,
+  if (value.type) {
+    const match = ALL_STOREFRONT_TYPES.find((t) => t === value.type);
+    if (match) {
+      chips.push({
+        label: "Type: " + STOREFRONT_TYPE_LABEL[match],
+        clear: () => onChange({ type: "" }),
+      });
+    }
+  }
+  if (value.status) {
+    const match = STATUS_OPTIONS.find((s) => s.value === value.status);
+    if (match) {
+      chips.push({
+        label: "Status: " + match.label,
+        clear: () => onChange({ status: "" }),
+      });
+    }
+  }
+  if (value.q.trim()) {
+    chips.push({
+      label: "Search: " + value.q,
+      clear: () => onChange({ q: "" }),
     });
-  };
-
-  const activeChips = [
-    type && {
-      label: `Type: ${typeOptions.find((t) => t.value === type)?.label}`,
-      clear: () => {
-        setType("");
-        applyChange({ type: "" });
-      },
-    },
-    status && {
-      label: `Status: ${statusOptions.find((s) => s.value === status)?.label}`,
-      clear: () => {
-        setStatus("");
-        applyChange({ status: "" });
-      },
-    },
-  ].filter(Boolean) as { label: string; clear: () => void }[];
-
-  const handleReset = () => {
-    setSearch("");
-    setType("");
-    setStatus("");
-    onFilterChange({ search: "", type: "", status: "" });
-  };
+  }
 
   return (
     <div className="space-y-3">
@@ -71,67 +72,72 @@ export function StorefrontFilters({ onFilterChange }: StorefrontFiltersProps) {
         <div className="relative min-w-[220px] flex-1">
           <AtlasIcon
             name="search"
-            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
           />
           <Input
-            placeholder="Search storefronts or owners..."
+            ref={searchInputRef}
+            aria-label="Search storefronts"
+            placeholder="Search by storefront, owner, or slug"
             className="pl-9"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              applyChange({ search: e.target.value });
-            }}
+            value={value.q}
+            onChange={(e) => onChange({ q: e.target.value })}
           />
         </div>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={type}
-          onChange={(e) => {
-            setType(e.target.value);
-            applyChange({ type: e.target.value });
-          }}
+          aria-label="Filter by type"
+          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+          value={value.type}
+          onChange={(e) => onChange({ type: e.target.value })}
         >
-          {typeOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          <option value="">All types</option>
+          {ALL_STOREFRONT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {STOREFRONT_TYPE_LABEL[t]}
             </option>
           ))}
         </select>
 
         <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            applyChange({ status: e.target.value });
-          }}
+          aria-label="Filter by status"
+          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+          value={value.status}
+          onChange={(e) => onChange({ status: e.target.value })}
         >
-          {statusOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s.value || "all"} value={s.value}>
+              {s.label}
             </option>
           ))}
         </select>
 
-        <Button variant="ghost" size="sm" onClick={handleReset}>
-          Reset
-        </Button>
+        {hasActive && (
+          <Button variant="ghost" size="sm" onClick={onClear}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
-      {activeChips.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {activeChips.map((chip) => (
+      {chips.length > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex flex-wrap gap-2"
+        >
+          {chips.map((chip) => (
             <span
               key={chip.label}
               className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
             >
               {chip.label}
               <button
+                type="button"
                 onClick={chip.clear}
-                className="ml-1 hover:text-danger-600"
+                aria-label={"Remove " + chip.label + " filter"}
+                className="ml-1 rounded-sm hover:text-danger-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                ×
+                x
               </button>
             </span>
           ))}

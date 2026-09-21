@@ -1,179 +1,270 @@
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
-import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
-import { formatCurrency } from "@/lib/admin/formatters";
+import { AtlasIcon } from "@/components/atlas/icons";
+import type { AtlasIconName } from "@/components/atlas/icons";
+import { formatCurrency } from "@/lib/shared/format";
 import { cn } from "@/lib/utils";
+import type {
+  CommissionSummary,
+  PlatformSummary,
+} from "@/lib/admin/commissions/commission-projection";
 
-interface ResellerCommissionSummaryData {
-  totalCommissions: number;
-  pendingCommissions: number;
-  paidCommissions: number;
-  todayCommissions: number;
-  avgRate: number;
-  comparison: {
-    totalCommissions: number;
-    pendingCommissions: number;
-    paidCommissions: number;
-    todayCommissions: number;
-  };
+type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type Polarity = "up_good" | "up_bad" | "neutral";
+
+interface MetricDelta {
+  current: number;
+  previous: number;
+  changePct: number | null;
+  direction: "up" | "down" | "flat";
+}
+
+interface CardSpec {
+  key: string;
+  label: string;
+  value: string;
+  sub: string;
+  icon: AtlasIconName;
+  variant: Variant;
+  delta?: MetricDelta;
+  polarity: Polarity;
+}
+
+function variantFor(v: Variant): string {
+  if (v === "success") {
+    return "text-success-700 dark:text-success-300";
+  }
+  if (v === "warning") {
+    return "text-warning-700 dark:text-warning-300";
+  }
+  if (v === "danger") {
+    return "text-danger-700 dark:text-danger-300";
+  }
+  if (v === "info") {
+    return "text-info-700 dark:text-info-300";
+  }
+  if (v === "brand") {
+    return "text-brand-700 dark:text-brand-300";
+  }
+  return "text-neutral-500 dark:text-neutral-400";
+}
+
+function iconColorFor(v: Variant): string {
+  if (v === "success") return "text-success-600 dark:text-success-400";
+  if (v === "warning") return "text-warning-600 dark:text-warning-400";
+  if (v === "danger") return "text-danger-600 dark:text-danger-400";
+  if (v === "info") return "text-info-600 dark:text-info-400";
+  if (v === "brand") return "text-brand-600 dark:text-brand-400";
+  return "text-neutral-400 dark:text-neutral-500";
+}
+
+function deltaColor(delta: MetricDelta, polarity: Polarity): string {
+  if (delta.direction === "flat") return "text-neutral-500 dark:text-neutral-400";
+  if (delta.changePct === null) return "text-neutral-500 dark:text-neutral-400";
+  if (polarity === "neutral") return "text-neutral-500 dark:text-neutral-400";
+  const up = delta.direction === "up";
+  if (polarity === "up_good") {
+    return up
+      ? "text-success-600 dark:text-success-400"
+      : "text-danger-600 dark:text-danger-400";
+  }
+  return up
+    ? "text-danger-600 dark:text-danger-400"
+    : "text-success-600 dark:text-success-400";
+}
+
+function arrowGlyph(delta: MetricDelta): string {
+  if (delta.direction === "up") return "\u25B2";
+  if (delta.direction === "down") return "\u25BC";
+  return "\u2013";
+}
+
+function deltaLabel(delta: MetricDelta): string {
+  if (delta.changePct === null) {
+    if (delta.current === 0 && delta.previous === 0) return "No change";
+    return delta.direction === "up" ? "New" : "None";
+  }
+  const abs = Math.abs(delta.changePct);
+  if (abs >= 100) return abs.toFixed(0) + "%";
+  return abs.toFixed(1) + "%";
+}
+
+const CARD_GRID_CLASS = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5";
+const CARD_GRID_CLASS_FOUR = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4";
+
+const LABEL_CLASS =
+  "text-[11px] font-semibold uppercase tracking-[0.12em]";
+
+const VALUE_CLASS =
+  "mt-3 text-2xl font-semibold tabular-nums text-neutral-900 dark:text-neutral-100";
+
+const SUB_CLASS = "mt-1 text-xs text-neutral-500 dark:text-neutral-400";
+
+const DELTA_ROW_CLASS = "mt-1 flex items-center gap-1.5 text-xs";
+
+function CardBody({ card }: { card: CardSpec }) {
+  const labelClass = cn(LABEL_CLASS, variantFor(card.variant));
+  const iconClass = cn("h-4 w-4", iconColorFor(card.variant));
+
+  return (
+    <Card className="h-full p-4">
+      <div className="flex items-start justify-between">
+        <span className={labelClass}>{card.label}</span>
+        <AtlasIcon
+          name={card.icon}
+          className={iconClass}
+          aria-hidden="true"
+        />
+      </div>
+      <div className={VALUE_CLASS}>{card.value}</div>
+      {card.delta && (
+        <div className={DELTA_ROW_CLASS}>
+          <span className={cn("font-medium", deltaColor(card.delta, card.polarity))}>
+            <span aria-hidden="true">{arrowGlyph(card.delta)} </span>
+            {deltaLabel(card.delta)}
+          </span>
+          <span className="text-neutral-500 dark:text-neutral-400">vs prev</span>
+        </div>
+      )}
+      {card.sub && <div className={SUB_CLASS}>{card.sub}</div>}
+    </Card>
+  );
 }
 
 export function ResellerCommissionSummaryCards({
-  data,
+  summary,
 }: {
-  data: ResellerCommissionSummaryData;
+  summary: CommissionSummary;
 }) {
-  const cards: {
-    label: string;
-    value: string;
-    icon: AtlasIconName;
-    color: string;
-    bg: string;
-    change?: number;
-  }[] = [
+  const todaySub =
+    summary.todayCommission > 0
+      ? "Today: " + formatCurrency(summary.todayCommission)
+      : "Nothing today";
+
+  const cards: CardSpec[] = [
     {
+      key: "total",
       label: "Total Commissions",
-      value: formatCurrency(data.totalCommissions),
+      value: formatCurrency(summary.totalCommission),
+      sub: todaySub,
       icon: "percent",
-      color: "text-brand-600",
-      bg: "bg-brand-50 dark:bg-brand-900/20",
-      change: data.comparison.totalCommissions,
+      variant: "brand",
+      delta: summary.totalCommissionDelta,
+      polarity: "up_good",
     },
     {
+      key: "pending",
       label: "Pending",
-      value: formatCurrency(data.pendingCommissions),
+      value: formatCurrency(summary.pendingCommission),
+      sub: "Awaiting payment to resellers",
       icon: "clock",
-      color: "text-warning-600",
-      bg: "bg-warning-50 dark:bg-warning-900/20",
-      change: data.comparison.pendingCommissions,
+      variant: "warning",
+      delta: summary.pendingCommissionDelta,
+      polarity: "neutral",
     },
     {
+      key: "paid",
       label: "Paid",
-      value: formatCurrency(data.paidCommissions),
+      value: formatCurrency(summary.paidCommission),
+      sub: "Settled to resellers",
       icon: "check",
-      color: "text-success-600",
-      bg: "bg-success-50 dark:bg-success-900/20",
-      change: data.comparison.paidCommissions,
+      variant: "success",
+      delta: summary.paidCommissionDelta,
+      polarity: "up_good",
     },
     {
-      label: "Today",
-      value: formatCurrency(data.todayCommissions),
+      key: "baseMargin",
+      label: "Atlas Base Margin",
+      value: formatCurrency(summary.atlasBaseMargin),
+      sub: "Provider to Atlas spread",
       icon: "trending-up",
-      color: "text-info-600",
-      bg: "bg-info-50 dark:bg-info-900/20",
-      change: data.comparison.todayCommissions,
+      variant: "info",
+      delta: summary.atlasBaseMarginDelta,
+      polarity: "up_good",
     },
     {
-      label: "Avg Rate",
-      value: `${data.avgRate}%`,
-      icon: "bar-chart",
-      color: "text-neutral-600",
-      bg: "bg-neutral-100 dark:bg-neutral-800",
+      key: "extraCut",
+      label: "Atlas Extra Cut",
+      value: formatCurrency(summary.atlasExtraCut),
+      sub: "Share of reseller price increases",
+      icon: "sales",
+      variant: "brand",
+      delta: summary.atlasExtraCutDelta,
+      polarity: "up_good",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-      {cards.map((card) => (
-        <Card
-          key={card.label}
-          className={cn(
-            "border-0 shadow-sm transition-shadow hover:shadow-md",
-            card.bg
-          )}
-        >
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                {card.label}
-              </p>
-              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
-            </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-            {card.change !== undefined && (
-              <p
-                className={cn(
-                  "mt-1 text-xs",
-                  card.change >= 0 ? "text-success-600" : "text-danger-600"
-                )}
-              >
-                {card.change >= 0 ? "▲" : "▼"} {Math.abs(card.change)}% vs prev
-              </p>
-            )}
-          </div>
-        </Card>
+    <div
+      role="region"
+      aria-label="Reseller commission summary"
+      className={CARD_GRID_CLASS}
+    >
+      {cards.map((c) => (
+        <div key={c.key}>
+          <CardBody card={c} />
+        </div>
       ))}
     </div>
   );
 }
 
-interface PlatformMarginSummaryData {
-  totalMargin: number;
-  todayMargin: number;
-  monthMargin: number;
-  avgMarginPercent: number;
-}
-
 export function PlatformMarginSummaryCards({
-  data,
+  summary,
 }: {
-  data: PlatformMarginSummaryData;
+  summary: PlatformSummary;
 }) {
-  const cards: {
-    label: string;
-    value: string;
-    icon: AtlasIconName;
-    color: string;
-    bg: string;
-  }[] = [
+  const cards: CardSpec[] = [
     {
+      key: "total",
       label: "Total Margin",
-      value: formatCurrency(data.totalMargin),
+      value: formatCurrency(summary.totalMargin),
+      sub: summary.rowCount + " orders in period",
       icon: "sales",
-      color: "text-brand-600",
-      bg: "bg-brand-50 dark:bg-brand-900/20",
+      variant: "brand",
+      delta: summary.totalMarginDelta,
+      polarity: "up_good",
     },
     {
+      key: "today",
       label: "Today's Margin",
-      value: formatCurrency(data.todayMargin),
+      value: formatCurrency(summary.todayMargin),
+      sub: "Since midnight",
       icon: "trending-up",
-      color: "text-success-600",
-      bg: "bg-success-50 dark:bg-success-900/20",
+      variant: "success",
+      polarity: "neutral",
     },
     {
+      key: "month",
       label: "This Month",
-      value: formatCurrency(data.monthMargin),
+      value: formatCurrency(summary.monthMargin),
+      sub: "Calendar month to date",
       icon: "calendar",
-      color: "text-info-600",
-      bg: "bg-info-50 dark:bg-info-900/20",
+      variant: "info",
+      polarity: "neutral",
     },
     {
+      key: "avg",
       label: "Avg Margin %",
-      value: `${data.avgMarginPercent}%`,
+      value: summary.avgMarginPercent.toFixed(1) + "%",
+      sub: "Across all margin rows",
       icon: "percent",
-      color: "text-warning-600",
-      bg: "bg-warning-50 dark:bg-warning-900/20",
+      variant: "warning",
+      polarity: "neutral",
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {cards.map((card) => (
-        <Card
-          key={card.label}
-          className={cn("border-0 shadow-sm", card.bg)}
-        >
-          <div className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                {card.label}
-              </p>
-              <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
-            </div>
-            <p className="mt-2 text-2xl font-bold">{card.value}</p>
-          </div>
-        </Card>
+    <div
+      role="region"
+      aria-label="Platform margin summary"
+      className={CARD_GRID_CLASS_FOUR}
+    >
+      {cards.map((c) => (
+        <div key={c.key}>
+          <CardBody card={c} />
+        </div>
       ))}
     </div>
   );

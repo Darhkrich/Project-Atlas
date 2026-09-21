@@ -32,6 +32,7 @@ interface AdminDataTableProps<T> {
   totalCount?: number;
   rowKey: (item: T) => string;
   onRowClick?: (item: T) => void;
+  rowAriaLabel?: (item: T) => string;
   caption?: string;
 }
 
@@ -54,12 +55,14 @@ export function AdminDataTable<T>({
   totalCount,
   rowKey,
   onRowClick,
+  rowAriaLabel,
   caption,
 }: AdminDataTableProps<T>) {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const isServerPaginated = typeof totalCount === "number";
 
   const sortedData = useMemo(() => {
+    if (isServerPaginated) return data;
     if (!sortConfig) return data;
     const col = columns.find((c) => c.key === sortConfig.key);
     if (!col) return data;
@@ -79,7 +82,7 @@ export function AdminDataTable<T>({
       }
       return sortConfig.direction === "asc" ? result : -result;
     });
-  }, [data, sortConfig, columns]);
+  }, [data, sortConfig, columns, isServerPaginated]);
 
   const totalPages = isServerPaginated
     ? Math.max(1, Math.ceil((totalCount as number) / pageSize))
@@ -91,6 +94,7 @@ export function AdminDataTable<T>({
     : sortedData.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const handleSort = (key: string) => {
+    if (isServerPaginated) return;
     setSortConfig((current) => {
       if (!current || current.key !== key) return { key, direction: "asc" };
       if (current.direction === "asc") return { key, direction: "desc" };
@@ -109,17 +113,25 @@ export function AdminDataTable<T>({
   }
 
   if (error) {
-    return <ErrorState title="Failed to load data" description={error} onRetry={onRetry} />;
+    return (
+      <ErrorState
+        title="Failed to load data"
+        description={error}
+        onRetry={onRetry}
+      />
+    );
   }
 
   if (!data || data.length === 0) {
     return <EmptyState title={emptyMessage} variant={"no_data"} />;
   }
 
+  const tableLabel = caption ? undefined : "Data table";
+
   return (
     <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm" aria-label={caption}>
+        <table className="w-full text-sm" aria-label={tableLabel}>
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50">
@@ -130,28 +142,35 @@ export function AdminDataTable<T>({
                     ? ("ascending" as const)
                     : ("descending" as const)
                   : undefined;
+                const sortable = col.sortable && !isServerPaginated;
+
                 return (
                   <th
                     key={col.key}
                     scope="col"
-                    aria-sort={col.sortable ? ariaSort : undefined}
+                    aria-sort={sortable ? ariaSort : undefined}
                     className={cn(
                       "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400",
-                      col.sortable &&
-                        "cursor-pointer select-none hover:text-neutral-700 dark:hover:text-neutral-300",
                       col.headerClassName,
                       col.className
                     )}
-                    onClick={() => col.sortable && handleSort(col.key)}
                   >
-                    <div className="flex items-center gap-1">
-                      {col.header}
-                      {col.sortable && isSorted && (
-                        <span aria-hidden="true">
-                          {sortConfig.direction === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </div>
+                    {sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col.key)}
+                        className="inline-flex items-center gap-1 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      >
+                        {col.header}
+                        {isSorted && (
+                          <span aria-hidden="true">
+                            {sortConfig.direction === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </button>
+                    ) : (
+                      col.header
+                    )}
                   </th>
                 );
               })}
@@ -162,8 +181,13 @@ export function AdminDataTable<T>({
               <tr
                 key={rowKey(item)}
                 tabIndex={onRowClick ? 0 : undefined}
-                role={onRowClick ? "button" : undefined}
-                aria-label={onRowClick ? `Open details` : undefined}
+                aria-label={
+                  onRowClick
+                    ? rowAriaLabel
+                      ? rowAriaLabel(item)
+                      : "Open row"
+                    : undefined
+                }
                 className={cn(
                   "border-b border-neutral-100 last:border-0 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900/50",
                   onRowClick &&
@@ -179,7 +203,10 @@ export function AdminDataTable<T>({
                 }}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={cn("px-4 py-3", col.cellClassName)}>
+                  <td
+                    key={col.key}
+                    className={cn("px-4 py-3", col.cellClassName)}
+                  >
                     {col.cell(item)}
                   </td>
                 ))}
@@ -193,7 +220,7 @@ export function AdminDataTable<T>({
         <div className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
           <span className="text-xs text-neutral-500">
             Page {safePage} of {totalPages}
-            {isServerPaginated && ` · ${totalCount} total`}
+            {isServerPaginated && " · " + totalCount + " total"}
           </span>
           <div className="flex gap-1">
             <Button

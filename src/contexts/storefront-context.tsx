@@ -22,7 +22,7 @@ interface StorefrontContextValue {
   resetConfig: () => void;
   getStorefrontBySlug: (slug: string) => StorefrontConfig | undefined;
 }
-
+ 
 const StorefrontContext = createContext<StorefrontContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "atlas_storefront_configs";

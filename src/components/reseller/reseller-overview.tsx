@@ -1,22 +1,24 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { AtlasCard } from "@/components/atlas/card";
 import { AtlasSkeleton } from "@/components/atlas/skeleton";
-import { AtlasErrorState } from "@/components/atlas/error-state";
 import { AtlasBadge } from "@/components/atlas/badge";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
-import { useResellerData } from "@/contexts/reseller-data-context";
+import { useResellerOverview } from "@/lib/reseller/hooks/use-reseller-overview";
 import { useStorefront } from "@/contexts/storefront-context";
 import { StorefrontPurchaseFlow } from "@/components/reseller/storefront/storefront-purchase-flow";
-
-/* -------------------------------------------------------------------------- */
-/* Static Local Data (For the Mockup's specific layout)                       */
-/* -------------------------------------------------------------------------- */
+import { formatCurrency } from "@/lib/shared/format";
+import { formatRelative } from "@/lib/shared/format";
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_STATUS_VARIANTS,
+  ORDER_AUDIENCE_LABELS,
+  ORDER_AUDIENCE_VARIANTS,
+  serviceLabel,
+} from "@/lib/admin/orders/orders-labels";
 
 const quickSellActions = [
   { label: "Airtime", serviceId: "airtime", description: "Top up any network", icon: "phone" as AtlasIconName, bgClass: "bg-orange-100" },
@@ -30,23 +32,11 @@ const quickSellActions = [
 ];
 
 const resellerTools = [
-  { label: "Price Management", description: "Set your selling prices", icon: "settings" as AtlasIconName },
-  { label: "Bulk Transactions", description: "Process multiple orders", icon: "layers" as AtlasIconName },
-  { label: "Transaction Reports", description: "Track your performance", icon: "chart-bar" as AtlasIconName },
-  { label: "API Access", description: "Integrate with your systems", icon: "code" as AtlasIconName },
+  { label: "Price Management", description: "Set your selling prices", icon: "settings" as AtlasIconName, href: "/reseller/services" },
+  { label: "Transaction Reports", description: "Track your performance", icon: "bar-chart" as AtlasIconName, href: "/reseller/analytics" },
+  { label: "Orders", description: "See every order", icon: "receipt" as AtlasIconName, href: "/reseller/orders" },
+  { label: "Wallet", description: "Fund and withdraw", icon: "wallet" as AtlasIconName, href: "/reseller/wallet" },
 ];
-
-const topServices = [
-  { label: "Data", percentage: 42, icon: "globe" as AtlasIconName, color: "bg-green-500" },
-  { label: "Airtime", percentage: 28, icon: "phone" as AtlasIconName, color: "bg-orange-500" },
-  { label: "Electricity", percentage: 14, icon: "zap" as AtlasIconName, color: "bg-yellow-500" },
-  { label: "Cable TV", percentage: 10, icon: "tv" as AtlasIconName, color: "bg-purple-500" },
-  { label: "Others", percentage: 6, icon: "more-horizontal" as AtlasIconName, color: "bg-neutral-500" },
-];
-
-/* -------------------------------------------------------------------------- */
-/* Loading & Error State                                                      */
-/* -------------------------------------------------------------------------- */
 
 function ResellerOverviewSkeleton() {
   return (
@@ -71,44 +61,107 @@ function ResellerOverviewSkeleton() {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* Main Component                                                             */
-/* -------------------------------------------------------------------------- */
-
 export function ResellerOverview() {
-  const { orders, customers } = useResellerData();
+  const {
+    reseller,
+    orders,
+    ordersSummary,
+    customers,
+    wallet,
+    nowMs,
+    loading,
+  } = useResellerOverview();
   const { config } = useStorefront();
-  const [loading, setLoading] = useState(true);
   const [quickSellService, setQuickSellService] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+  const resellerStatus = (reseller as { status?: string } | null)?.status;
+  const resellerJoinedAt = (reseller as { joinedAt?: string } | null)?.joinedAt;
 
-  const kpis = useMemo(() => {
-    const totalOrders = orders.length;
-    const totalCustomers = customers.length;
-    const totalSales = orders.reduce((sum, order) => {
-      const amount = parseFloat(order.amount.replace(/[^0-9.]/g, ""));
-      return sum + (isNaN(amount) ? 0 : amount);
-    }, 0);
-    const todaySales = orders
-      .filter((o) => o.date === "Just now" || o.date === "Today")
-      .reduce((sum, order) => {
-        const amount = parseFloat(order.amount.replace(/[^0-9.]/g, ""));
-        return sum + (isNaN(amount) ? 0 : amount);
-      }, 0);
+  const walletBalance = wallet.wallet?.record.balance ?? 0;
 
+  const topServices = useMemo(() => {
+    const counts = new Map<string, { count: number; revenue: number }>();
+    for (const o of orders) {
+      const current = counts.get(o.serviceId) ?? { count: 0, revenue: 0 };
+      current.count += 1;
+      if (o.status === "successful") current.revenue += o.amount;
+      counts.set(o.serviceId, current);
+    }
+    const total = orders.length;
+    const list = Array.from(counts.entries())
+      .map(([serviceId, data]) => ({
+        serviceId,
+        label: serviceLabel(serviceId),
+        count: data.count,
+        revenue: data.revenue,
+        percentage: total > 0 ? Math.round((data.count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+    return list;
+  }, [orders]);
+
+  const performanceSeries = useMemo(() => {
+    if (nowMs === null) {
+      return Array.from({ length: 7 }, () => ({
+        label: "",
+        sales: 0,
+        orders: 0,
+      }));
+    }
+    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const buckets = Array.from({ length: 7 }, (_, i) => {
+      const dayStartMs = nowMs - (6 - i) * 86_400_000;
+      const d = new Date(dayStartMs);
+      return {
+        start: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+        label: dayLabels[d.getUTCDay()],
+        sales: 0,
+        orders: 0,
+      };
+    });
+    const endOfToday = buckets[6].start + 86_400_000;
+    for (const o of orders) {
+      const t = new Date(o.createdAt).getTime();
+      if (Number.isNaN(t)) continue;
+      for (const bucket of buckets) {
+        if (t >= bucket.start && t < bucket.start + 86_400_000) {
+          bucket.orders += 1;
+          if (o.status === "successful") bucket.sales += o.amount;
+          break;
+        }
+      }
+    }
+    void endOfToday;
+    return buckets;
+  }, [orders, nowMs]);
+
+  const maxSales = Math.max(...performanceSeries.map((b) => b.sales), 1);
+  const weekTotal = performanceSeries.reduce((sum, b) => sum + b.sales, 0);
+
+  const accountStatusChecks = useMemo(() => {
+    if (!reseller) return [];
     return [
-      { label: "Today's Sales", value: `GH₵ ${todaySales.toFixed(2)}`, change: "+12.5%", trend: "up" as const },
-      { label: "Total Orders", value: totalOrders.toString(), change: "+20.3%", trend: "up" as const },
-      { label: "Customers", value: totalCustomers.toString(), change: "+18.7%", trend: "up" as const },
-      { label: "Wallet Balance", value: "GH₵ 850.00", change: "", trend: "up" as const },
+      {
+        text: "Verified reseller",
+        ok: reseller.verificationStatus === "verified",
+      },
+      {
+        text: "Account active",
+        ok: resellerStatus === "active",
+      },
+      {
+        text: "Wallet enabled",
+        ok: walletBalance > 0 || resellerStatus === "active",
+      },
+      {
+        text: "Full platform access",
+        ok: resellerStatus === "active",
+      },
     ];
-  }, [orders, customers]);
+  }, [reseller, resellerStatus, walletBalance]);
 
-  if (loading) return <ResellerOverviewSkeleton />;
+  if (loading || !reseller) return <ResellerOverviewSkeleton />;
 
   const recentOrders = orders.slice(0, 5);
 
@@ -121,31 +174,40 @@ export function ResellerOverview() {
           <div className="relative overflow-hidden rounded-2xl bg-[#12251C] p-6 text-white shadow-lg">
             <div className="relative z-10 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-bold md:text-2xl">Welcome back, Kofi Appiah 👋</h2>
+                <h2 className="text-xl font-bold md:text-2xl">
+                  Welcome back, {reseller.name}
+                </h2>
                 <p className="mt-2 max-w-md text-sm text-neutral-300">
-                  Manage your digital services business with Atlas. Sell, earn and grow - all in one place.
+                  Manage your digital services business with Atlas. Sell, earn
+                  and grow - all in one place.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
                 <div className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2">
-                  <AtlasIcon name="zap" className="h-5 w-5 text-yellow-400" />
+                  <AtlasIcon name="zap" className="h-5 w-5 text-yellow-400" aria-hidden="true" />
                   <div>
                     <p className="text-xs font-semibold">Fast Transactions</p>
-                    <p className="hidden text-[10px] text-neutral-300 sm:block">Instant processing</p>
+                    <p className="hidden text-[10px] text-neutral-300 sm:block">
+                      Instant processing
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2">
-                  <AtlasIcon name="shield" className="h-5 w-5 text-green-400" />
+                  <AtlasIcon name="shield" className="h-5 w-5 text-green-400" aria-hidden="true" />
                   <div>
                     <p className="text-xs font-semibold">Secure Platform</p>
-                    <p className="hidden text-[10px] text-neutral-300 sm:block">Bank-level security</p>
+                    <p className="hidden text-[10px] text-neutral-300 sm:block">
+                      Bank-level security
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2">
-                  <AtlasIcon name="headphones" className="h-5 w-5 text-blue-400" />
+                  <AtlasIcon name="headphones" className="h-5 w-5 text-blue-400" aria-hidden="true" />
                   <div>
                     <p className="text-xs font-semibold">24/7 Support</p>
-                    <p className="hidden text-[10px] text-neutral-300 sm:block">Always here</p>
+                    <p className="hidden text-[10px] text-neutral-300 sm:block">
+                      Always here
+                    </p>
                   </div>
                 </div>
               </div>
@@ -154,37 +216,76 @@ export function ResellerOverview() {
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {kpis.map((kpi, idx) => (
-              <AtlasCard key={idx} className="p-5">
-                <div className="flex items-start justify-between">
-                  <p className="text-sm text-neutral-500">{kpi.label}</p>
-                  <AtlasIcon
-                    name={["wallet", "trending-up", "receipt", "coins"][idx] as AtlasIconName}
-                    className={`h-4 w-4 ${["text-green-600", "text-blue-600", "text-purple-600", "text-yellow-600"][idx]}`}
-                  />
-                </div>
-                <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">{kpi.value}</p>
-                {kpi.change ? (
-                  <p className="mt-2 text-xs font-medium text-green-600">
-                    <AtlasIcon name="trending-up" className="mr-1 inline h-3 w-3" />
-                    {kpi.change} vs yesterday
-                  </p>
-                ) : (
-                  <button className="mt-2 w-full rounded-lg bg-[#12251C] py-2 text-xs font-semibold text-white hover:bg-[#0d1a14]">
-                    Fund Wallet +
-                  </button>
-                )}
-              </AtlasCard>
-            ))}
+          <div
+            role="region"
+            aria-label="Reseller dashboard summary"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          >
+            <AtlasCard className="p-5">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-neutral-500">Today&apos;s Sales</p>
+                <AtlasIcon name="trending-up" className="h-4 w-4 text-green-600" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">
+                {formatCurrency(ordersSummary.todayRevenue)}
+              </p>
+              <p className="mt-2 text-xs text-neutral-500">
+                {ordersSummary.todayOrders} {ordersSummary.todayOrders === 1 ? "order" : "orders"}
+              </p>
+            </AtlasCard>
+
+            <AtlasCard className="p-5">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-neutral-500">Total Orders</p>
+                <AtlasIcon name="receipt" className="h-4 w-4 text-blue-600" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">
+                {ordersSummary.totalOrders}
+              </p>
+              <p className="mt-2 text-xs text-neutral-500">
+                {ordersSummary.successfulCount} successful
+              </p>
+            </AtlasCard>
+
+            <AtlasCard className="p-5">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-neutral-500">Customers</p>
+                <AtlasIcon name="users" className="h-4 w-4 text-purple-600" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">
+                {customers.length}
+              </p>
+              <p className="mt-2 text-xs text-neutral-500">
+                On your storefront
+              </p>
+            </AtlasCard>
+
+            <AtlasCard className="p-5">
+              <div className="flex items-start justify-between">
+                <p className="text-sm text-neutral-500">Wallet Balance</p>
+                <AtlasIcon name="wallet" className="h-4 w-4 text-yellow-600" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-white">
+                {formatCurrency(walletBalance)}
+              </p>
+              <Link
+                href="/reseller/wallet"
+                className="mt-2 block w-full rounded-lg bg-[#12251C] py-2 text-center text-xs font-semibold text-white hover:bg-[#0d1a14]"
+              >
+                Fund Wallet
+              </Link>
+            </AtlasCard>
           </div>
 
           {/* Quick Sell */}
           <div>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-semibold">Quick Sell</h2>
-              <Link href="/reseller/storefront" className="text-sm font-medium text-brand-800 hover:underline">
-                View Storefront →
+              <Link
+                href="/reseller/storefront"
+                className="text-sm font-medium text-brand-800 hover:underline"
+              >
+                View Storefront
               </Link>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -196,10 +297,12 @@ export function ResellerOverview() {
                   className="group rounded-xl border border-neutral-200 bg-white p-4 text-left transition-all hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900"
                 >
                   <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${action.bgClass}`}>
-                    <AtlasIcon name={action.icon} className="h-5 w-5 text-neutral-700" />
+                    <AtlasIcon name={action.icon} className="h-5 w-5 text-neutral-700" aria-hidden="true" />
                   </div>
                   <p className="mt-3 text-sm font-semibold">{action.label}</p>
-                  <p className="mt-0.5 text-xs text-neutral-500">{action.description}</p>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    {action.description}
+                  </p>
                 </button>
               ))}
             </div>
@@ -208,42 +311,68 @@ export function ResellerOverview() {
           {/* Recent Transactions */}
           <AtlasCard padding="none" className="overflow-hidden">
             <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4 dark:border-neutral-800">
-              <h2 className="text-lg font-semibold">Recent Transactions</h2>
-              <Link href="/reseller/orders" className="text-sm font-medium text-brand-800 hover:underline">View All</Link>
+              <h2 className="text-lg font-semibold">Recent Orders</h2>
+              <Link
+                href="/reseller/orders"
+                className="text-sm font-medium text-brand-800 hover:underline"
+              >
+                View All
+              </Link>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm min-w-[600px]">
+                <caption className="sr-only">Recent reseller orders</caption>
                 <thead className="bg-neutral-50 text-xs uppercase text-neutral-500 dark:bg-neutral-900/50 dark:text-neutral-400">
                   <tr>
-                    <th className="px-6 py-3 font-medium">Service</th>
-                    <th className="px-6 py-3 font-medium">Customer</th>
-                    <th className="px-6 py-3 font-medium">Amount</th>
-                    <th className="px-6 py-3 font-medium">Status</th>
-                    <th className="px-6 py-3 font-medium">Time</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Service</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Customer</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Audience</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Amount</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Status</th>
+                    <th scope="col" className="px-6 py-3 font-medium">Time</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                   {recentOrders.length > 0 ? (
                     recentOrders.map((order) => (
-                      <tr key={order.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50">
+                      <tr
+                        key={order.id}
+                        className="hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                      >
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800">
-                              <AtlasIcon name={(order.icon || "phone") as AtlasIconName} className="h-4 w-4 text-neutral-600" />
-                            </div>
-                            <span className="font-medium">{order.service}</span>
-                          </div>
+                          <span className="font-medium">
+                            {serviceLabel(order.serviceId)}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 text-neutral-600 dark:text-neutral-300">{order.customer}</td>
-                        <td className="px-6 py-4 font-medium">{order.amount}</td>
-                        <td className="px-6 py-4"><AtlasBadge variant={order.statusVariant}>{order.status}</AtlasBadge></td>
-                        <td className="px-6 py-4 text-neutral-500">{order.date}</td>
+                        <td className="px-6 py-4 text-neutral-600 dark:text-neutral-300">
+                          {order.customerName}
+                        </td>
+                        <td className="px-6 py-4">
+                          <AtlasBadge variant={ORDER_AUDIENCE_VARIANTS[order.audience]}>
+                            {ORDER_AUDIENCE_LABELS[order.audience]}
+                          </AtlasBadge>
+                        </td>
+                        <td className="px-6 py-4 font-medium">
+                          {formatCurrency(order.amount)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <AtlasBadge variant={ORDER_STATUS_VARIANTS[order.status]}>
+                            {ORDER_STATUS_LABELS[order.status]}
+                          </AtlasBadge>
+                        </td>
+                        <td className="px-6 py-4 text-neutral-500">
+                          {nowMs ? formatRelative(order.createdAt, nowMs) : "—"}
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
-                        No orders yet. Orders from your storefront will appear here.
+                      <td
+                        colSpan={6}
+                        className="px-6 py-8 text-center text-neutral-500"
+                      >
+                        No orders yet. Orders from your storefront will appear
+                        here.
                       </td>
                     </tr>
                   )}
@@ -257,13 +386,23 @@ export function ResellerOverview() {
             <h2 className="mb-3 text-lg font-semibold">Reseller Tools</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {resellerTools.map((tool) => (
-                <Link key={tool.label} href="#" className="group rounded-xl border border-neutral-200 bg-white p-5 transition-all hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900">
+                <Link
+                  key={tool.label}
+                  href={tool.href}
+                  className="group rounded-xl border border-neutral-200 bg-white p-5 transition-all hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900"
+                >
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-neutral-100 dark:bg-neutral-800">
-                    <AtlasIcon name={tool.icon} className="h-5 w-5 text-neutral-700" />
+                    <AtlasIcon name={tool.icon} className="h-5 w-5 text-neutral-700" aria-hidden="true" />
                   </div>
                   <p className="mt-3 text-sm font-semibold">{tool.label}</p>
-                  <p className="mt-1 text-xs text-neutral-500">{tool.description}</p>
-                  <AtlasIcon name="arrow-right" className="mt-3 h-4 w-4 text-neutral-400 transition-transform group-hover:translate-x-1" />
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {tool.description}
+                  </p>
+                  <AtlasIcon
+                    name="arrow-right"
+                    className="mt-3 h-4 w-4 text-neutral-400 transition-transform group-hover:translate-x-1"
+                    aria-hidden="true"
+                  />
                 </Link>
               ))}
             </div>
@@ -276,90 +415,145 @@ export function ResellerOverview() {
           <AtlasCard className="p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Business Performance</h2>
-              <button className="text-xs font-medium text-neutral-500 hover:text-neutral-900">This Week ▾</button>
+              <span className="text-xs font-medium text-neutral-500">
+                Last 7 days
+              </span>
             </div>
             <div className="mt-4 h-32 rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900">
               <div className="flex h-full items-end gap-2">
-                {[40, 65, 45, 90, 75, 55, 80].map((height, i) => (
-                  <div key={i} className="flex-1 rounded-t bg-brand-800 dark:bg-brand-400" style={{ height: `${height}%` }} />
-                ))}
+                {performanceSeries.map((bucket, i) => {
+                  const height = Math.max((bucket.sales / maxSales) * 100, 4);
+                  return (
+                    <div
+                      key={i}
+                      className="flex-1 rounded-t bg-brand-800 dark:bg-brand-400"
+                      style={{ height: `${height}%` }}
+                      title={formatCurrency(bucket.sales)}
+                    />
+                  );
+                })}
               </div>
               <div className="mt-2 flex justify-between text-[10px] text-neutral-400">
-                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                {performanceSeries.map((bucket, i) => (
+                  <span key={i}>{bucket.label}</span>
+                ))}
               </div>
             </div>
             <div className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-xs font-semibold text-green-700 dark:bg-green-900/30">
-              GHS 1,240
+              {formatCurrency(weekTotal)}
             </div>
           </AtlasCard>
 
           {/* Top Services */}
           <AtlasCard className="p-5">
             <h2 className="mb-4 text-base font-semibold">Top Services</h2>
-            <div className="space-y-4">
-              {topServices.map((service) => (
-                <div key={service.label}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2">
-                      <AtlasIcon name={service.icon} className="h-4 w-4 text-neutral-500" />
+            {topServices.length === 0 ? (
+              <p className="text-sm text-neutral-500">
+                No orders recorded yet.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {topServices.map((service) => (
+                  <div key={service.serviceId}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
                       <span className="font-medium">{service.label}</span>
+                      <span className="text-neutral-500">
+                        {service.percentage}%
+                      </span>
                     </div>
-                    <span className="text-neutral-500">{service.percentage}%</span>
+                    <div className="h-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800">
+                      <div
+                        className="h-2 rounded-full bg-brand-600"
+                        style={{ width: `${service.percentage}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-neutral-100 dark:bg-neutral-800">
-                    <div className={`h-2 rounded-full ${service.color}`} style={{ width: `${service.percentage}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </AtlasCard>
 
           {/* Boost Your Earnings */}
           <AtlasCard className="border-green-100 bg-green-50 p-5 dark:bg-green-950/30">
-            <AtlasIcon name="rocket" className="h-8 w-8 text-green-600" />
-            <h2 className="mt-3 text-base font-semibold text-green-900 dark:text-white">Boost Your Earnings</h2>
-            <p className="mt-1 text-sm text-green-700 dark:text-neutral-400">Sell more with competitive reseller rates.</p>
-            <button className="mt-4 w-full rounded-lg bg-white py-2 text-xs font-semibold text-green-700 shadow-sm hover:bg-green-100 dark:bg-neutral-900 dark:text-neutral-300">
-              View Price List →
-            </button>
+            <AtlasIcon
+              name="rocket"
+              className="h-8 w-8 text-green-600"
+              aria-hidden="true"
+            />
+            <h2 className="mt-3 text-base font-semibold text-green-900 dark:text-white">
+              Boost Your Earnings
+            </h2>
+            <p className="mt-1 text-sm text-green-700 dark:text-neutral-400">
+              Sell more with competitive reseller rates.
+            </p>
+            <Link
+              href="/reseller/services"
+              className="mt-4 block w-full rounded-lg bg-white py-2 text-center text-xs font-semibold text-green-700 shadow-sm hover:bg-green-100 dark:bg-neutral-900 dark:text-neutral-300"
+            >
+              View Services
+            </Link>
           </AtlasCard>
 
           {/* Support */}
           <AtlasCard className="p-5">
             <h2 className="text-base font-semibold">Support</h2>
-            <p className="mt-1 text-sm text-neutral-500">Need help with a transaction or your account?</p>
-            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-200 py-2 text-xs font-semibold hover:bg-neutral-50 dark:border-neutral-700">
-              <AtlasIcon name="headphones" className="h-4 w-4" />
+            <p className="mt-1 text-sm text-neutral-500">
+              Need help with a transaction or your account?
+            </p>
+            <Link
+              href="/reseller/support"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-200 py-2 text-xs font-semibold hover:bg-neutral-50 dark:border-neutral-700"
+            >
+              <AtlasIcon name="headphones" className="h-4 w-4" aria-hidden="true" />
               Contact Support
-            </button>
+            </Link>
           </AtlasCard>
 
           {/* Account Status */}
           <AtlasCard className="p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold">Account Status</h2>
-              <AtlasBadge variant="success">Active</AtlasBadge>
+              <AtlasBadge
+                variant={reseller.status === "active" ? "success" : "warning"}
+              >
+                {reseller.status === "active"
+                  ? "Active"
+                  : reseller.status === "pending"
+                  ? "Pending"
+                  : "Suspended"}
+              </AtlasBadge>
             </div>
             <div className="mt-4 space-y-3">
-              {[
-                { text: "Verified Reseller", icon: "shield" },
-                { text: "Account Verified", icon: "check-circle" },
-                { text: "Business Active", icon: "check-circle" },
-                { text: "Wallet Enabled", icon: "wallet" },
-                { text: "Full Platform Access", icon: "grid" }
-              ].map((item, idx) => (
+              {accountStatusChecks.map((item, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <AtlasIcon name={item.icon as AtlasIconName} className="h-4 w-4 text-green-600" />
-                  <span className="text-sm">{item.text}</span>
+                  <AtlasIcon
+                    name={item.ok ? "check" : "x"}
+                    className={
+                      item.ok
+                        ? "h-4 w-4 text-green-600"
+                        : "h-4 w-4 text-neutral-400"
+                    }
+                    aria-hidden="true"
+                  />
+                  <span className="text-sm text-neutral-600 dark:text-neutral-300">
+                    {item.text}
+                  </span>
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-xs text-neutral-400">Member since May 2024</p>
+            <p className="mt-4 text-xs text-neutral-400">
+              Member since{" "}
+              {resellerJoinedAt
+                ? new Date(resellerJoinedAt).toLocaleDateString("en-GH", {
+                    month: "long",
+                    year: "numeric",
+                  })
+                : "—"}
+            </p>
           </AtlasCard>
         </div>
       </div>
 
-      {/* Quick Sell Modal with clean StorefrontPurchaseFlow */}
       {quickSellService && (
         <StorefrontPurchaseFlow
           serviceId={quickSellService}

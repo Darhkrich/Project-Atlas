@@ -1,13 +1,28 @@
 export type CommissionStatus = "pending" | "paid" | "cancelled" | "reversed";
-export type ServiceCategory = "data" | "airtime" | "bills" | "tv" | "exam_pins" | "other";
+
+export type ServiceCategory =
+  | "data"
+  | "airtime"
+  | "bills"
+  | "tv"
+  | "exam_pins"
+  | "other";
+
 export type PayoutRunStatus = "pending" | "completed" | "failed";
+
+/**
+ * Base commission rates, expressed as percentages of order value. Data is
+ * a percentage like every other service. Different data plans carry
+ * different prices, so a flat per-order amount would not scale.
+ */
+export type TierPercentRates = Record<ServiceCategory, number>;
 
 export interface ResellerTier {
   id: string;
   name: string;
   minMonthlySales: number;
   extraCutPercent: number;
-  baseCommissionRates: Record<ServiceCategory, number>;
+  baseCommissionRates: TierPercentRates;
   perks: string[];
 }
 
@@ -47,6 +62,18 @@ export interface ResellerCommission {
     previousStatus?: CommissionStatus;
     newStatus?: CommissionStatus;
   }[];
+}
+
+export interface CommissionAuditEntry {
+  id: string;
+  commissionId: string;
+  admin: string;
+  adminEmail: string;
+  action: string;
+  previousStatus?: CommissionStatus;
+  newStatus?: CommissionStatus;
+  reason?: string;
+  timestamp: string;
 }
 
 export interface PlatformMargin {
@@ -89,3 +116,13 @@ export const PAYOUT_RUN_STATUS_LABELS: Record<PayoutRunStatus, string> = {
   completed: "Completed",
   failed: "Failed",
 };
+
+export interface PayoutRun {
+  id: string;
+  date: string;
+  totalAmount: number;
+  resellerCount: number;
+  status: PayoutRunStatus;
+  commissionIds: string[];
+  failureReason?: string;
+}

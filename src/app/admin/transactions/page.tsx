@@ -1,403 +1,224 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/purity */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { TransactionSummaryCards } from "@/components/admin/transactions/transaction-summary-cards";
-import { TransactionAnalytics } from "@/components/admin/transactions/transaction-analytics";
-import { LiveTransactionsCard } from "@/components/admin/transactions/live-transactions-card";
-import { FailedTransactionsCard } from "@/components/admin/transactions/failed-transactions-card";
-import { ProviderHealthCard } from "@/components/admin/transactions/provider-health-card";
-import { FailureInsightsCard } from "@/components/admin/transactions/failure-insights-card";
-import { ReconciliationCard } from "@/components/admin/transactions/reconciliation-card";
-import { TransactionDetailDrawer } from "@/components/admin/transactions/transactions-detail-drawer";
-import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
-import { Button } from "@/components/admin/ui/button";
-import { Badge } from "@/components/admin/ui/badge";
-import { Input } from "@/components/admin/ui/input";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockTransactions } from "@/lib/admin/mock/transactions";
-import { formatCurrency } from "@/lib/admin/formatters";
-import { Transaction } from "@/lib/admin/types/transaction";
-import { cn } from "@/lib/utils";
 
-const statusVariantMap: Record<string, "success" | "warning" | "danger" | "info" | "neutral"> = {
-  successful: "success",
-  failed: "danger",
-  cancelled: "neutral",
-  refunded: "neutral",
-};
+
+import { TransactionsSummaryCards } from "@/components/admin/transactions/transaction-summary-cards";
+import { TransactionsFilters } from "@/components/admin/transactions/transactions-filters";
+import { TransactionsTable } from "@/components/admin/transactions/transactions-table";
+import { TransactionsEmptyState } from "@/components/admin/transactions/transactions-empty-state";
+import { TransactionDetailDrawer } from "@/components/admin/transactions/transactions-detail-drawer";
+
+
+import { Button } from "@/components/admin/ui/button";
+import { ErrorState } from "@/components/admin/ui/error-state";
+import { Can } from "@/lib/admin/rbac/can";
+import { useCan } from "@/lib/admin/rbac/can";
+import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
+import { useNow } from "@/lib/shared/hooks/use-now";
+import { useTransactions } from "@/lib/admin/hooks/use-transactions";
+import {
+  filterTransactions,
+  projectTransactionSummary,
+} from "@/lib/admin/transactions/transactions-projection";
+import { exportTransactionsCsv } from "@/lib/admin/transactions/transactions-csv-export";
+import type { TransactionLedgerFilters } from "@/lib/admin/types/transaction";
+import {
+  DEFAULT_TRANSACTIONS_PAGE_SIZE,
+  TRANSACTIONS_KIND_FILTER_ORDER,
+  TRANSACTIONS_STATUS_FILTER_ORDER,
+} from "@/lib/admin/transactions/transactions-constants";
+import type {
+  TransactionAudience,
+  TransactionSourceKind,
+  TransactionStatus,
+} from "@/lib/admin/types/transaction";
+
+function parseFilters(params: URLSearchParams): TransactionLedgerFilters {
+  const filters: TransactionLedgerFilters = {};
+  const search = params.get("q");
+  if (search) filters.search = search;
+  const kind = params.get("kind");
+  if (kind && (TRANSACTIONS_KIND_FILTER_ORDER as string[]).includes(kind)) {
+    filters.kind = kind as TransactionSourceKind;
+  }
+  const audience = params.get("audience");
+  if (audience) filters.audience = audience as TransactionAudience;
+  const status = params.get("status");
+  if (status && (TRANSACTIONS_STATUS_FILTER_ORDER as string[]).includes(status)) {
+    filters.status = status as TransactionStatus;
+  }
+  const method = params.get("method");
+  if (method) filters.paymentMethodId = method as TransactionLedgerFilters["paymentMethodId"];
+  const from = params.get("from");
+  if (from) filters.dateFrom = from;
+  const to = params.get("to");
+  if (to) filters.dateTo = to;
+  return filters;
+}
+
+function filtersToParams(filters: TransactionLedgerFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters.search) params.set("q", filters.search);
+  if (filters.kind) params.set("kind", filters.kind);
+  if (filters.audience) params.set("audience", filters.audience);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.paymentMethodId) params.set("method", filters.paymentMethodId);
+  if (filters.dateFrom) params.set("from", filters.dateFrom);
+  if (filters.dateTo) params.set("to", filters.dateTo);
+  return params;
+}
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTxn, setSelectedTxn] = useState<Transaction | null>(null);
-  const [filters, setFilters] = useState<any>({});
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(30);
-  const [bulkAction, setBulkAction] = useState<"retry" | "refund" | "export" | null>(null);
-  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const now = useNow();
+  const canView = useCan(PERMISSIONS.TRANSACTIONS_VIEW);
+  const { transactions, isLoading, error } = useTransactions();
 
-  // Define columns inside component to access setSelectedTxn
-  const allColumns = [
-    {
-      key: "id",
-      header: "Transaction ID",
-      cell: (t: Transaction) => <span className="font-medium">{t.id}</span>,
-    },
-    { key: "reference", header: "Reference", cell: (t: Transaction) => t.reference },
-    { key: "user", header: "User", cell: (t: Transaction) => t.user.name },
-    {
-      key: "type",
-      header: "Type",
-      cell: (t: Transaction) => <Badge variant="info">{t.type}</Badge>,
-    },
-    { key: "amount", header: "Amount", cell: (t: Transaction) => formatCurrency(t.amount) },
-    { key: "fee", header: "Fee", cell: (t: Transaction) => formatCurrency(t.fee) },
-    { key: "net", header: "Net", cell: (t: Transaction) => formatCurrency(t.netAmount) },
-    { key: "method", header: "Method", cell: (t: Transaction) => t.paymentMethodId },
-    {
-      key: "status",
-      header: "Status",
-      cell: (t: Transaction) => <Badge variant={statusVariantMap[t.status]}>{t.status}</Badge>,
-    },
-    {
-      key: "created",
-      header: "Created",
-      cell: (t: Transaction) => new Date(t.createdAt).toLocaleDateString(),
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (t: Transaction) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedTxn(t);
-          }}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+  const currentPage = useMemo(() => {
+    const raw = Number(searchParams.get("page") ?? "1");
+    return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
+  }, [searchParams]);
+  const selectedTransactionId = searchParams.get("txn");
 
-  // Initialize visible columns once allColumns is defined
-  useEffect(() => {
-    setVisibleColumns(allColumns.map((c) => c.key));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setTransactions(mockTransactions);
-      setLoading(false);
-    }, 500);
-  }, []);
-
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      setLoading(true);
-      setTimeout(() => {
-        setTransactions(mockTransactions);
-        setLoading(false);
-      }, 500);
-    }, refreshInterval * 1000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval]);
-
- const liveTransactions = transactions.filter((t) => t.status === "pending" || t.status === "processing");
-  const todayFailedTransactions = transactions.filter((t) => {
-    const today = new Date();
-    const txnDate = new Date(t.createdAt);
-    return (
-      t.status === "failed" &&
-      txnDate.getDate() === today.getDate() &&
-      txnDate.getMonth() === today.getMonth() &&
-      txnDate.getFullYear() === today.getFullYear()
-    );
-  });
-
-  const historyTransactions = transactions.filter((t) =>
-    ["successful", "failed", "cancelled", "refunded"].includes(t.status)
+  const selectedTransaction = useMemo(
+    () =>
+      selectedTransactionId
+        ? transactions.find((t) => t.id === selectedTransactionId) ?? null
+        : null,
+    [transactions, selectedTransactionId]
   );
 
-  const filteredTransactions = historyTransactions.filter((txn) => {
-    if (
-      filters.search &&
-      !txn.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !txn.reference.toLowerCase().includes(filters.search.toLowerCase())
-    )
-      return false;
-    if (filters.type && txn.type !== filters.type) return false;
-    if (filters.status && txn.status !== filters.status) return false;
-    if (filters.paymentMethod && txn.paymentMethodId !== filters.paymentMethod) return false;
-    return true;
-  });
+  const filteredRows = useMemo(
+    () => filterTransactions(transactions, filters),
+    [transactions, filters]
+  );
 
-  const columns = allColumns.filter((c) => visibleColumns.includes(c.key));
+  const summary = useMemo(
+    () => projectTransactionSummary(transactions, now ?? Date.now()),
+    [transactions, now]
+  );
 
-  const summaryData = {
-    totalVolume: 1250000,
-    todayVolume: 45000,
-    pendingAmount: 15000,
-    failedAmount: 5000,
-    successRate: 96.5,
-  };
+  const pageSize = DEFAULT_TRANSACTIONS_PAGE_SIZE;
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
 
-  const handleRetry = (id: string) => {
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: "processing" as const } : t))
+  const hasFilters = Object.keys(filters).length > 0;
+
+  const handleFiltersChange = useCallback(
+    (next: TransactionLedgerFilters) => {
+      const params = filtersToParams(next);
+      router.replace("/admin/transactions?" + params.toString());
+    },
+    [router]
+  );
+
+  const handleFiltersReset = useCallback(() => {
+    router.replace("/admin/transactions");
+  }, [router]);
+
+  const handlePageChange = useCallback(
+    (page: number) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (page <= 1) next.delete("page");
+      else next.set("page", String(page));
+      router.replace("/admin/transactions?" + next.toString());
+    },
+    [router, searchParams]
+  );
+
+  const handleRowClick = useCallback(
+    (transactionId: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      next.set("txn", transactionId);
+      router.replace("/admin/transactions?" + next.toString());
+    },
+    [router, searchParams]
+  );
+
+  const handleCloseDrawer = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("txn");
+    router.replace("/admin/transactions?" + next.toString());
+  }, [router, searchParams]);
+
+  const handleExport = useCallback(() => {
+    exportTransactionsCsv(filteredRows);
+  }, [filteredRows]);
+
+  if (!canView) {
+    return (
+      <ErrorState
+        title="You do not have access to transactions"
+        description="Ask an administrator to grant you the transactions:view permission."
+      />
     );
-  };
-
-  const handleRefund = (id: string, amount: number) => {
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              refundStatus: "completed" as const,
-              refundHistory: [
-                ...(t.refundHistory || []),
-                {
-                  timestamp: new Date().toISOString(),
-                  amount,
-                  status: "completed" as const,
-                  admin: "current_admin@atlas.com",
-                },
-              ],
-            }
-          : t
-      )
-    );
-  };
-
-  const handleBulkAction = () => {
-    console.log(`${bulkAction} for`, selectedRowKeys);
-    setShowBulkConfirm(false);
-    setBulkAction(null);
-    setSelectedRowKeys([]);
-  };
+  }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Transactions"
-        description="Financial operations console for all money movement."
-        actions={
+        description="Read-only ledger of every Atlas wallet movement across direct, reseller, and storefront user audiences. Orders, payments, and gateway state live on their own pages."
+        meta={
           <>
+            <span>{transactions.length} total</span>
+            <span className="text-neutral-400">·</span>
+            <span>{filteredRows.length} after filters</span>
+          </>
+        }
+        actions={
+          <Can permission={PERMISSIONS.TRANSACTIONS_EXPORT}>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              className={cn(
-                autoRefresh && "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
-              )}
+              onClick={handleExport}
+              disabled={filteredRows.length === 0}
             >
-              Auto Refresh {autoRefresh ? "On" : "Off"}
+              Export CSV
             </Button>
-            {autoRefresh && (
-              <select
-                className="h-8 rounded-md border border-neutral-300 px-2 text-xs dark:border-neutral-700 dark:bg-neutral-800"
-                value={refreshInterval}
-                onChange={(e) => setRefreshInterval(Number(e.target.value))}
-              >
-                <option value={30}>30s</option>
-                <option value={60}>1m</option>
-                <option value={300}>5m</option>
-              </select>
-            )}
-          </>
+          </Can>
         }
       />
 
-      <TransactionSummaryCards data={summaryData} />
+      {error ? (
+        <ErrorState title="Could not load transactions" description={error.message} />
+      ) : (
+        <>
+          <TransactionsSummaryCards summary={summary} />
 
-      <TransactionAnalytics />
+          <TransactionsFilters
+            filters={filters}
+            onChange={handleFiltersChange}
+            onReset={handleFiltersReset}
+          />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <LiveTransactionsCard
-          transactions={liveTransactions}
-          onViewAll={() => setFilters({ ...filters, status: "pending" })}
-          onTransactionClick={setSelectedTxn}
-          onRetry={handleRetry}
-        />
-        <FailedTransactionsCard
-          transactions={todayFailedTransactions}
-          onViewAll={() => setFilters({ ...filters, status: "failed" })}
-          onTransactionClick={setSelectedTxn}
-          onRetry={handleRetry}
-          onRefund={(id) => {
-            setSelectedTxn(transactions.find((t) => t.id === id) || null);
-          }}
-        />
-        <ProviderHealthCard />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <FailureInsightsCard />
-        <ReconciliationCard />
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Input
-          placeholder="Search transactions..."
-          className="max-w-xs"
-          value={filters.search || ""}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-        />
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filters.type || ""}
-          onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-        >
-          <option value="">All Types</option>
-          <option value="deposit">Deposit</option>
-          <option value="withdrawal">Withdrawal</option>
-          <option value="purchase">Purchase</option>
-          <option value="commission">Commission</option>
-          <option value="refund">Refund</option>
-          <option value="adjustment">Adjustment</option>
-        </select>
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filters.status || ""}
-          onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-        >
-          <option value="">All Statuses</option>
-          <option value="successful">Successful</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="refunded">Refunded</option>
-        </select>
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={filters.paymentMethod || ""}
-          onChange={(e) => setFilters({ ...filters, paymentMethod: e.target.value })}
-        >
-          <option value="">All Methods</option>
-          <option value="wallet">Wallet</option>
-          <option value="momo">Mobile Money</option>
-          <option value="card">Card</option>
-          <option value="bank">Bank</option>
-          <option value="ussd">USSD</option>
-          <option value="atlas_points">Atlas Points</option>
-        </select>
-      </div>
-
-      {/* Column visibility & page size */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Rows per page:</span>
-          <select
-            className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Columns:</span>
-          {allColumns
-            .filter((c) => c.key !== "actions")
-            .map((col) => (
-              <label key={col.key} className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.includes(col.key)}
-                  onChange={(e) => {
-                    if (e.target.checked) setVisibleColumns((prev) => [...prev, col.key]);
-                    else setVisibleColumns((prev) => prev.filter((k) => k !== col.key));
-                  }}
-                  className="h-3 w-3"
-                />
-                {col.header}
-              </label>
-            ))}
-        </div>
-      </div>
-
-      {/* Bulk actions */}
-      {selectedRowKeys.length > 0 && (
-        <div className="flex items-center gap-2 rounded-md bg-neutral-50 p-2 dark:bg-neutral-900">
-          <span className="text-sm">{selectedRowKeys.length} selected</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("retry");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Retry
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("refund");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Refund
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setBulkAction("export");
-              setShowBulkConfirm(true);
-            }}
-          >
-            Export
-          </Button>
-        </div>
+          {filteredRows.length === 0 && !isLoading ? (
+            <TransactionsEmptyState hasFilters={hasFilters} />
+          ) : (
+            <TransactionsTable
+              rows={paginatedRows}
+              isLoading={isLoading}
+              page={currentPage}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+              onRowClick={handleRowClick}
+            />
+          )}
+        </>
       )}
 
-      <AdminDataTable
-        columns={columns}
-        data={filteredTransactions}
-        isLoading={loading}
-        rowKey={(t) => t.id}
-        onRowClick={(t) => setSelectedTxn(t)}
-        pageSize={pageSize}
-        currentPage={page}
-        onPageChange={setPage}
-        emptyMessage="No transactions found."
-      />
-
       <TransactionDetailDrawer
-        transaction={selectedTxn}
-        onClose={() => setSelectedTxn(null)}
-        onRetry={handleRetry}
-        onRefund={handleRefund}
-      />
-
-      <ConfirmDialog
-        open={showBulkConfirm}
-        title={`Confirm ${bulkAction ?? ""}`}
-        description={`Are you sure you want to ${bulkAction} ${selectedRowKeys.length} transactions?`}
-        confirmLabel="Confirm"
-        danger={bulkAction === "refund"}
-        onConfirm={handleBulkAction}
-        onCancel={() => {
-          setShowBulkConfirm(false);
-          setBulkAction(null);
-        }}
+        transaction={selectedTransaction}
+        now={now}
+        onClose={handleCloseDrawer}
       />
     </div>
   );

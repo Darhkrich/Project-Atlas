@@ -1,7 +1,6 @@
+// components/admin/dashboard/transactions-card.tsx
 "use client";
 
-import { DashboardCard } from "./dashboard-card";
-import { SubCardWithChart } from "./sub-card-with-chart";
 import {
   BarChart,
   Bar,
@@ -15,33 +14,58 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { mockDashboardData } from "@/lib/admin/mock/dashboard";
-
-const COLORS_PENDING = ["#3b82f6", "#22c55e", "#f59e0b"];
-const COLORS_FAILED = ["#f59e0b", "#ef4444", "#8b5cf6"];
+import { DashboardCard } from "./dashboard-card";
+import { SubCardWithChart } from "./sub-card-with-chart";
+import {
+  mockDashboardData,
+  dashboardTrends,
+} from "@/lib/admin/mock/dashboard";
+import {
+  STREAM_COLORS,
+  TRANSACTION_STATUS_COLORS,
+  GRID_STROKE,
+  GRID_CLASS,
+} from "@/lib/admin/dashboard/chart-palette";
 
 export function TransactionsCard() {
   const pendingTotal = mockDashboardData.transactions.pending.total;
   const failedTotal = mockDashboardData.transactions.failed.total;
   const total = pendingTotal + failedTotal;
   const statusData = mockDashboardData.transactionStatusData;
+  const pendingBreakdown = mockDashboardData.transactions.pending.breakdown;
+  const failedBreakdown = mockDashboardData.transactions.failed.breakdown;
+
+  const pendingPie = [
+    { name: "E-commerce", value: pendingBreakdown.ecommerce },
+    { name: "Resellers", value: pendingBreakdown.reseller },
+    { name: "Digital Services", value: pendingBreakdown.digitalServices },
+  ];
+
+  const failedPie = [
+    { name: "E-commerce", value: failedBreakdown.ecommerce },
+    { name: "Resellers", value: failedBreakdown.reseller },
+    { name: "Digital Services", value: failedBreakdown.digitalServices },
+  ];
 
   return (
     <DashboardCard
       title="Transactions"
       value={total}
       icon="transactions"
+      delta={dashboardTrends.transactions}
+      deltaLabel="vs last 30 days"
+      href="/admin/payments"
       mainChart={
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={statusData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} className={GRID_CLASS} />
             <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={10} />
             <YAxis tickLine={false} axisLine={false} fontSize={10} />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 10 }} />
-            <Bar dataKey="ecommerce" stackId="a" fill="#3b82f6" name="E-commerce" />
-            <Bar dataKey="reseller" stackId="a" fill="#22c55e" name="Resellers" />
-            <Bar dataKey="digitalServices" stackId="a" fill="#f59e0b" name="Digital Services" />
+            <Bar dataKey="ecommerce" stackId="a" fill={STREAM_COLORS.ecommerce} name="E-commerce" />
+            <Bar dataKey="reseller" stackId="a" fill={STREAM_COLORS.reseller} name="Resellers" />
+            <Bar dataKey="digitalServices" stackId="a" fill={STREAM_COLORS.digitalServices} name="Digital Services" />
           </BarChart>
         </ResponsiveContainer>
       }
@@ -50,23 +74,23 @@ export function TransactionsCard() {
           <SubCardWithChart
             label="Pending"
             value={pendingTotal}
+            status={pendingTotal > 0 ? "warning" : "neutral"}
             chart={
               <ResponsiveContainer width="100%" height={50}>
                 <PieChart>
                   <Pie
-                    data={[
-                      { name: "Ecom", value: mockDashboardData.transactions.pending.breakdown.ecommerce },
-                      { name: "Reseller", value: mockDashboardData.transactions.pending.breakdown.reseller },
-                      { name: "Services", value: mockDashboardData.transactions.pending.breakdown.digitalServices },
-                    ]}
+                    data={pendingPie}
                     dataKey="value"
                     innerRadius={15}
                     outerRadius={25}
                     paddingAngle={2}
                     stroke="none"
                   >
-                    {COLORS_PENDING.map((color, index) => (
-                      <Cell key={`pending-${index}`} fill={color} />
+                    {pendingPie.map((_, index) => (
+                      <Cell
+                        key={"pending-" + index}
+                        fill={TRANSACTION_STATUS_COLORS.pending[index % TRANSACTION_STATUS_COLORS.pending.length]}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -77,23 +101,23 @@ export function TransactionsCard() {
           <SubCardWithChart
             label="Failed"
             value={failedTotal}
+            status={failedTotal > 0 ? "danger" : "neutral"}
             chart={
               <ResponsiveContainer width="100%" height={50}>
                 <PieChart>
                   <Pie
-                    data={[
-                      { name: "Ecom", value: mockDashboardData.transactions.failed.breakdown.ecommerce },
-                      { name: "Reseller", value: mockDashboardData.transactions.failed.breakdown.reseller },
-                      { name: "Services", value: mockDashboardData.transactions.failed.breakdown.digitalServices },
-                    ]}
+                    data={failedPie}
                     dataKey="value"
                     innerRadius={15}
                     outerRadius={25}
                     paddingAngle={2}
                     stroke="none"
                   >
-                    {COLORS_FAILED.map((color, index) => (
-                      <Cell key={`failed-${index}`} fill={color} />
+                    {failedPie.map((_, index) => (
+                      <Cell
+                        key={"failed-" + index}
+                        fill={TRANSACTION_STATUS_COLORS.failed[index % TRANSACTION_STATUS_COLORS.failed.length]}
+                      />
                     ))}
                   </Pie>
                   <Tooltip />

@@ -1,71 +1,99 @@
+// components/admin/dashboard/today-revenue-card.tsx
 "use client";
 
 import { useState } from "react";
+import {
+  ComposedChart,
+  Area,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
-import {
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from "recharts";
-import { mockDashboardData } from "@/lib/admin/mock/dashboard";
-import { formatCurrency } from "@/lib/admin/formatters";
 import { Button } from "@/components/admin/ui/button";
+import {
+  mockDashboardData,
+  todayRevenueSeries,
+  dashboardTrends,
+  type TodayRevenueRange,
+} from "@/lib/admin/mock/dashboard";
+import { formatCurrency } from "@/lib/shared/format";
+import {
+  STREAM_COLORS,
+  GRID_STROKE,
+  GRID_CLASS,
+} from "@/lib/admin/dashboard/chart-palette";
 import { cn } from "@/lib/utils";
 
-const hourlyData = [
-  { date: "00:00", ecommerce: 200, reseller: 150, digitalServices: 80 },
-  { date: "04:00", ecommerce: 450, reseller: 300, digitalServices: 150 },
-  { date: "08:00", ecommerce: 900, reseller: 600, digitalServices: 250 },
-  { date: "12:00", ecommerce: 1600, reseller: 1000, digitalServices: 400 },
-  { date: "16:00", ecommerce: 2200, reseller: 1400, digitalServices: 550 },
-  { date: "20:00", ecommerce: 2800, reseller: 1800, digitalServices: 700 },
+const RANGES: { key: TodayRevenueRange; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "7d", label: "7D" },
+  { key: "30d", label: "30D" },
 ];
 
 export function TodayRevenueCard() {
-  const [range, setRange] = useState<"today" | "7d" | "30d">("today");
-  const data = hourlyData; // for other ranges we could use different data; mock is same for brevity
-  const total = mockDashboardData.todayRevenue.total;
+  const [range, setRange] = useState<TodayRevenueRange>("today");
+  const data = todayRevenueSeries[range];
   const breakdown = mockDashboardData.todayRevenue.breakdown;
 
   return (
     <DashboardCard
       title="Today's Revenue"
-      value={formatCurrency(total)}
+      value={formatCurrency(mockDashboardData.todayRevenue.total)}
       icon="trending-up"
-      trend={mockDashboardData.todayRevenue.trend}
-      trendLabel="vs yesterday"
+      delta={dashboardTrends.todayRevenue}
+      deltaLabel="vs yesterday"
+      href="/admin/revenue"
       mainChart={
         <>
-          <div className="flex gap-1 mb-2">
-            {(["today", "7d", "30d"] as const).map((r) => (
+          <div className="mb-2 flex gap-1">
+            {RANGES.map((r) => (
               <Button
-                key={r}
+                key={r.key}
                 variant="ghost"
                 size="sm"
-                className={cn("text-xs", range === r && "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300")}
-                onClick={() => setRange(r)}
+                className={cn(
+                  "text-xs",
+                  range === r.key &&
+                    "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
+                )}
+                onClick={() => setRange(r.key)}
+                aria-pressed={range === r.key}
               >
-                {r === "today" ? "Today" : r.toUpperCase()}
+                {r.label}
               </Button>
             ))}
           </div>
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart data={data}>
               <defs>
-                <linearGradient id="todayRevGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#166e59" stopOpacity={0.6} />
-                  <stop offset="95%" stopColor="#166e59" stopOpacity={0} />
+                <linearGradient id="todayRevEcom" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0.6} />
+                  <stop offset="95%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="todayRevRes" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={STREAM_COLORS.reseller} stopOpacity={0.6} />
+                  <stop offset="95%" stopColor={STREAM_COLORS.reseller} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="todayRevDig" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0.6} />
+                  <stop offset="95%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} className={GRID_CLASS} />
               <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={10} />
               <YAxis tickLine={false} axisLine={false} fontSize={10} />
               <Tooltip formatter={(value: number) => formatCurrency(value)} />
-              <Area type="monotone" dataKey="ecommerce" stackId="1" stroke="#3b82f6" fill="url(#todayRevGrad)" strokeWidth={1.5} />
-              <Area type="monotone" dataKey="reseller" stackId="1" stroke="#22c55e" fill="url(#todayRevGrad)" strokeWidth={1.5} />
-              <Area type="monotone" dataKey="digitalServices" stackId="1" stroke="#f59e0b" fill="url(#todayRevGrad)" strokeWidth={1.5} />
-              <Line type="monotone" dataKey="ecommerce" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="reseller" stroke="#22c55e" strokeWidth={1.5} dot={false} />
-              <Line type="monotone" dataKey="digitalServices" stroke="#f59e0b" strokeWidth={1.5} dot={false} />
+              <Area type="monotone" dataKey="ecommerce" stackId="1" stroke={STREAM_COLORS.ecommerce} fill="url(#todayRevEcom)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="reseller" stackId="1" stroke={STREAM_COLORS.reseller} fill="url(#todayRevRes)" strokeWidth={1.5} />
+              <Area type="monotone" dataKey="digitalServices" stackId="1" stroke={STREAM_COLORS.digitalServices} fill="url(#todayRevDig)" strokeWidth={1.5} />
+              <Line type="monotone" dataKey="ecommerce" stroke={STREAM_COLORS.ecommerce} strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="reseller" stroke={STREAM_COLORS.reseller} strokeWidth={1.5} dot={false} />
+              <Line type="monotone" dataKey="digitalServices" stroke={STREAM_COLORS.digitalServices} strokeWidth={1.5} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </>
@@ -78,8 +106,13 @@ export function TodayRevenueCard() {
             chart={
               <ResponsiveContainer width="100%" height={35}>
                 <ComposedChart data={data}>
-                  <Area type="monotone" dataKey="ecommerce" stroke="#3b82f6" fill="url(#todayRevGrad)" strokeWidth={1} />
-                  <Line type="monotone" dataKey="ecommerce" stroke="#3b82f6" strokeWidth={1} dot={false} />
+                  <defs>
+                    <linearGradient id="subTodayEcom" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="ecommerce" stroke={STREAM_COLORS.ecommerce} fill="url(#subTodayEcom)" strokeWidth={1} />
                 </ComposedChart>
               </ResponsiveContainer>
             }
@@ -90,8 +123,13 @@ export function TodayRevenueCard() {
             chart={
               <ResponsiveContainer width="100%" height={35}>
                 <ComposedChart data={data}>
-                  <Area type="monotone" dataKey="reseller" stroke="#22c55e" fill="url(#todayRevGrad)" strokeWidth={1} />
-                  <Line type="monotone" dataKey="reseller" stroke="#22c55e" strokeWidth={1} dot={false} />
+                  <defs>
+                    <linearGradient id="subTodayRes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.reseller} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.reseller} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="reseller" stroke={STREAM_COLORS.reseller} fill="url(#subTodayRes)" strokeWidth={1} />
                 </ComposedChart>
               </ResponsiveContainer>
             }
@@ -102,8 +140,13 @@ export function TodayRevenueCard() {
             chart={
               <ResponsiveContainer width="100%" height={35}>
                 <ComposedChart data={data}>
-                  <Area type="monotone" dataKey="digitalServices" stroke="#f59e0b" fill="url(#todayRevGrad)" strokeWidth={1} />
-                  <Line type="monotone" dataKey="digitalServices" stroke="#f59e0b" strokeWidth={1} dot={false} />
+                  <defs>
+                    <linearGradient id="subTodayDig" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0.8} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="digitalServices" stroke={STREAM_COLORS.digitalServices} fill="url(#subTodayDig)" strokeWidth={1} />
                 </ComposedChart>
               </ResponsiveContainer>
             }

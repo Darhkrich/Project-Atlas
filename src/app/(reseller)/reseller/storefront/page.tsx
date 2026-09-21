@@ -10,6 +10,7 @@ import { Button } from "@/components/atlas/button";
 import { useStorefront } from "@/contexts/storefront-context";
 import { StorefrontRenderer } from "@/components/reseller/storefront/storefront-renderer";
 import { generateSlug, validateStorefrontConfig } from "@/lib/storefront/utils";
+import { DomainSection } from "@/components/domains/domain-section";
 import type {
   StorefrontTemplateId,
   StorefrontThemeId,
@@ -129,7 +130,6 @@ export default function StorefrontManagementPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-950 dark:text-white">
@@ -150,7 +150,6 @@ export default function StorefrontManagementPage() {
         </div>
       </div>
 
-      {/* Status */}
       <AtlasCard className="border-brand-100 dark:border-brand-900/40">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
@@ -171,20 +170,13 @@ export default function StorefrontManagementPage() {
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                 {`/customer-store/${config.store.slug}`}
               </p>
-              {config.store.subdomain && (
-                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                  {`https://${config.store.subdomain}.atlas.com`}
-                </p>
-              )}
             </div>
           </div>
           {saveStatus && <p className="text-sm text-neutral-600 dark:text-neutral-400">{saveStatus}</p>}
         </div>
       </AtlasCard>
 
-      {/* Editor + Preview */}
       <div className="grid gap-6 xl:grid-cols-[440px_minmax(0,1fr)]">
-        {/* Configuration panel */}
         <AtlasCard padding="none" className="overflow-hidden">
           <div className="grid grid-cols-6 border-b border-neutral-200 dark:border-neutral-800">
             {[
@@ -233,18 +225,6 @@ export default function StorefrontManagementPage() {
                     className="mt-1.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
                   />
                   {errors.slug && <p className="mt-1 text-xs text-danger-600">{errors.slug}</p>}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                    Subdomain (Production)
-                  </label>
-                  <input
-                    value={config.store.subdomain || ""}
-                    onChange={(e) => updateConfig({ store: { ...config.store, subdomain: e.target.value } })}
-                    placeholder="yourstore"
-                    className="mt-1.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
-                  />
-                  <p className="mt-1 text-[11px] text-neutral-500">https://yourstore.atlas.com</p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-neutral-700 dark:text-neutral-300">
@@ -655,9 +635,19 @@ export default function StorefrontManagementPage() {
               </>
             )}
           </div>
+
+          <div className="border-t border-neutral-200 dark:border-neutral-800">
+            <DomainSection
+              storefrontId={config.storefrontId}
+              storefrontName={config.store.name}
+              variant="reseller"
+              ownerName={config.store.name}
+              ownerEmail={config.contact.email}
+              framed={false}
+            />
+          </div>
         </AtlasCard>
 
-        {/* Preview panel */}
         <AtlasCard padding="none" className="overflow-hidden">
           <div className="flex flex-col gap-3 border-b border-neutral-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-800">
             <div>

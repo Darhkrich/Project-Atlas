@@ -1,85 +1,122 @@
+// components/admin/dashboard/pending-refunds-card.tsx
 "use client";
 
-import { DashboardCard } from "./dashboard-card";
-import { SubCardWithChart } from "./sub-card-with-chart";
 import {
   PieChart,
   Pie,
   Cell,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
 } from "recharts";
+import { DashboardCard } from "./dashboard-card";
+import { SubCardWithChart } from "./sub-card-with-chart";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
-
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b"];
+import { refundTrendSeries } from "@/lib/admin/mock/dashboard-series";
+import { dashboardTrends } from "@/lib/admin/mock/dashboard-trends";
+import {
+  STREAM_COLORS,
+  ACTIVE_USERS_DONUT_COLORS,
+} from "@/lib/admin/dashboard/chart-palette";
+import { formatCurrency } from "@/lib/shared/format";
 
 export function PendingRefundsCard() {
-  const data = mockDashboardData.refundBreakdown;
   const total = mockDashboardData.pendingRefunds.total;
+  const breakdown = mockDashboardData.pendingRefunds.breakdown;
+  const distribution = mockDashboardData.refundBreakdown;
 
   return (
     <DashboardCard
-      title="Total Pending Refunds"
+      title="Pending Refunds"
       value={total}
       icon="receipt"
+      delta={dashboardTrends.pendingRefunds}
+      deltaLabel="vs last month"
+      href="/admin/payments"
       mainChart={
-        <ResponsiveContainer width="100%" height={180}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={80}
-              paddingAngle={2}
-              stroke="none"
-              label={({ value }) => `${value}`}
-              labelLine={false}
-            >
-              {data.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip />
-          </PieChart>
-        </ResponsiveContainer>
+        <div className="relative">
+          <ResponsiveContainer width="100%" height={180}>
+            <PieChart>
+              <Pie
+                data={distribution}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={2}
+                stroke="none"
+              >
+                {distribution.map((_, index) => (
+                  <Cell
+                    key={"ref-" + index}
+                    fill={ACTIVE_USERS_DONUT_COLORS[index % ACTIVE_USERS_DONUT_COLORS.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <p className="text-2xl font-semibold tabular-nums">{total}</p>
+            <p className="text-[10px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              pending
+            </p>
+          </div>
+        </div>
       }
       subCards={
         <>
           <SubCardWithChart
             label="E-commerce"
-            value={mockDashboardData.pendingRefunds.breakdown.ecommerce}
+            value={formatCurrency(breakdown.ecommerce)}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.pendingRefunds.breakdown.ecommerce }]}>
-                  <Bar dataKey="value" fill="#3b82f6" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={refundTrendSeries}>
+                  <defs>
+                    <linearGradient id="prEcom" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.ecommerce} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="ecommerce" stroke={STREAM_COLORS.ecommerce} fill="url(#prEcom)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Resellers"
-            value={mockDashboardData.pendingRefunds.breakdown.reseller}
+            value={formatCurrency(breakdown.reseller)}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.pendingRefunds.breakdown.reseller }]}>
-                  <Bar dataKey="value" fill="#22c55e" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={refundTrendSeries}>
+                  <defs>
+                    <linearGradient id="prRes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.reseller} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.reseller} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="reseller" stroke={STREAM_COLORS.reseller} fill="url(#prRes)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Digital Services"
-            value={mockDashboardData.pendingRefunds.breakdown.digitalServices}
+            value={formatCurrency(breakdown.digitalServices)}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.pendingRefunds.breakdown.digitalServices }]}>
-                  <Bar dataKey="value" fill="#f59e0b" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={refundTrendSeries}>
+                  <defs>
+                    <linearGradient id="prDig" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={STREAM_COLORS.digitalServices} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="digitalServices" stroke={STREAM_COLORS.digitalServices} fill="url(#prDig)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />

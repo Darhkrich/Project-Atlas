@@ -1,11 +1,6 @@
-// lib/admin/resellers/csv-export.ts
-
 import type { Reseller } from "@/lib/admin/types/reseller";
 import type { ResellerCommission } from "@/lib/admin/types/commission";
-import {
-  STATUS_LABEL,
-  VERIFICATION_LABEL,
-} from "./constants";
+import { STATUS_LABEL, VERIFICATION_LABEL } from "./constants";
 
 function escape(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -13,7 +8,10 @@ function escape(value: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function resellersToCsv(resellers: Reseller[]): string {
+export function resellersToCsv(
+  resellers: Reseller[],
+  walletBalanceById: Map<string, number>
+): string {
   const header = [
     "id",
     "businessName",
@@ -24,7 +22,6 @@ export function resellersToCsv(resellers: Reseller[]): string {
     "status",
     "verificationStatus",
     "tierName",
-    "commissionRate",
     "walletBalance",
     "totalOrders",
     "totalRevenue",
@@ -45,8 +42,7 @@ export function resellersToCsv(resellers: Reseller[]): string {
     STATUS_LABEL[r.status] ?? r.status,
     VERIFICATION_LABEL[r.verificationStatus] ?? r.verificationStatus,
     r.tierName ?? "",
-    r.commissionRate,
-    r.walletBalance,
+    walletBalanceById.get(r.id) ?? 0,
     r.totalOrders,
     r.totalRevenue,
     r.commissionsEarned,

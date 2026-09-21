@@ -1,5 +1,3 @@
-// lib/admin/resellers/constants.ts
-
 import type {
   ResellerStatus,
   VerificationStatus,
@@ -126,26 +124,15 @@ export const COLUMN_LABEL: Record<ColumnKey, string> = {
   status: "Status",
 };
 
+// Only one adjustment method today: writes a ledger entry to the reseller's
+// authoritative wallet. Rail methods (Mobile Money reversal, bank transfer,
+// payout queue) are deferred until those rails are implemented. Adding them
+// back requires each method to dispatch a different ledger entry kind.
 export const WALLET_ADJUST_METHODS = [
   {
     value: "atlas_wallet" as const,
     label: "Atlas wallet balance",
-    hint: "Adjusts the reseller's wallet balance directly.",
-  },
-  {
-    value: "mobile_money" as const,
-    label: "Mobile money reversal",
-    hint: "Reverses to the original MoMo number. 1 to 24 hours.",
-  },
-  {
-    value: "bank_transfer" as const,
-    label: "Bank transfer",
-    hint: "Refunds the original settlement account. 1 to 3 business days.",
-  },
-  {
-    value: "payout_queue" as const,
-    label: "Payout queue adjustment",
-    hint: "Added to the next payout cycle (Tuesday or Friday).",
+    hint: "Writes an adjustment entry to the reseller's wallet ledger. The balance recomputes.",
   },
 ];
 

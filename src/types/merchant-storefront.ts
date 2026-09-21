@@ -8,8 +8,7 @@ export type MerchantTemplateCategory =
   | "cosmetics"
   | "clothing"
   | "garden"
-  | "accessories"
-  | "electronics"
+  | "access"
   | "home"
   | "food"
   | "sports"
@@ -31,6 +30,8 @@ export interface MerchantStorefrontProduct {
 }
 
 export interface MerchantStorefrontConfig {
+  /** Cross-references the storefront record in the admin catalog. */
+  storefrontId: string;
   storeName: string;
   slug: string;
   logo?: string;
@@ -60,15 +61,21 @@ export interface MerchantStorefrontConfig {
   showFeaturedProducts: boolean;
   status: "draft" | "live";
   paymentMethodIds: string[];
-  customDomain?: string;
-  customDomainStatus?: "pending" | "verified" | "failed";
-  subdomain?: string;
-  atlasDomain?: string;
   codEnabled?: boolean;
-  planId?: string; // subscription plan code (starter, growth, pro, enterprise)
+  planId?: string;
+
+  /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
+  customDomain?: string;
+  /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
+  customDomainStatus?: "pending" | "verified" | "failed";
+  /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
+  subdomain?: string;
+  /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
+  atlasDomain?: string;
 }
 
 export const defaultMerchantStorefront: MerchantStorefrontConfig = {
+  storefrontId: "SF-MER-001",
   storeName: "My Store",
   slug: "my-store",
   primaryColor: "#14532d",
@@ -96,10 +103,6 @@ export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   showFeaturedProducts: true,
   status: "draft",
   paymentMethodIds: ["momo"],
-  customDomain: "",
-  customDomainStatus: "pending",
-  subdomain: "",
-  atlasDomain: "",
   codEnabled: false,
   planId: "starter",
 };

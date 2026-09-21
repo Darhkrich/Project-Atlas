@@ -1,17 +1,31 @@
+// components/admin/dashboard/total-users-card.tsx
 "use client";
 
+import {
+  AreaChart,
+  Area,
+  ResponsiveContainer,
+} from "recharts";
 import { DashboardCard } from "./dashboard-card";
 import { SubCardWithChart } from "./sub-card-with-chart";
 import { PictorialChart } from "./pictorial-chart";
-import { ResponsiveContainer, BarChart, Bar } from "recharts";
-import { mockDashboardData } from "@/lib/admin/mock/dashboard";
+import {
+  mockDashboardData,
+} from "@/lib/admin/mock/dashboard";
+import { userGrowthSeries } from "@/lib/admin/mock/dashboard-series";
+import { dashboardTrends } from "@/lib/admin/mock/dashboard-trends";
+import { ACCOUNT_COLORS } from "@/lib/admin/dashboard/chart-palette";
 
 export function TotalUsersCard() {
   const total = mockDashboardData.totalUsers.total;
+  const resellers = mockDashboardData.totalUsers.resellers;
+  const customers = mockDashboardData.totalUsers.customers;
+  const merchants = mockDashboardData.totalUsers.merchants;
+
   const distribution = [
-    { name: "Resellers", value: mockDashboardData.totalUsers.resellers, icon: "users" as const, color: "#3b82f6" },
-    { name: "Customers", value: mockDashboardData.totalUsers.customers, icon: "user" as const, color: "#22c55e" },
-    { name: "Merchants", value: mockDashboardData.totalUsers.merchants, icon: "store" as const, color: "#f59e0b" },
+    { name: "Resellers", value: resellers, icon: "users" as const, color: "info" as const },
+    { name: "Customers", value: customers, icon: "user" as const, color: "success" as const },
+    { name: "Merchants", value: merchants, icon: "store" as const, color: "warning" as const },
   ];
 
   return (
@@ -19,40 +33,60 @@ export function TotalUsersCard() {
       title="Total Users"
       value={total.toLocaleString()}
       icon="users"
+      delta={dashboardTrends.totalUsers}
+      deltaLabel="vs last month"
       href="/admin/customers"
       mainChart={<PictorialChart data={distribution} className="mt-1" />}
       subCards={
         <>
           <SubCardWithChart
             label="Resellers"
-            value={mockDashboardData.totalUsers.resellers}
+            value={resellers}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.totalUsers.resellers }]}>
-                  <Bar dataKey="value" fill="#3b82f6" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={userGrowthSeries}>
+                  <defs>
+                    <linearGradient id="tuRes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={ACCOUNT_COLORS.resellers} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={ACCOUNT_COLORS.resellers} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="resellers" stroke={ACCOUNT_COLORS.resellers} fill="url(#tuRes)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Customers"
-            value={mockDashboardData.totalUsers.customers}
+            value={customers}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.totalUsers.customers }]}>
-                  <Bar dataKey="value" fill="#22c55e" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={userGrowthSeries}>
+                  <defs>
+                    <linearGradient id="tuCust" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={ACCOUNT_COLORS.customers} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={ACCOUNT_COLORS.customers} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="customers" stroke={ACCOUNT_COLORS.customers} fill="url(#tuCust)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />
           <SubCardWithChart
             label="Merchants"
-            value={mockDashboardData.totalUsers.merchants}
+            value={merchants}
             chart={
-              <ResponsiveContainer width="100%" height={30}>
-                <BarChart data={[{ value: mockDashboardData.totalUsers.merchants }]}>
-                  <Bar dataKey="value" fill="#f59e0b" />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={userGrowthSeries}>
+                  <defs>
+                    <linearGradient id="tuMer" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={ACCOUNT_COLORS.merchants} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={ACCOUNT_COLORS.merchants} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="merchants" stroke={ACCOUNT_COLORS.merchants} fill="url(#tuMer)" strokeWidth={1.5} />
+                </AreaChart>
               </ResponsiveContainer>
             }
           />

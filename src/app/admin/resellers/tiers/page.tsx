@@ -1,93 +1,267 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import type { ResellerTier } from "@/lib/admin/types/commission";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
-import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
-import { Input } from "@/components/admin/ui/input";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockResellerTiers } from "@/lib/admin/mock/commissions";
-import { ResellerTier } from "@/lib/admin/types/commission";
+import { EmptyState } from "@/components/admin/ui/empty-state";
+import { AtlasIcon } from "@/components/atlas/icons";
+import { Can, PERMISSIONS, useCurrentAdmin } from "@/lib/admin/rbac";
+import { useResellerTiers } from "@/lib/admin/hooks/use-reseller-tiers";
+import {
+  addTier,
+  updateTier,
+  removeTier,
+  type TierActor,
+  type TierInput,
+} from "@/lib/admin/mock/reseller-tier-store";
+import { TierSummaryCards } from "@/components/admin/resellers/tier-summary-cards";
+import { TierCard } from "@/components/admin/resellers/tier-card";
+import {
+  TierEditorModal,
+  type TierDraft,
+} from "@/components/admin/resellers/tier-editor-modal";
+import { TierDeleteModal } from "@/components/admin/resellers/tier-delete-modal";
 
-export default function ResellerTierManagementPage() {
-  const [tiers, setTiers] = useState<ResellerTier[]>(mockResellerTiers);
-  const [editingTier, setEditingTier] = useState<ResellerTier | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+interface Toast {
+  kind: "success" | "error";
+  text: string;
+}
 
-  const handleSaveTier = (tier: ResellerTier) => {
-    if (tier.id) {
-      setTiers(prev => prev.map(t => t.id === tier.id ? tier : t));
-    } else {
-      tier.id = `TIER-${Date.now()}`;
-      setTiers(prev => [...prev, tier]);
-    }
-    setEditingTier(null);
+export default function ResellerTiersPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <ResellerTiersPageInner />
+    </Suspense>
+  );
+}
+
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-96 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ResellerTiersPageInner() {
+  const admin = useCurrentAdmin();
+  const { tiers, counts, summary, loading } = useResellerTiers();
+
+  const [editorState, setEditorState] = useState<
+    | { kind: "closed" }
+    | { kind: "create" }
+    | { kind: "edit"; tier: ResellerTier }
+  >({ kind: "closed" });
+  const [deleteTarget, setDeleteTarget] = useState<ResellerTier | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  const actor: TierActor = useMemo(
+    () =>
+      admin
+        ? { name: admin.name, email: admin.email }
+        : { name: "System", email: "system@atlas.com" },
+    [admin]
+  );
+
+  const showToast = (kind: Toast["kind"], text: string) => {
+    setToast({ kind, text });
+    window.setTimeout(() => setToast(null), 6000);
   };
 
-  const handleDeleteTier = (id: string) => {
-    setTiers(prev => prev.filter(t => t.id !== id));
-    setConfirmDelete(null);
+  const headerMeta = (
+    <>
+      <span>
+        {summary.tierCount} tier{summary.tierCount === 1 ? "" : "s"}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span>
+        {summary.assignedResellers} of {summary.totalResellers} resellers
+        assigned
+      </span>
+      {summary.tierCount > 0 && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>
+            Extra cut {summary.extraCutRange.min}–{summary.extraCutRange.max}%
+          </span>
+        </>
+      )}
+    </>
+  );
+
+  const handleSubmit = (
+    draft: TierDraft,
+    mode: "create" | "edit"
+  ): { ok: boolean; error?: string } => {
+    const input: TierInput = {
+      name: draft.name,
+      minMonthlySales: draft.minMonthlySales,
+      extraCutPercent: draft.extraCutPercent,
+      baseCommissionRates: draft.baseCommissionRates,
+      perks: draft.perks,
+    };
+
+    let result;
+    if (mode === "create") {
+      result = addTier(input, actor);
+      if (result.ok && result.tier) {
+        showToast("success", result.tier.name + " added.");
+      }
+    } else {
+      const id = editorState.kind === "edit" ? editorState.tier.id : "";
+      result = updateTier(id, input, actor);
+      if (result.ok && result.tier) {
+        showToast("success", result.tier.name + " updated.");
+      }
+    }
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+    return { ok: true };
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return;
+    const count = counts[deleteTarget.id] ?? 0;
+    const result = removeTier(deleteTarget.id, actor, count);
+    if (result.ok) {
+      showToast("success", deleteTarget.name + " deleted.");
+    } else {
+      showToast("error", result.error ?? "Could not delete tier.");
+    }
+    setDeleteTarget(null);
   };
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Reseller Tiers"
-        description="Manage commission tiers, thresholds, and benefits."
-        actions={<Button size="sm" onClick={() => setEditingTier({ id: "", name: "New Tier", minMonthlySales: 0, extraCutPercent: 25, baseCommissionRates: { data: 0.4, airtime: 2, bills: 3, tv: 3, exam_pins: 3, other: 3 }, perks: [] })}>Add Tier</Button>}
+        title="Reseller tiers"
+        description="Commission tiers, thresholds, and benefits for the reseller channel."
+        meta={headerMeta}
+        actions={
+          <Can permission={PERMISSIONS.RESELLERS_TIER}>
+            <Button
+              size="sm"
+              onClick={() => setEditorState({ kind: "create" })}
+            >
+              Add tier
+            </Button>
+          </Can>
+        }
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {tiers.map(tier => (
-          <Card key={tier.id}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{tier.name}</CardTitle>
-              <Badge variant="info">Min Sales: {tier.minMonthlySales}</Badge>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">Extra Cut: {tier.extraCutPercent}%</p>
-              <p className="text-sm">Base Data: {tier.baseCommissionRates.data} GHS</p>
-              <p className="text-sm">Airtime: {tier.baseCommissionRates.airtime}%</p>
-              <p className="text-sm">Bills: {tier.baseCommissionRates.bills}%</p>
-              <p className="text-sm">Perks: {tier.perks.join(", ") || "None"}</p>
-              <div className="mt-3 flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditingTier(tier)}>Edit</Button>
-                <Button variant="ghost" size="sm" className="text-danger-600" onClick={() => setConfirmDelete(tier.id)}>Delete</Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <TierSummaryCards summary={summary} loading={loading} />
+
+      <div className="rounded-lg border border-info-200 bg-info-50 p-3 text-xs text-info-900 dark:border-info-800 dark:bg-info-900/20 dark:text-info-100">
+        <p className="flex items-start gap-2">
+          <AtlasIcon
+            name="info"
+            aria-hidden="true"
+            className="mt-0.5 h-3.5 w-3.5 shrink-0"
+          />
+          <span>
+            Base rates apply to the Atlas price. When a reseller sets a
+            higher price, the extra amount is split: Atlas keeps the tier's
+            extra cut percent and the reseller keeps the rest. Higher tiers
+            trade a lower Atlas cut for a higher Atlas contribution.
+          </span>
+        </p>
       </div>
 
-      {editingTier && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setEditingTier(null)} />
-          <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
-            <h3 className="text-lg font-semibold">{editingTier.id ? "Edit Tier" : "Add Tier"}</h3>
-            <div className="mt-4 space-y-3">
-              <Input placeholder="Name" value={editingTier.name} onChange={e => setEditingTier({ ...editingTier, name: e.target.value })} />
-              <Input type="number" placeholder="Min Monthly Sales" value={editingTier.minMonthlySales} onChange={e => setEditingTier({ ...editingTier, minMonthlySales: Number(e.target.value) })} />
-              <Input type="number" placeholder="Extra Cut %" value={editingTier.extraCutPercent} onChange={e => setEditingTier({ ...editingTier, extraCutPercent: Number(e.target.value) })} />
-              <Input type="number" step="0.1" placeholder="Base Data Commission (GHS)" value={editingTier.baseCommissionRates.data} onChange={e => setEditingTier({ ...editingTier, baseCommissionRates: { ...editingTier.baseCommissionRates, data: Number(e.target.value) } })} />
-            </div>
-            <div className="mt-6 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditingTier(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => handleSaveTier(editingTier)}>Save</Button>
-            </div>
-          </div>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-96 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+            />
+          ))}
         </div>
+      ) : tiers.length === 0 ? (
+        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <EmptyState
+            variant="no_data"
+            title="No tiers yet"
+            description="Add your first tier to define commission policy for resellers."
+            action={
+              <Can permission={PERMISSIONS.RESELLERS_TIER}>
+                <Button
+                  size="sm"
+                  onClick={() => setEditorState({ kind: "create" })}
+                >
+                  Add tier
+                </Button>
+              </Can>
+            }
+          />
+        </div>
+      ) : (
+        <ul
+          role="list"
+          className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+        >
+          {tiers.map((tier) => (
+            <li key={tier.id}>
+              <TierCard
+                tier={tier}
+                resellerCount={counts[tier.id] ?? 0}
+                onEdit={(t) => setEditorState({ kind: "edit", tier: t })}
+                onDelete={(t) => setDeleteTarget(t)}
+              />
+            </li>
+          ))}
+        </ul>
       )}
 
-      <ConfirmDialog
-        open={confirmDelete !== null}
-        title="Confirm Delete Tier"
-        description="Are you sure you want to delete this tier?"
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => handleDeleteTier(confirmDelete!)}
-        onCancel={() => setConfirmDelete(null)}
+      <TierEditorModal
+        open={editorState.kind !== "closed"}
+        mode={editorState.kind === "edit" ? "edit" : "create"}
+        current={editorState.kind === "edit" ? editorState.tier : null}
+        existingTiers={tiers}
+        onClose={() => setEditorState({ kind: "closed" })}
+        onSubmit={(draft) =>
+          handleSubmit(draft, editorState.kind === "edit" ? "edit" : "create")
+        }
       />
+
+      <TierDeleteModal
+        open={deleteTarget !== null}
+        tier={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            toast.kind === "success"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+          }
+        >
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }

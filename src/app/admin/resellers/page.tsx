@@ -2,7 +2,13 @@
 // src/app/admin/resellers/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
@@ -13,7 +19,10 @@ import {
   SavedViews,
   type SavedView,
 } from "@/components/admin/ui/saved-views";
-import { AdminDataTable, type Column } from "@/components/admin/ui/admin-data-table";
+import {
+  AdminDataTable,
+  type Column,
+} from "@/components/admin/ui/admin-data-table";
 import { ResellerSummaryCards } from "@/components/admin/resellers/reseller-summary-cards";
 import {
   ResellerFilters,
@@ -26,11 +35,17 @@ import {
 } from "@/components/admin/resellers/reseller-onboard-modal";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { useResellers } from "@/lib/admin/hooks/use-resellers";
+import { useResellerWallets } from "@/lib/admin/hooks/use-reseller-wallets";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
-import { mockResellers } from "@/lib/admin/mock/resellers";
 import { mockStorefronts } from "@/lib/admin/mock/storefronts";
-import { mockResellerTiers } from "@/lib/admin/mock/commissions";
+import { getTiers } from "@/lib/admin/mock/reseller-tier-store";
+import {
+  getStorefrontStatus,
+  disableStorefront,
+  reactivateStorefront,
+} from "@/lib/admin/mock/storefront-status-store";
 import { formatCurrency } from "@/lib/admin/formatters";
 import {
   PAGE_SIZE,
@@ -44,14 +59,19 @@ import {
   type SortKey,
   type WalletAdjustMethod,
 } from "@/lib/admin/resellers/constants";
-import {
-  appendActivity,
-  appendAuditTrail,
-  buildAuditEntry,
-  computeCommissionTotals,
-  tierById,
-} from "@/lib/admin/resellers/helpers";
 import { resellersToCsv } from "@/lib/admin/resellers/csv-export";
+import {
+  suspendReseller,
+  reactivateReseller,
+  verifyReseller,
+  rejectResellerVerification,
+  adjustResellerWallet,
+  assignResellerTier,
+  sendResellerNotification,
+  resetResellerSecurity,
+  onboardReseller,
+  type ResellerActor,
+} from "@/lib/admin/resellers/reseller-mutations";
 import type { Reseller } from "@/lib/admin/types/reseller";
 
 const VIEWS_KEY = "atlas-reseller-views-v2";
@@ -71,18 +91,9 @@ const DEFAULT_FILTERS: ResellerUrlFilters = {
   pageSize: String(PAGE_SIZE),
 };
 
-const SYSTEM_ADMIN = {
-  id: "system",
-  name: "System",
-  email: "system@atlas.com",
-  role: "super_admin" as const,
-  extraPermissions: [],
-};
-
 interface Toast {
   kind: "success" | "error";
   text: string;
-  onUndo?: () => void;
 }
 
 type BulkIntent =
@@ -124,9 +135,9 @@ function ResellersSkeleton() {
 
 function ResellersPageInner() {
   const admin = useCurrentAdmin();
+  const { resellers, loading } = useResellers();
+  const { wallets: walletRows } = useResellerWallets();
 
-  const [resellers, setResellers] = useState<Reseller[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -146,22 +157,23 @@ function ResellersPageInner() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      const enriched: Reseller[] = mockResellers.map((r) => {
-        const totals = computeCommissionTotals(r.id);
-        return {
-          ...r,
-          commissionsEarned: totals.earned,
-          commissionsPending: totals.pending,
-          commissionsPaid: totals.paid,
-        };
-      });
-      setResellers(enriched);
-      setLoading(false);
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, []);
+  const actor: ResellerActor = useMemo(
+    () =>
+      admin
+        ? { name: admin.name, email: admin.email }
+        : { name: "System", email: "system@atlas.com" },
+    [admin]
+  );
+
+  // Lookup map: resellerId -> wallet balance. Built from the wallet store
+  // projection. Every reader of a balance on this page goes through this map.
+  const walletBalanceById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const w of walletRows) {
+      map.set(w.resellerId, w.balance);
+    }
+    return map;
+  }, [walletRows]);
 
   useEffect(() => {
     try {
@@ -223,6 +235,10 @@ function ResellersPageInner() {
     return () => window.clearTimeout(t);
   }, [toast]);
 
+  const showToast = (kind: Toast["kind"], text: string) => {
+    setToast({ kind, text });
+  };
+
   const storefrontByOwner = useMemo(() => {
     const map = new Map<string, string>();
     for (const s of mockStorefronts) {
@@ -231,10 +247,7 @@ function ResellersPageInner() {
     return map;
   }, []);
 
-  const availableTiers = useMemo(
-    () => mockResellerTiers.map((t) => t.name),
-    []
-  );
+  const availableTiers = useMemo(() => getTiers().map((t) => t.name), []);
 
   const filtered = useMemo(() => {
     const q = filters.q.trim().toLowerCase();
@@ -274,8 +287,11 @@ function ResellersPageInner() {
           );
         case "totalRevenue":
           return b.totalRevenue - a.totalRevenue;
-        case "wallet":
-          return b.walletBalance - a.walletBalance;
+        case "wallet": {
+          const aBal = walletBalanceById.get(a.id) ?? 0;
+          const bBal = walletBalanceById.get(b.id) ?? 0;
+          return bBal - aBal;
+        }
         case "commissionsEarned":
           return b.commissionsEarned - a.commissionsEarned;
         case "commissionsPending":
@@ -290,7 +306,7 @@ function ResellersPageInner() {
       }
     });
     return sorted;
-  }, [resellers, filters]);
+  }, [resellers, filters, walletBalanceById]);
 
   const pageSize = Math.max(5, Number(filters.pageSize) || PAGE_SIZE);
   const page = Math.max(1, Number(filters.page) || 1);
@@ -355,10 +371,6 @@ function ResellersPageInner() {
     };
   }, [resellers]);
 
-  const updateReseller = (id: string, patch: (r: Reseller) => Reseller) => {
-    setResellers((prev) => prev.map((r) => (r.id === id ? patch(r) : r)));
-  };
-
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -375,10 +387,7 @@ function ResellersPageInner() {
     });
   };
 
-  const applyAudit = (reseller: Reseller, action: string): Reseller => {
-    const entry = buildAuditEntry({ admin: admin ?? SYSTEM_ADMIN, action });
-    return { ...reseller, auditTrail: appendAuditTrail(reseller, entry) };
-  };
+  /* --------------------------- Single mutations ---------------------- */
 
   const handleAdjustWallet = (
     id: string,
@@ -386,89 +395,100 @@ function ResellersPageInner() {
     reason: string,
     method: WalletAdjustMethod
   ) => {
-    updateReseller(id, (r) => {
-      const withBalance: Reseller = {
-        ...r,
-        walletBalance: r.walletBalance + amount,
-      };
-      const direction = amount >= 0 ? "Credited" : "Debited";
-      const withActivity: Reseller = {
-        ...withBalance,
-        activityLog: appendActivity(
-          withBalance,
-          `${direction} ${formatCurrency(Math.abs(amount))} via ${method}. ${reason}`
-        ),
-      };
-      return applyAudit(
-        withActivity,
-        `${direction} wallet ${formatCurrency(Math.abs(amount))} via ${method}. ${reason}`
+    const result = adjustResellerWallet(id, amount, reason, method, actor);
+    if (result.ok) {
+      showToast(
+        "success",
+        `Wallet ${amount >= 0 ? "credited" : "debited"} ${formatCurrency(
+          Math.abs(amount)
+        )}.`
       );
-    });
-    setToast({
-      kind: "success",
-      text: `Wallet ${amount >= 0 ? "credited" : "debited"} ${formatCurrency(
-        Math.abs(amount)
-      )}.`,
-    });
+    } else {
+      showToast("error", result.error ?? "Could not adjust wallet.");
+    }
   };
 
   const handleSuspend = (id: string, reason: string) => {
-    updateReseller(id, (r) => {
-      const next: Reseller = { ...r, status: "suspended" };
-      return applyAudit(next, `Suspended: ${reason}`);
-    });
-    setSelectedId(null);
-    setToast({ kind: "success", text: "Reseller suspended." });
+    const result = suspendReseller(id, reason, actor);
+    if (result.ok) {
+      setSelectedId(null);
+      showToast("success", "Reseller suspended.");
+    } else {
+      showToast("error", result.error ?? "Could not suspend reseller.");
+    }
   };
 
   const handleReactivate = (id: string) => {
-    updateReseller(id, (r) => {
-      const next: Reseller = { ...r, status: "active" };
-      return applyAudit(next, "Reactivated");
-    });
-    setToast({ kind: "success", text: "Reseller reactivated." });
+    const result = reactivateReseller(id, actor);
+    if (result.ok) {
+      showToast("success", "Reseller reactivated.");
+    } else {
+      showToast("error", result.error ?? "Could not reactivate reseller.");
+    }
   };
 
   const handleApproveVerification = (id: string) => {
-    updateReseller(id, (r) => {
-      const next: Reseller = {
-        ...r,
-        verificationStatus: "verified",
-        lastVerifiedAt: new Date().toISOString(),
-      };
-      return applyAudit(next, "Verified identity");
-    });
-    setToast({ kind: "success", text: "Verification approved." });
+    const result = verifyReseller(id, actor);
+    if (result.ok) {
+      showToast("success", "Verification approved.");
+    } else {
+      showToast("error", result.error ?? "Could not verify reseller.");
+    }
   };
 
   const handleRejectVerification = (id: string, reason: string) => {
-    updateReseller(id, (r) => {
-      const next: Reseller = { ...r, verificationStatus: "rejected" };
-      return applyAudit(next, `Verification rejected: ${reason}`);
-    });
-    setToast({ kind: "success", text: "Verification rejected." });
+    const result = rejectResellerVerification(id, reason, actor);
+    if (result.ok) {
+      showToast("success", "Verification rejected.");
+    } else {
+      showToast("error", result.error ?? "Could not reject verification.");
+    }
   };
 
   const handleToggleStorefront = (id: string) => {
     const storefrontId = storefrontByOwner.get(id);
-    if (!storefrontId) return;
-    updateReseller(id, (r) =>
-      applyAudit(
-        r,
-        r.status === "active" ? "Disabled storefront" : "Enabled storefront"
-      )
-    );
-    setToast({ kind: "success", text: "Storefront status toggled." });
+    if (!storefrontId) {
+      showToast("error", "This reseller has no storefront.");
+      return;
+    }
+    const slice = getStorefrontStatus(storefrontId);
+    const status = slice?.status;
+    if (status === "live") {
+      const result = disableStorefront(
+        storefrontId,
+        "Disabled from reseller detail drawer.",
+        actor
+      );
+      if (result.ok) {
+        showToast("success", "Storefront disabled.");
+      } else {
+        showToast("error", result.error ?? "Could not disable storefront.");
+      }
+    } else if (status === "disabled") {
+      const result = reactivateStorefront(storefrontId, actor);
+      if (result.ok) {
+        showToast("success", "Storefront reactivated.");
+      } else {
+        showToast("error", result.error ?? "Could not reactivate storefront.");
+      }
+    } else {
+      showToast(
+        "error",
+        "Pending storefronts must be approved from the storefronts page."
+      );
+    }
   };
 
   const handleAssignTier = (id: string, tierId: string) => {
-    const tier = tierById(tierId);
-    if (!tier) return;
-    updateReseller(id, (r) => {
-      const next: Reseller = { ...r, tierId: tier.id, tierName: tier.name };
-      return applyAudit(next, `Tier changed to ${tier.name}`);
-    });
-    setToast({ kind: "success", text: `Tier updated to ${tier.name}.` });
+    const result = assignResellerTier(id, tierId, actor);
+    if (result.ok) {
+      showToast(
+        "success",
+        `Tier updated to ${result.reseller?.tierName ?? "new tier"}.`
+      );
+    } else {
+      showToast("error", result.error ?? "Could not change tier.");
+    }
   };
 
   const handleSendNotification = (
@@ -476,94 +496,47 @@ function ResellersPageInner() {
     channel: "email" | "sms" | "push",
     message: string
   ) => {
-    void message;
     const target = resellers.find((r) => r.id === id);
-    if (!target) return;
-    updateReseller(id, (r) => {
-      const withActivity: Reseller = {
-        ...r,
-        activityLog: appendActivity(
-          r,
-          `Notification sent via ${channel.toUpperCase()}`
-        ),
-      };
-      return applyAudit(
-        withActivity,
-        `Notification sent to ${target.email} via ${channel.toUpperCase()}`
+    const result = sendResellerNotification(id, channel, message, actor);
+    if (result.ok) {
+      showToast(
+        "success",
+        `${channel.toUpperCase()} sent to ${target?.businessName ?? "reseller"}.`
       );
-    });
-    setToast({
-      kind: "success",
-      text: `${channel.toUpperCase()} sent to ${target.businessName}.`,
-    });
+    } else {
+      showToast("error", result.error ?? "Could not send notification.");
+    }
   };
 
   const handleResetSecurity = (id: string) => {
     const target = resellers.find((r) => r.id === id);
-    if (!target) return;
-    updateReseller(id, (r) => {
-      const withActivity: Reseller = {
-        ...r,
-        activityLog: appendActivity(
-          r,
-          "Security reset. All sessions revoked."
-        ),
-      };
-      return applyAudit(
-        withActivity,
-        `Reset security. Password reset link sent to ${target.email}`
+    const result = resetResellerSecurity(id, actor);
+    if (result.ok) {
+      showToast(
+        "success",
+        `Security reset for ${target?.businessName ?? "reseller"}.`
       );
-    });
-    setToast({
-      kind: "success",
-      text: `Security reset for ${target.businessName}.`,
-    });
+    } else {
+      showToast("error", result.error ?? "Could not reset security.");
+    }
   };
 
   const handleOnboard = (input: OnboardResellerInput) => {
-    const tier = tierById(input.tierId);
-    const nowIso = new Date().toISOString();
-    const newReseller: Reseller = {
-      id: `RS-${crypto.randomUUID().slice(0, 6).toUpperCase()}`,
-      businessName: input.businessName,
-      storeName: input.storeName,
-      contactPerson: input.contactPerson,
-      email: input.email,
-      phone: input.phone,
-      walletBalance: 0,
-      totalOrders: 0,
-      totalRevenue: 0,
-      commissionRate: input.commissionRate,
-      status: "pending",
-      verificationStatus: "not_submitted",
-      joinedAt: nowIso,
-      lastActive: nowIso,
-      tierName: tier?.name,
-      tierId: tier?.id,
-      commissionRateIsDefault: true,
-      commissionsEarned: 0,
-      commissionsPending: 0,
-      commissionsPaid: 0,
-      activityLog: [
-        {
-          id: crypto.randomUUID(),
-          timestamp: nowIso,
-          action: "Account created",
-        },
-      ],
-      auditTrail: [
-        buildAuditEntry({
-          admin: admin ?? SYSTEM_ADMIN,
-          action: "Created reseller account",
-        }),
-      ],
-    };
-    setResellers((prev) => [newReseller, ...prev]);
-    setToast({
-      kind: "success",
-      text: `Created ${input.businessName}.`,
-    });
+    const reseller = onboardReseller(
+      {
+        businessName: input.businessName,
+        storeName: input.storeName,
+        contactPerson: input.contactPerson,
+        email: input.email,
+        phone: input.phone,
+        tierId: input.tierId,
+      },
+      actor
+    );
+    showToast("success", `Created ${reseller.businessName}.`);
   };
+
+  /* --------------------------- Bulk actions -------------------------- */
 
   const handleBulkSuspend = () => {
     setBulkIntent({ kind: "suspend", ids: selectedIds });
@@ -580,54 +553,45 @@ function ResellersPageInner() {
 
   const confirmBulk = () => {
     if (!bulkIntent) return;
-    const idSet = new Set(bulkIntent.ids);
+
     if (bulkIntent.kind === "suspend") {
-      setResellers((prev) =>
-        prev.map((r) => {
-          if (!idSet.has(r.id)) return r;
-          const next: Reseller = { ...r, status: "suspended" };
-          return applyAudit(next, "Suspended via bulk action");
-        })
+      let failed = 0;
+      for (const id of bulkIntent.ids) {
+        const result = suspendReseller(id, "Bulk suspend by admin", actor);
+        if (!result.ok) failed += 1;
+      }
+      showToast(
+        failed === 0 ? "success" : "error",
+        failed === 0
+          ? `Suspended ${bulkIntent.ids.length} resellers.`
+          : `Suspended ${bulkIntent.ids.length - failed} of ${bulkIntent.ids.length}.`
       );
-      setToast({
-        kind: "success",
-        text: `Suspended ${bulkIntent.ids.length} resellers.`,
-      });
     } else if (bulkIntent.kind === "verify") {
-      setResellers((prev) =>
-        prev.map((r) => {
-          if (!idSet.has(r.id)) return r;
-          const next: Reseller = {
-            ...r,
-            verificationStatus: "verified",
-            lastVerifiedAt: new Date().toISOString(),
-          };
-          return applyAudit(next, "Verified via bulk action");
-        })
+      let failed = 0;
+      for (const id of bulkIntent.ids) {
+        const result = verifyReseller(id, actor);
+        if (!result.ok) failed += 1;
+      }
+      showToast(
+        failed === 0 ? "success" : "error",
+        failed === 0
+          ? `Verified ${bulkIntent.ids.length} resellers.`
+          : `Verified ${bulkIntent.ids.length - failed} of ${bulkIntent.ids.length}.`
       );
-      setToast({
-        kind: "success",
-        text: `Verified ${bulkIntent.ids.length} resellers.`,
-      });
     } else if (bulkIntent.kind === "tier") {
-      const tier = tierById(bulkIntent.tierId);
-      if (!tier) return;
-      setResellers((prev) =>
-        prev.map((r) => {
-          if (!idSet.has(r.id)) return r;
-          const next: Reseller = {
-            ...r,
-            tierId: tier.id,
-            tierName: tier.name,
-          };
-          return applyAudit(next, `Tier changed to ${tier.name} (bulk)`);
-        })
+      let failed = 0;
+      for (const id of bulkIntent.ids) {
+        const result = assignResellerTier(id, bulkIntent.tierId, actor);
+        if (!result.ok) failed += 1;
+      }
+      showToast(
+        failed === 0 ? "success" : "error",
+        failed === 0
+          ? `Assigned tier to ${bulkIntent.ids.length} resellers.`
+          : `Assigned tier to ${bulkIntent.ids.length - failed} of ${bulkIntent.ids.length}.`
       );
-      setToast({
-        kind: "success",
-        text: `Assigned ${tier.name} to ${bulkIntent.ids.length} resellers.`,
-      });
     }
+
     setSelectedIds([]);
     setBulkIntent(null);
   };
@@ -636,21 +600,21 @@ function ResellersPageInner() {
     const selectedResellers = resellers.filter((r) =>
       selectedIds.includes(r.id)
     );
-    const csv = resellersToCsv(selectedResellers);
+    const csv = resellersToCsv(selectedResellers, walletBalanceById);
     downloadCsv(
       `atlas-resellers-selected-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
     );
-    setToast({
-      kind: "success",
-      text: `Exported ${selectedResellers.length} resellers.`,
-    });
+    showToast(
+      "success",
+      `Exported ${selectedResellers.length} resellers.`
+    );
     setSelectedIds([]);
   };
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
-    const csv = resellersToCsv(filtered);
+    const csv = resellersToCsv(filtered, walletBalanceById);
     downloadCsv(
       `atlas-resellers-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
@@ -678,6 +642,8 @@ function ResellersPageInner() {
   const handleDeleteView = (name: string) => {
     setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
+
+  /* --------------------------- Columns ------------------------------- */
 
   const allColumns: Column<Reseller>[] = useMemo(
     () => [
@@ -745,7 +711,7 @@ function ResellersPageInner() {
         header: "Wallet",
         cell: (r) => (
           <span className="text-neutral-800 dark:text-neutral-200">
-            {formatCurrency(r.walletBalance)}
+            {formatCurrency(walletBalanceById.get(r.id) ?? 0)}
           </span>
         ),
       },
@@ -803,7 +769,7 @@ function ResellersPageInner() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedIds]
+    [selectedIds, walletBalanceById]
   );
 
   const displayColumns = useMemo(
@@ -843,13 +809,17 @@ function ResellersPageInner() {
   const filterValues: ResellerFilterValues = {
     q: filters.q,
     status: filters.status,
-    verification: filters.verification,
+  verification: filters.verification,
     tier: filters.tier,
-    joinedFrom: filters.joinedFrom,
+    joinedBFrom: filters.joinedFrom,
     joinedTo: filters.joinedTo,
     sort: filters.sort,
     page: filters.page,
   };
+
+  const selectedWalletBalance = selected
+    ? walletBalanceById.get(selected.id) ?? 0
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -963,7 +933,7 @@ function ResellersPageInner() {
                 Apply this tier to all {selectedIds.length} selected:
               </p>
               <div className="flex flex-wrap gap-2">
-                {mockResellerTiers.map((tier) => (
+                {getTiers().map((tier) => (
                   <Button
                     key={tier.id}
                     variant="outline"
@@ -1095,6 +1065,7 @@ function ResellersPageInner() {
 
       <ResellerDetailDrawer
         reseller={selected}
+        walletBalance={selectedWalletBalance}
         onClose={() => setSelectedId(null)}
         onAdjustWallet={handleAdjustWallet}
         onSuspend={handleSuspend}
@@ -1145,16 +1116,11 @@ function ResellersPageInner() {
           aria-live="polite"
           className={
             toast.kind === "success"
-              ? "flex items-center justify-between gap-3 rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
-              : "flex items-center justify-between gap-3 rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
+              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
           }
         >
-          <span>{toast.text}</span>
-          {toast.onUndo && (
-            <Button variant="ghost" size="sm" onClick={toast.onUndo}>
-              Undo
-            </Button>
-          )}
+          {toast.text}
         </div>
       )}
     </div>

@@ -7,7 +7,7 @@ import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
 import { ModalShell } from "@/components/admin/ui/model-shell";
 import { SettingsField } from "@/components/admin/ui/settings-field";
-import { mockResellerTiers } from "@/lib/admin/mock/commissions";
+import { getTiers } from "@/lib/admin/mock/reseller-tier-store";
 
 export interface OnboardResellerInput {
   businessName: string;
@@ -40,7 +40,7 @@ export function ResellerOnboardModal({
   const [contactPerson, setContactPerson] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [tierId, setTierId] = useState(mockResellerTiers[0]?.id ?? "");
+  const [tierId, setTierId] = useState(getTiers()[0]?.id ?? "");
   const [commissionRate, setCommissionRate] = useState("4");
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +51,7 @@ export function ResellerOnboardModal({
     setContactPerson("");
     setEmail("");
     setPhone("");
-    setTierId(mockResellerTiers[0]?.id ?? "");
+    setTierId(getTiers()[0]?.id ?? "");
     setCommissionRate("4");
     setError(null);
   }, [open]);
@@ -189,7 +189,7 @@ export function ResellerOnboardModal({
               value={tierId}
               onChange={(e) => setTierId(e.target.value)}
             >
-              {mockResellerTiers.map((tier) => (
+              {getTiers().map((tier) => (
                 <option key={tier.id} value={tier.id}>
                   {tier.name}
                 </option>

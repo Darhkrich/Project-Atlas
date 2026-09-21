@@ -18,7 +18,7 @@ import {
   commissionDeltaForTier,
   tierByName,
 } from "@/lib/admin/resellers/helpers";
-import { mockResellerTiers } from "@/lib/admin/mock/commissions";
+import { getTiers } from "@/lib/admin/mock/reseller-tier-store";
 
 /* ---------------------- Wallet adjustment ----------------------------- */
 
@@ -452,11 +452,9 @@ export function ResellerTierChangeModal({
     }
   }, [open]);
 
-  const selectedTier = mockResellerTiers.find((t) => t.id === selectedTierId);
-  const delta = commissionDeltaForTier(
-    currentTierName,
-    selectedTier?.name
-  );
+  const tiers = getTiers();
+  const selectedTier = tiers.find((t) => t.id === selectedTierId);
+  const delta = commissionDeltaForTier(currentTierName, selectedTier?.name);
   const currentTier = tierByName(currentTierName);
 
   const handleSubmit = () => {
@@ -506,7 +504,7 @@ export function ResellerTierChangeModal({
             }}
           >
             <option value="">Choose a tier…</option>
-            {mockResellerTiers.map((tier) => (
+            {tiers.map((tier) => (
               <option key={tier.id} value={tier.id}>
                 {tier.name} - extra cut {tier.extraCutPercent}% - min{" "}
                 {formatCurrency(tier.minMonthlySales)}/mo

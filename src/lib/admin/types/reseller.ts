@@ -1,5 +1,3 @@
-// lib/admin/types/reseller.ts
-
 export type ResellerStatus = "active" | "suspended" | "pending";
 export type VerificationStatus =
   | "verified"
@@ -29,10 +27,8 @@ export interface Reseller {
   email: string;
   phone: string;
 
-  walletBalance: number;
   totalOrders: number;
   totalRevenue: number;
-  commissionRate: number;
 
   status: ResellerStatus;
   verificationStatus: VerificationStatus;
@@ -43,7 +39,6 @@ export interface Reseller {
 
   tierName?: string;
   tierId?: string;
-  commissionRateIsDefault?: boolean;
 
   commissionsEarned: number;
   commissionsPending: number;
@@ -51,6 +46,8 @@ export interface Reseller {
 
   activityLog: ResellerActivityEntry[];
   auditTrail?: ResellerAuditEntry[];
+  verificationSubmittedAt?: string;
+  verificationRejectionReason?: string;
 }
 
 export const RESELLER_STATUS_LABELS: Record<ResellerStatus, string> = {

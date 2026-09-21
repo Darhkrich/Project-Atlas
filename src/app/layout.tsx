@@ -4,7 +4,6 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { SavedPaymentMethodsProvider } from "@/contexts/SavedPaymentMethodsContext";
 import { SavedDetailsProvider } from "@/contexts/SavedDetailsContext";
 import "./globals.css";
-import { ResellerProvider } from "@/contexts/ResellerContext";
 import { StorefrontConfigProvider } from "@/contexts/storefront-config-context";
 import { SubscriptionProvider } from "@/contexts/subscription-context";
 import { OrdersProvider } from "@/contexts/orders-context";
@@ -30,23 +29,21 @@ export default function RootLayout({
           <ThemeProvider>
             <SavedPaymentMethodsProvider>
               <SavedDetailsProvider>
-                <ResellerProvider>
-                  <StorefrontConfigProvider>
-                    <SubscriptionProvider>
-                      <OrdersProvider>
-                        <StoreProductsProvider>
-                          <StoreCustomersProvider>
-                            <AiAssistantProvider>
-                              <ResellerStorefrontProvider>
-                                {children}
-                              </ResellerStorefrontProvider>
-                            </AiAssistantProvider>
-                          </StoreCustomersProvider>
-                        </StoreProductsProvider>
-                      </OrdersProvider>
-                    </SubscriptionProvider>
-                  </StorefrontConfigProvider>
-                </ResellerProvider>
+                <StorefrontConfigProvider>
+                  <SubscriptionProvider>
+                    <OrdersProvider>
+                      <StoreProductsProvider>
+                        <StoreCustomersProvider>
+                          <AiAssistantProvider>
+                            <ResellerStorefrontProvider>
+                              {children}
+                            </ResellerStorefrontProvider>
+                          </AiAssistantProvider>
+                        </StoreCustomersProvider>
+                      </StoreProductsProvider>
+                    </OrdersProvider>
+                  </SubscriptionProvider>
+                </StorefrontConfigProvider>
               </SavedDetailsProvider>
             </SavedPaymentMethodsProvider>
           </ThemeProvider>

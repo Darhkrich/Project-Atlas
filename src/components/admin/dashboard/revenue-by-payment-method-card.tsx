@@ -1,32 +1,45 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// components/admin/dashboard/revenue-by-payment-method-card.tsx
 "use client";
 
-import { DashboardCard } from "./dashboard-card";
-import { SubCardWithChart } from "./sub-card-with-chart";
 import {
   PieChart,
   Pie,
   Cell,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
 } from "recharts";
+import { DashboardCard } from "./dashboard-card";
+import { SubCardWithChart } from "./sub-card-with-chart";
 import { mockDashboardData } from "@/lib/admin/mock/dashboard";
+import { paymentMethodSeries } from "@/lib/admin/mock/dashboard-series";
+import { dashboardTrends } from "@/lib/admin/mock/dashboard-trends";
+import {
+  CHART_COLORS,
+  STREAM_COLORS,
+  ACCOUNT_COLORS,
+} from "@/lib/admin/dashboard/chart-palette";
 
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#8b5cf6"];
+const METHOD_COLORS: Record<string, string> = {
+  "Mobile Money": STREAM_COLORS.digitalServices,
+  Wallet: STREAM_COLORS.reseller,
+  Card: STREAM_COLORS.ecommerce,
+  Bank: ACCOUNT_COLORS.resellers,
+};
 
 export function RevenueByPaymentMethodCard() {
-  const data = mockDashboardData.paymentMethodDistribution as Array<{
-    method: string;
-    value: number;
-  }>;
+  const data = mockDashboardData.paymentMethodDistribution;
+  const total = data.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <DashboardCard
       title="Revenue by Payment Method"
-      value="Distribution"
+      value={total + "%"}
       icon="credit-card"
+      delta={dashboardTrends.totalRevenue}
+      deltaLabel="vs last month"
+      href="/admin/payments"
       mainChart={
         <ResponsiveContainer width="100%" height={180}>
           <PieChart>
@@ -41,30 +54,75 @@ export function RevenueByPaymentMethodCard() {
               paddingAngle={2}
               stroke="none"
             >
-              {data.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              {data.map((item, index) => (
+                <Cell
+                  key={"cell-" + index}
+                  fill={METHOD_COLORS[item.method] ?? CHART_COLORS.neutral}
+                />
               ))}
             </Pie>
-            <Tooltip formatter={(value: any, name: any) => [`${value}%`, name]} />
+            <Tooltip formatter={(value: number) => value + "%"} />
           </PieChart>
         </ResponsiveContainer>
       }
       subCards={
         <>
-          {data.slice(0, 3).map((method) => (
-            <SubCardWithChart
-              key={method.method}
-              label={method.method}
-              value={`${method.value}%`}
-              chart={
-                <ResponsiveContainer width="100%" height={30}>
-                  <BarChart data={[{ value: method.value }]}>
-                    <Bar dataKey="value" fill={COLORS[data.indexOf(method) % COLORS.length]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              }
-            />
-          ))}
+          <SubCardWithChart
+            label="Mobile Money"
+            value={
+              (data.find((d) => d.method === "Mobile Money")?.value ?? 0) + "%"
+            }
+            chart={
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={paymentMethodSeries}>
+                  <defs>
+                    <linearGradient id="pmMomo" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={METHOD_COLORS["Mobile Money"]} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={METHOD_COLORS["Mobile Money"]} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="mobileMoney" stroke={METHOD_COLORS["Mobile Money"]} fill="url(#pmMomo)" strokeWidth={1.5} />
+                </AreaChart>
+              </ResponsiveContainer>
+            }
+          />
+          <SubCardWithChart
+            label="Wallet"
+            value={(data.find((d) => d.method === "Wallet")?.value ?? 0) + "%"}
+            chart={
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={paymentMethodSeries}>
+                  <defs>
+                    <linearGradient id="pmWallet" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={METHOD_COLORS.Wallet} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={METHOD_COLORS.Wallet} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="wallet" stroke={METHOD_COLORS.Wallet} fill="url(#pmWallet)" strokeWidth={1.5} />
+                </AreaChart>
+              </ResponsiveContainer>
+            }
+          />
+          <SubCardWithChart
+            label="Card + Bank"
+            value={
+              ((data.find((d) => d.method === "Card")?.value ?? 0) +
+                (data.find((d) => d.method === "Bank")?.value ?? 0)) + "%"
+            }
+            chart={
+              <ResponsiveContainer width="100%" height={35}>
+                <AreaChart data={paymentMethodSeries}>
+                  <defs>
+                    <linearGradient id="pmCard" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={METHOD_COLORS.Card} stopOpacity={0.6} />
+                      <stop offset="95%" stopColor={METHOD_COLORS.Card} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="card" stroke={METHOD_COLORS.Card} fill="url(#pmCard)" strokeWidth={1.5} />
+                </AreaChart>
+              </ResponsiveContainer>
+            }
+          />
         </>
       }
     />

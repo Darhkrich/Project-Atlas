@@ -9,6 +9,7 @@ import { MerchantStorefrontPreview } from "./merchant-storefront-preview";
 import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { useSubscription } from "@/contexts/subscription-context";
 import { getPlanByCode } from "@/config/subscription-plans";
+import { DomainSection } from "@/components/domains/domain-section";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
 import Link from "next/link";
 
@@ -20,7 +21,6 @@ const allThemes = [
   { id: "minimal", label: "Minimal", description: "Clean and product-focused." },
 ];
 
-// Phase 1 AI assistant: simple text suggestions
 function generateSuggestion(
   type: "tagline" | "description" | "heroTitle" | "heroDescription",
   storeName: string,
@@ -97,54 +97,8 @@ export function MerchantStorefrontManagement() {
     window.setTimeout(() => setStatusMessage(""), 3000);
   };
 
-  const handleGenerateAtlasDomain = () => {
-    const base = (store.storeName || "store")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
+  const storeUrl = `https://atlas.com/ecommerce/${store.slug}`;
 
-    const tlds = [".store", ".com", ".africa", ".shop"];
-    const available = tlds.map((tld) => `${base}${tld}`);
-    // Simulate some domains taken: last two are taken in this mock
-    const taken = available.filter((_, i) => i >= 2);
-    const firstAvailable = available.find((d) => !taken.includes(d)) || available[0];
-    updateStore({ atlasDomain: firstAvailable });
-    setStatusMessage(
-      `Suggested domain: ${firstAvailable}. Some domains may already be taken.`,
-    );
-    window.setTimeout(() => setStatusMessage(""), 3000);
-  };
-
-  const checkSubdomainAvailability = (value: string) => {
-    const takenSubdomains = ["admin", "store", "shop", "test"];
-    const normalized = value.toLowerCase().replace(/\s+/g, "-");
-    if (!normalized) return;
-    if (takenSubdomains.includes(normalized)) {
-      setStatusMessage(`Subdomain "${normalized}.atlas.com" is already taken.`);
-    } else {
-      setStatusMessage(`Subdomain "${normalized}.atlas.com" is available.`);
-    }
-    window.setTimeout(() => setStatusMessage(""), 3000);
-  };
-
-  const handleVerifyDomain = () => {
-    if (!store.customDomain) return;
-    updateStore({ customDomainStatus: "pending" });
-    setTimeout(() => {
-      const success = true; // change to Math.random() > 0.5 for testing
-      updateStore({ customDomainStatus: success ? "verified" : "failed" });
-    }, 1500);
-  };
-
-  const storeUrl = store.customDomain && store.customDomainStatus === "verified"
-    ? `https://${store.customDomain}`
-    : store.atlasDomain
-    ? `https://${store.atlasDomain}`
-    : store.subdomain
-    ? `https://${store.subdomain}.atlas.com`
-    : `https://atlas.com/ecommerce/${store.slug}`;
-
-  // AI suggestion handler
   const applyAiSuggestion = (
     field: "tagline" | "description" | "heroTitle" | "heroDescription",
   ) => {
@@ -196,13 +150,13 @@ export function MerchantStorefrontManagement() {
             />
             {store.status === "live" ? "Unpublish Store" : "Launch Store"}
           </Button>
-<Link
-  href="/merchant/products"
-  className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
->
-  <AtlasIcon name="package" className="h-4 w-4" />
-  Manage Products
-</Link>
+          <Link
+            href="/merchant/products"
+            className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
+            <AtlasIcon name="package" className="h-4 w-4" />
+            Manage Products
+          </Link>
           <Button onClick={handleSave} className="inline-flex items-center gap-2">
             <AtlasIcon name="check" className="h-4 w-4" />
             {saved ? "Saved" : "Save Changes"}
@@ -233,7 +187,9 @@ export function MerchantStorefrontManagement() {
                   {store.status === "live" ? "Live" : "Draft"}
                 </span>
               </div>
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{storeUrl}</p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                {storeUrl}
+              </p>
             </div>
           </div>
 
@@ -349,7 +305,6 @@ export function MerchantStorefrontManagement() {
                   </div>
                 </label>
 
-                {/* Logo upload */}
                 <div>
                   <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                     Store Logo
@@ -464,7 +419,6 @@ export function MerchantStorefrontManagement() {
                   {store.templateId}
                 </div>
 
-                {/* Theme selection */}
                 <div>
                   <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                     Theme
@@ -524,7 +478,6 @@ export function MerchantStorefrontManagement() {
                   </p>
                 </div>
 
-                {/* Primary color */}
                 <div>
                   <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                     Primary Color
@@ -544,7 +497,6 @@ export function MerchantStorefrontManagement() {
                   </div>
                 </div>
 
-                {/* Accent color */}
                 <div>
                   <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                     Accent Color
@@ -620,139 +572,62 @@ export function MerchantStorefrontManagement() {
                     />
                   </label>
                   <label className="block sm:col-span-2">
-  <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-    Store Slug (URL path)
-  </span>
-  <input
-    value={store.slug}
-    onChange={(e) =>
-      updateStore({
-        slug: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-      })
-    }
-    placeholder="glow-beauty"
-    className="mt-1.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
-  />
-  <p className="mt-1 text-[11px] text-neutral-500">
-    This is used for your development URL: /ecommerce-stores/your-slug
-  </p>
-</label> 
+                    <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                      Store Slug (URL path)
+                    </span>
+                    <input
+                      value={store.slug}
+                      onChange={(e) =>
+                        updateStore({
+                          slug: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                        })
+                      }
+                      placeholder="glow-beauty"
+                      className="mt-1.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
+                    />
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      This is used for your development URL: /ecommerce-stores/your-slug
+                    </p>
+                  </label>
 
-{/* Cash on Delivery */}
-<div className="flex items-center justify-between">
-  <div>
-    <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-      Cash on Delivery
-    </p>
-    <p className="text-[11px] text-neutral-500">
-      Allow customers to pay when their order is delivered.
-    </p>
-  </div>
-  <button
-    type="button"
-    onClick={() => updateStore({ codEnabled: !store.codEnabled })}
-    className={`relative h-6 w-11 rounded-full transition-colors ${
-      store.codEnabled ? "bg-brand-600" : "bg-neutral-300 dark:bg-neutral-700"
-    }`}
-  >
-    <span
-      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-        store.codEnabled ? "translate-x-5" : "translate-x-0.5"
-      }`}
-    />
-  </button>
-</div>
+                  <div className="flex items-center justify-between sm:col-span-2">
+                    <div>
+                      <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                        Cash on Delivery
+                      </p>
+                      <p className="text-[11px] text-neutral-500">
+                        Allow customers to pay when their order is delivered.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateStore({ codEnabled: !store.codEnabled })}
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        store.codEnabled ? "bg-brand-600" : "bg-neutral-300 dark:bg-neutral-700"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          store.codEnabled ? "translate-x-5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Domain settings */}
-                <div className="space-y-4 border-t border-neutral-200 pt-4 dark:border-neutral-800">
-                  <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                    Domain Settings
-                  </p>
-
-                  {/* Subdomain */}
-                  <div>
-                    <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                      Atlas Subdomain
-                    </span>
-                    <div className="mt-1.5 flex items-center">
-                      <input
-                        value={store.subdomain || ""}
-                        onChange={(e) =>
-                          updateStore({
-                            subdomain: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-                          })
-                        }
-                        onBlur={(e) => checkSubdomainAvailability(e.target.value)}
-                        placeholder="yourstore"
-                        className="w-full rounded-l-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
-                      />
-                      <span className="rounded-r-lg border border-l-0 border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-                        .atlas.com
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Atlas-provided domain */}
-                  {plan.domainOptions.includes("atlas-domain") && (
-                    <div>
-                      <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                        Get a Domain
-                      </span>
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <input
-                          value={store.atlasDomain || ""}
-                          onChange={(e) => updateStore({ atlasDomain: e.target.value })}
-                          placeholder="yourstore.store"
-                          className="flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
-                        />
-                        <Button variant="outline" onClick={handleGenerateAtlasDomain}>
-                          Generate
-                        </Button>
-                      </div>
-                      <p className="mt-1 text-[11px] text-neutral-500">
-                        We&apos;ll suggest available domains based on your store name.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Custom domain */}
-                  {plan.domainOptions.includes("custom-domain") && (
-                    <div className="space-y-2">
-                      <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                        Use Your Own Domain
-                      </span>
-                      <div className="flex gap-2">
-                        <input
-                          value={store.customDomain || ""}
-                          onChange={(e) => updateStore({ customDomain: e.target.value, customDomainStatus: "pending" })}
-                          placeholder="www.yourstore.com"
-                          className="flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-white"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={handleVerifyDomain}
-                          disabled={!store.customDomain || store.customDomainStatus === "verified"}
-                        >
-                          {store.customDomainStatus === "verified" ? "Verified" : "Verify"}
-                        </Button>
-                      </div>
-                      {store.customDomainStatus === "pending" && store.customDomain && (
-                        <p className="text-[11px] text-neutral-500">
-                          Add a CNAME record pointing to{" "}
-                          <code className="text-xs">domains.atlas.com</code>, then click Verify.
-                        </p>
-                      )}
-                      {store.customDomainStatus === "verified" && (
-                        <p className="text-[11px] text-success-600">Domain verified successfully.</p>
-                      )}
-                      {store.customDomainStatus === "failed" && (
-                        <p className="text-[11px] text-danger-600">
-                          Verification failed. Please check your DNS settings and try again.
-                        </p>
-                      )}
-                    </div>
-                  )}
+                <div className="border-t border-neutral-200 pt-4 dark:border-neutral-800">
+                  <DomainSection
+                    storefrontId={store.storefrontId}
+                    storefrontName={store.storeName}
+                    variant="merchant"
+                    ownerName={store.storeName}
+                    ownerEmail={store.contactEmail}
+                    planOptions={{
+                      customDomain: plan.domainOptions.includes("custom-domain"),
+                    }}
+                    framed={false}
+                  />
                 </div>
 
                 {/* Social links */}
