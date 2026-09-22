@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { useResellers } from "./use-resellers";
+import { useCommissions } from "./use-commissions";
+import { buildCommissionTotalsMap } from "@/lib/admin/resellers/helpers";
 import {
   projectCommissionsByTier,
   projectGrowth,
@@ -13,17 +15,29 @@ import {
 
 export function useResellerDashboard() {
   const { resellers, loading } = useResellers();
+  const { commissions } = useCommissions();
+
+  const commissionTotalsById = useMemo(
+    () => buildCommissionTotalsMap(commissions),
+    [commissions]
+  );
 
   const value = useMemo(
     () => ({
-      summary: projectSummary(resellers),
+      summary: projectSummary(resellers, commissionTotalsById),
       growth: projectGrowth(resellers),
-      topResellers: projectTopResellers(resellers),
-      commissionsByTier: projectCommissionsByTier(resellers),
-      topPendingCommissions: projectTopPendingCommissions(resellers),
+      topResellers: projectTopResellers(resellers, commissionTotalsById),
+      commissionsByTier: projectCommissionsByTier(
+        resellers,
+        commissionTotalsById
+      ),
+      topPendingCommissions: projectTopPendingCommissions(
+        resellers,
+        commissionTotalsById
+      ),
       recentActivity: projectRecentActivity(resellers),
     }),
-    [resellers]
+    [resellers, commissionTotalsById]
   );
 
   return { ...value, loading };

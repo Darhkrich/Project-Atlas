@@ -1,3 +1,5 @@
+// lib/admin/types/commission.ts
+
 export type CommissionStatus = "pending" | "paid" | "cancelled" | "reversed";
 
 export type ServiceCategory =
@@ -41,7 +43,6 @@ export interface ResellerCommission {
   atlasExtraCut: number;
   resellerExtraCut: number;
   totalCommission: number;
-  commissionRate?: number;
   tierId?: string;
   tierName?: string;
   effectiveExtraCutPercent?: number;
@@ -49,6 +50,8 @@ export interface ResellerCommission {
   createdAt: string;
   paidAt?: string;
   reversedAt?: string;
+  payoutRunId?: string;
+  recoveryId?: string;
   timeline: {
     timestamp: string;
     label: string;
@@ -76,25 +79,6 @@ export interface CommissionAuditEntry {
   timestamp: string;
 }
 
-export interface PlatformMargin {
-  id: string;
-  orderId: string;
-  service: string;
-  providerCost: number;
-  atlasPrice: number;
-  margin: number;
-  marginPercentage: number;
-  date: string;
-}
-
-export interface CommissionRule {
-  id: string;
-  name: string;
-  description: string;
-  value: string;
-  enabled: boolean;
-}
-
 export interface PayoutRun {
   id: string;
   date: string;
@@ -102,6 +86,7 @@ export interface PayoutRun {
   resellerCount: number;
   status: PayoutRunStatus;
   commissionIds: string[];
+  failureReason?: string;
 }
 
 export const COMMISSION_STATUS_LABELS: Record<CommissionStatus, string> = {
@@ -116,13 +101,3 @@ export const PAYOUT_RUN_STATUS_LABELS: Record<PayoutRunStatus, string> = {
   completed: "Completed",
   failed: "Failed",
 };
-
-export interface PayoutRun {
-  id: string;
-  date: string;
-  totalAmount: number;
-  resellerCount: number;
-  status: PayoutRunStatus;
-  commissionIds: string[];
-  failureReason?: string;
-}

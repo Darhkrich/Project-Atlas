@@ -1,16 +1,19 @@
+// lib/admin/ecommerce/payments/payments-labels.ts
+
 import type {
-  ApprovalRequiredReason,
   CheckoutStatus,
   DisputeStatus,
   DisputeType,
   MerchantMoneyEvent,
-  MerchantWalletType,
   PlanChargeSource,
   PlanChargeStatus,
   PaymentRail,
-  WithdrawalFailureReason,
-  WithdrawalStatus,
 } from "@/lib/admin/types/merchant-money";
+import type {
+  WalletApprovalReason,
+  WalletWithdrawalFailureReason,
+  WalletWithdrawalStatus,
+} from "@/lib/domains/wallet/enums";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
 
@@ -65,7 +68,10 @@ export const CHECKOUT_METHOD_LABELS: Record<string, string> = {
   wallet: "Atlas wallet",
 };
 
-export const WITHDRAWAL_STATUS_LABELS: Record<WithdrawalStatus, string> = {
+export const WITHDRAWAL_STATUS_LABELS: Record<
+  WalletWithdrawalStatus,
+  string
+> = {
   pending_admin: "Awaiting approval",
   pending_processing: "Processing",
   completed: "Completed",
@@ -73,7 +79,10 @@ export const WITHDRAWAL_STATUS_LABELS: Record<WithdrawalStatus, string> = {
   rejected: "Rejected",
 };
 
-export const WITHDRAWAL_STATUS_VARIANT: Record<WithdrawalStatus, Variant> = {
+export const WITHDRAWAL_STATUS_VARIANT: Record<
+  WalletWithdrawalStatus,
+  Variant
+> = {
   pending_admin: "warning",
   pending_processing: "info",
   completed: "success",
@@ -81,21 +90,25 @@ export const WITHDRAWAL_STATUS_VARIANT: Record<WithdrawalStatus, Variant> = {
   rejected: "neutral",
 };
 
-export const WITHDRAWAL_FAILURE_LABELS: Record<string, string> = {
+export const WITHDRAWAL_FAILURE_LABELS: Record<
+  WalletWithdrawalFailureReason,
+  string
+> = {
   insufficient_balance: "Insufficient balance",
-  destination_mismatch: "Destination does not match merchant record",
   system_error: "System error",
   rail_error: "Rail provider error",
 };
 
 export const WITHDRAWAL_APPROVAL_REASON_LABELS: Record<
-  ApprovalRequiredReason,
+  WalletApprovalReason,
   string
 > = {
   exceeds_threshold: "Exceeds threshold",
+  insufficient_balance: "Insufficient balance",
   daily_cap_reached: "Daily cap reached",
   open_dispute: "Open dispute",
-  destination_change_pending: "Destination change pending",
+  owner_suspended: "Wallet frozen",
+  detail_change_pending: "Destination change pending",
 };
 
 export const REFUND_STATUS_LABELS: Record<"processing" | "settled", string> = {
@@ -135,7 +148,7 @@ export const DISPUTE_STATUS_VARIANT: Record<DisputeStatus, Variant> = {
   dismissed: "neutral",
 };
 
-export const WALLET_TYPE_LABELS: Record<MerchantWalletType, string> = {
+export const WALLET_TYPE_LABELS: Record<"billing" | "main", string> = {
   billing: "Billing wallet",
   main: "Main wallet",
 };
@@ -152,9 +165,3 @@ export function deriveRefundStatusLabel(refund: {
 }): string {
   return refund.settledAt ? "Settled" : "Processing";
 }
-
-export const __approvalReasonsTypeCheck: ApprovalRequiredReason | undefined =
-  undefined;
-export const __withdrawalFailureTypeCheck:
-  | WithdrawalFailureReason
-  | undefined = undefined;

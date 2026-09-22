@@ -1,27 +1,20 @@
-import type { WalletFundingMethod } from "@/lib/domains/wallet/enums";
+// lib/merchant/wallet/wallet-constants.ts
+//
+// Public merchant re-exports over the shared constants module.
 
-export const MIN_MERCHANT_WITHDRAWAL_AMOUNT = 1;
-
-export const MERCHANT_FUND_PRESET_AMOUNTS = [100, 250, 500, 1000] as const;
-
-export const MERCHANT_WITHDRAWAL_PRESET_FRACTIONS = [0.25, 0.5, 1] as const;
+export {
+  MIN_MERCHANT_WITHDRAWAL_AMOUNT,
+  MERCHANT_FUND_PRESET_AMOUNTS,
+  MERCHANT_WITHDRAWAL_PRESET_FRACTIONS,
+  MERCHANT_FUNDABLE_METHODS,
+  MIN_MERCHANT_SAVED_METHOD_LABEL_LENGTH,
+  MAX_MERCHANT_SAVED_METHOD_LABEL_LENGTH,
+  MIN_MERCHANT_DESTINATION_REASON_LENGTH,
+  MAX_MERCHANT_DESTINATION_REASON_LENGTH,
+} from "@/lib/domains/wallet/merchant-money/constants";
 
 export const MERCHANT_WALLET_VIEWS_STORAGE_KEY =
   "atlas-merchant-wallet-views-v1";
 
 export const MERCHANT_SAVED_METHODS_STORAGE_KEY =
   "atlas-merchant-saved-methods-v1";
-
-export const MERCHANT_FUNDABLE_METHODS: WalletFundingMethod[] = [
-  "momo",
-  "card",
-  "bank",
-];
-
-export const MIN_MERCHANT_SAVED_METHOD_LABEL_LENGTH = 2;
-
-export const MAX_MERCHANT_SAVED_METHOD_LABEL_LENGTH = 40;
-
-export const MIN_MERCHANT_DESTINATION_REASON_LENGTH = 10;
-
-export const MAX_MERCHANT_DESTINATION_REASON_LENGTH = 280;

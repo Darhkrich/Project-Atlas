@@ -1,7 +1,19 @@
+// lib/admin/commissions/commission-projection.ts
+//
+// Projections over the commission store. Margins are projections of the
+// commission array, not a separate store. Three margin types:
+//
+//   Type 1 = atlasPrice - providerCost                (gross spread)
+//   Type 2 = Type 1 - baseCommission                  (net after reseller base)
+//   Type 3 = Type 2 + atlasExtraCut                   (Atlas total revenue)
+//
+// Only paid commissions contribute Atlas margin. Pending commissions
+// describe orders that have not settled; cancelled and reversed
+// commissions describe orders whose money is not Atlas's.
+
 import type {
   CommissionStatus,
   PayoutRun,
-  PlatformMargin,
   ResellerCommission,
   ServiceCategory,
 } from "../types/commission";
@@ -28,8 +40,12 @@ export interface CommissionSummary {
   pendingCommissionDelta: MetricWithDelta;
   paidCommission: number;
   paidCommissionDelta: MetricWithDelta;
-  atlasBaseMargin: number;
-  atlasBaseMarginDelta: MetricWithDelta;
+  atlasType1Margin: number;
+  atlasType1MarginDelta: MetricWithDelta;
+  atlasType2Margin: number;
+  atlasType2MarginDelta: MetricWithDelta;
+  atlasType3Margin: number;
+  atlasType3MarginDelta: MetricWithDelta;
   atlasExtraCut: number;
   atlasExtraCutDelta: MetricWithDelta;
   todayCommission: number;
@@ -90,18 +106,37 @@ function startOfUtcMonth(ms: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
 }
 
-function baseMarginOf(c: ResellerCommission): number {
-  const margin = c.atlasPrice - c.providerCost - c.baseCommission;
-  if (margin < 0) return 0;
-  return Math.round(margin * 100) / 100;
+// Margin math. Not clamped. A negative is a real event and must surface.
+
+function type1MarginOf(c: ResellerCommission): number {
+  return Math.round((c.atlasPrice - c.providerCost) * 100) / 100;
+}
+
+function type2MarginOf(c: ResellerCommission): number {
+  return (
+    Math.round((c.atlasPrice - c.providerCost - c.baseCommission) * 100) /
+    100
+  );
+}
+
+function type3MarginOf(c: ResellerCommission): number {
+  return (
+    Math.round(
+      (c.atlasPrice -
+        c.providerCost -
+        c.baseCommission +
+        c.atlasExtraCut) *
+        100
+    ) / 100
+  );
 }
 
 function reasonFor(c: ResellerCommission): string {
   if (c.status === "paid") {
-    return "Paid automatically on order settlement";
+    return "Paid on order completion";
   }
   if (c.status === "pending") {
-    return "Awaiting order settlement";
+    return "Awaiting order completion";
   }
   if (c.status === "cancelled") {
     const reversedTimeline = [...c.timeline].reverse();
@@ -109,7 +144,7 @@ function reasonFor(c: ResellerCommission): string {
       t.label.toLowerCase().includes("cancel")
     );
     if (entry) return entry.label;
-    return "Cancelled by admin";
+    return "Cancelled";
   }
   if (c.status === "reversed") {
     const reversedTimeline = [...c.timeline].reverse();
@@ -183,12 +218,16 @@ export function projectCommissionSummary(
   let pendingPrev = 0;
   let paidCur = 0;
   let paidPrev = 0;
-  let baseMarginCur = 0;
-  let baseMarginPrev = 0;
+  let t1Cur = 0;
+  let t1Prev = 0;
+  let t2Cur = 0;
+  let t2Prev = 0;
+  let t3Cur = 0;
+  let t3Prev = 0;
   let extraCutCur = 0;
   let extraCutPrev = 0;
   let todayCommission = 0;
-  let reversedCommission = 0;
+  let reversedInWindow = 0;
 
   for (const c of commissions) {
     const createdTs = new Date(c.createdAt).getTime();
@@ -210,15 +249,28 @@ export function projectCommissionSummary(
       if (inCurrent) paidCur += c.totalCommission;
       else if (inPrevious) paidPrev += c.totalCommission;
     }
-    if (c.status === "reversed") {
-      reversedCommission += c.totalCommission;
+
+    // Margin only when the money is Atlas's. Reversed commissions are
+    // returned to the customer. Cancelled commissions never settled.
+    if (c.status === "paid") {
+      if (inCurrent) {
+        t1Cur += type1MarginOf(c);
+        t2Cur += type2MarginOf(c);
+        t3Cur += type3MarginOf(c);
+        extraCutCur += c.atlasExtraCut;
+      } else if (inPrevious) {
+        t1Prev += type1MarginOf(c);
+        t2Prev += type2MarginOf(c);
+        t3Prev += type3MarginOf(c);
+        extraCutPrev += c.atlasExtraCut;
+      }
     }
-    const counts = c.status !== "cancelled" && c.status !== "reversed";
-    if (counts) {
-      if (inCurrent) baseMarginCur += baseMarginOf(c);
-      else if (inPrevious) baseMarginPrev += baseMarginOf(c);
-      if (inCurrent) extraCutCur += c.atlasExtraCut;
-      else if (inPrevious) extraCutPrev += c.atlasExtraCut;
+
+    if (c.status === "reversed" && c.reversedAt) {
+      const reversedTs = new Date(c.reversedAt).getTime();
+      if (reversedTs >= currentStart && reversedTs < nowMs + 1) {
+        reversedInWindow += c.totalCommission;
+      }
     }
   }
 
@@ -229,15 +281,23 @@ export function projectCommissionSummary(
     pendingCommissionDelta: computeDelta(pendingCur, pendingPrev),
     paidCommission: Math.round(paidCur * 100) / 100,
     paidCommissionDelta: computeDelta(paidCur, paidPrev),
-    atlasBaseMargin: Math.round(baseMarginCur * 100) / 100,
-    atlasBaseMarginDelta: computeDelta(baseMarginCur, baseMarginPrev),
+    atlasType1Margin: Math.round(t1Cur * 100) / 100,
+    atlasType1MarginDelta: computeDelta(t1Cur, t1Prev),
+    atlasType2Margin: Math.round(t2Cur * 100) / 100,
+    atlasType2MarginDelta: computeDelta(t2Cur, t2Prev),
+    atlasType3Margin: Math.round(t3Cur * 100) / 100,
+    atlasType3MarginDelta: computeDelta(t3Cur, t3Prev),
     atlasExtraCut: Math.round(extraCutCur * 100) / 100,
     atlasExtraCutDelta: computeDelta(extraCutCur, extraCutPrev),
     todayCommission: Math.round(todayCommission * 100) / 100,
-    reversedCommission: Math.round(reversedCommission * 100) / 100,
+    reversedCommission: Math.round(reversedInWindow * 100) / 100,
     currency: "GHS",
   };
 }
+
+// ---------------------------------------------------------------------------
+// Platform margin projections. Type 1 only, projected from commissions.
+// ---------------------------------------------------------------------------
 
 export interface PlatformSummary {
   totalMargin: number;
@@ -249,7 +309,7 @@ export interface PlatformSummary {
 }
 
 export function projectPlatformSummary(
-  margins: PlatformMargin[],
+  commissions: ResellerCommission[],
   nowMs: number
 ): PlatformSummary {
   const currentStart = nowMs - THIRTY_DAYS_MS;
@@ -264,22 +324,33 @@ export function projectPlatformSummary(
   let todayMargin = 0;
   let monthMargin = 0;
   let pctSum = 0;
+  let pctCount = 0;
+  let rowCount = 0;
 
-  for (const m of margins) {
-    const ts = new Date(m.date).getTime();
+  for (const c of commissions) {
+    if (c.status !== "paid") continue;
+    const ts = new Date(c.createdAt).getTime();
+    const margin = type1MarginOf(c);
     const inCurrent = ts >= currentStart && ts < nowMs + 1;
     const inPrevious = ts >= previousStart && ts < previousEnd;
-    if (inCurrent) totalCur += m.margin;
-    else if (inPrevious) totalPrev += m.margin;
-    if (ts >= dayStart && ts < dayEnd) todayMargin += m.margin;
-    if (ts >= monthStart) monthMargin += m.margin;
-    pctSum += m.marginPercentage;
+
+    if (inCurrent) {
+      totalCur += margin;
+      rowCount += 1;
+      if (c.atlasPrice > 0) {
+        pctSum += (margin / c.atlasPrice) * 100;
+        pctCount += 1;
+      }
+    } else if (inPrevious) {
+      totalPrev += margin;
+    }
+
+    if (ts >= dayStart && ts < dayEnd) todayMargin += margin;
+    if (ts >= monthStart) monthMargin += margin;
   }
 
   const avgMarginPercent =
-    margins.length === 0
-      ? 0
-      : Math.round((pctSum / margins.length) * 10) / 10;
+    pctCount === 0 ? 0 : Math.round((pctSum / pctCount) * 10) / 10;
 
   return {
     totalMargin: Math.round(totalCur * 100) / 100,
@@ -287,7 +358,7 @@ export function projectPlatformSummary(
     todayMargin: Math.round(todayMargin * 100) / 100,
     monthMargin: Math.round(monthMargin * 100) / 100,
     avgMarginPercent,
-    rowCount: margins.length,
+    rowCount,
   };
 }
 
@@ -298,7 +369,7 @@ export interface PlatformTrendPoint {
 }
 
 export function projectPlatformTrend(
-  margins: PlatformMargin[],
+  commissions: ResellerCommission[],
   nowMs: number
 ): PlatformTrendPoint[] {
   const points: PlatformTrendPoint[] = [];
@@ -316,11 +387,12 @@ export function projectPlatformTrend(
       timeZone: "UTC",
     });
     let sum = 0;
-    for (const m of margins) {
-      const ts = new Date(m.date).getTime();
+    for (const c of commissions) {
+      if (c.status !== "paid") continue;
+      const ts = new Date(c.createdAt).getTime();
       if (ts < startUtc) continue;
       if (ts >= endUtc) continue;
-      sum += m.margin;
+      sum += type1MarginOf(c);
     }
     points.push({
       date: new Date(startUtc).toISOString(),
@@ -330,6 +402,10 @@ export function projectPlatformTrend(
   }
   return points;
 }
+
+// ---------------------------------------------------------------------------
+// Payout summary. Unchanged.
+// ---------------------------------------------------------------------------
 
 export interface PayoutSummary {
   pending: number;
@@ -349,5 +425,3 @@ export function projectPayoutSummary(payoutRuns: PayoutRun[]): PayoutSummary {
   }
   return { pending, completed, failed, total: payoutRuns.length };
 }
-
-export const __unusedStatusRef: CommissionStatus | undefined = undefined;

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { ModalShell } from "@/components/admin/ui/model-shell";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
@@ -239,7 +238,7 @@ export function ResellerCommissionDetailDrawer({
           </ol>
         </section>
 
-        {audit.length > 0 && (
+        {audit.length >  0 && (
           <section aria-label="Audit trail">
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
               Audit trail

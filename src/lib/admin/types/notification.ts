@@ -1,93 +1,69 @@
-import type { PlanCode } from "@/config/subscription-plans";
+// lib/admin/types/notification.ts
 
-export type MerchantStatus = "active" | "pending" | "suspended";
-export type MerchantStoreStatus = "live" | "draft" | "disabled";
-export type MerchantVerificationStatus =
-  | "verified"
-  | "pending"
-  | "not_submitted";
+export type NotificationChannel = "in_app" | "email" | "sms" | "push";
 
-export type MerchantSubscriptionStatus =
-  | "active"
-  | "past_due"
-  | "cancelled"
-  | "expired";
+export type NotificationStatus =
+  | "draft"
+  | "scheduled"
+  | "sent"
+  | "failed"
+  | "cancelled";
 
-export interface MerchantStoreConfig {
-  storeName: string;
-  slug: string;
-  primaryColor: string;
-  accentColor: string;
-  templateId: string;
-  subdomain: string;
-  customDomain?: string;
+export type NotificationAudience =
+  | "all_users"
+  | "resellers"
+  | "customers"
+  | "merchants"
+  | "specific_user";
+
+export type NotificationSection =
+  | "all"
+  | "digital_services"
+  | "resellers"
+  | "ecommerce";
+
+export interface NotificationDeliveryStats {
+  delivered: number;
+  opened: number;
+  failed: number;
+  totalRecipients: number;
 }
 
-export interface MerchantSubscription {
-  planId: PlanCode;
-  status: MerchantSubscriptionStatus;
-  startDate: string;
-  endDate: string;
-  billingCycle: "monthly" | "annual";
-  amountPaid: number;
-  lastPaymentDate: string;
-  discountPercent?: number;
+export interface FailedRecipientBreakdown {
+  reason: string;
+  count: number;
 }
 
-export interface MerchantOrderSummary {
+export interface PlatformNotification {
   id: string;
-  itemCount: number;
-  total: number;
-  date: string;
-}
-
-export interface MerchantPaymentSummary {
-  id: string;
-  amount: number;
-  method: string;
-  date: string;
-}
-
-export interface MerchantWalletTransaction {
-  id: string;
-  type: string;
-  amount: number;
-  date: string;
-}
-
-export interface MerchantActivityEntry {
-  id: string;
-  timestamp: string;
-  action: string;
-}
-
-export interface MerchantAuditEntry {
-  id: string;
-  timestamp: string;
-  admin: string;
-  action: string;
-}
-
-export interface Merchant {
-  id: string;
-  businessName: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  storeConfig: MerchantStoreConfig;
-  subscription: MerchantSubscription;
-  verificationStatus: MerchantVerificationStatus;
-  merchantStatus: MerchantStatus;
-  storeStatus: MerchantStoreStatus;
-  totalOrders: number;
-  totalRevenue: number;
-  lastActive: string;
+  title: string;
+  message: string;
+  audience: NotificationAudience;
+  targetSection: NotificationSection;
+  channels: NotificationChannel[];
+  scheduledFor?: string;
+  sentChannels?: NotificationChannel[];
+  sentAt?: string;
+  status: NotificationStatus;
+  createdBy: string;
+  createdById: string;
+  createdByName: string;
   createdAt: string;
-  recentOrders?: MerchantOrderSummary[];
-  recentPayments?: MerchantPaymentSummary[];
-  walletBalance: number;
-  walletTransactions?: MerchantWalletTransaction[];
-  activityLog: MerchantActivityEntry[];
-  auditTrail: MerchantAuditEntry[];
-  contractMrr?: number;
+  estimatedRecipients: number;
+  deliveryStats?: NotificationDeliveryStats;
+  failedRecipientBreakdown?: FailedRecipientBreakdown[];
+  failureReason?: string;
+  cancelledAt?: string;
+  cancelledById?: string;
+  cancelledByName?: string;
+}
+
+export interface NotificationTemplate {
+  id: string;
+  name: string;
+  title: string;
+  message: string;
+  audience: NotificationAudience;
+  targetSection: NotificationSection;
+  channels: NotificationChannel[];
 }

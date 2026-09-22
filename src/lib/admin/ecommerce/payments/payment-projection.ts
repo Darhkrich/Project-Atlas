@@ -1,16 +1,20 @@
+// lib/admin/ecommerce/payments/payment-projection.ts
+
 import type { Merchant } from "@/lib/admin/types/merchant";
 import type {
   ApprovalRequiredReason,
   AutoApproveEvaluation,
   CheckoutEvent,
   LedgerRow,
+  MerchantMoneyEvent,
   MerchantMoneyState,
   PaymentsSummary,
   PlanChargeEvent,
   RefundEvent,
   WithdrawalQueueRow,
-  WithdrawalRequest,
+  MetricWithDelta,
 } from "@/lib/admin/types/merchant-money";
+import type { MerchantWithdrawalRequest } from "@/lib/domains/wallet/merchant-money/types";
 import {
   CHECKOUT_METHOD_LABELS,
   CHECKOUT_STATUS_LABELS,
@@ -74,7 +78,7 @@ function checkoutRow(
 }
 
 function withdrawalRow(
-  event: WithdrawalRequest,
+  event: MerchantWithdrawalRequest,
   map: Map<string, Merchant>
 ): LedgerRow {
   return {
@@ -89,12 +93,10 @@ function withdrawalRow(
     statusLabel: WITHDRAWAL_STATUS_LABELS[event.status],
     statusVariant: WITHDRAWAL_STATUS_VARIANT[event.status],
     sourceLabel:
-      event.destinationSnapshot.provider +
-      " " +
-      event.destinationSnapshot.maskedAccount,
+      event.destinationProvider + " " + event.destinationMaskedLabel,
     sourceRef: event.transactionRef,
-    createdAt: event.createdAt,
-    raw: event,
+    createdAt: event.requestedAt,
+    raw: { ...event, kind: "withdrawal" as const },
   };
 }
 
@@ -152,8 +154,8 @@ export function projectWithdrawalQueue(
       fee: w.fee,
       total: w.total,
       destinationLabel: dest ? dest.provider + " " + dest.method : "unknown",
-      destinationProvider: dest?.provider ?? "unknown",
-      destinationMasked: w.destinationSnapshot.maskedAccount,
+      destinationProvider: w.destinationProvider,
+      destinationMasked: w.destinationMaskedLabel,
       destinationVerified: Boolean(dest?.verifiedAt) && !dest?.pendingChange,
       destinationPendingChange: Boolean(dest?.pendingChange),
       approvalRequiredReasons: w.approvalRequiredReasons,
@@ -161,7 +163,7 @@ export function projectWithdrawalQueue(
       statusLabel: WITHDRAWAL_STATUS_LABELS[w.status],
       statusVariant: WITHDRAWAL_STATUS_VARIANT[w.status],
       autoApproved: w.autoApproved,
-      createdAt: w.createdAt,
+      createdAt: w.requestedAt,
       raw: w,
     };
   });
@@ -173,6 +175,7 @@ export function projectWithdrawalQueue(
   });
   return rows;
 }
+
 function computeDelta(current: number, previous: number): MetricWithDelta {
   const diff = current - previous;
   let direction: "up" | "down" | "flat" = "flat";
@@ -200,16 +203,17 @@ export function projectSummary(
   const inPrev = (iso: string) =>
     hasPrevWindow && inRange(iso, prevSinceMs, prevUntilMs);
 
-  const countedStatuses: WithdrawalRequest["status"][] = [
-    "pending_processing",
-    "completed",
-  ];
+  const countedStatuses = ["pending_processing", "completed", "pending_admin"] as const;
 
   const currentRevenueWithdrawals = state.withdrawals.filter(
-    (w) => countedStatuses.includes(w.status) && inCurrent(w.createdAt)
+    (w) =>
+      (countedStatuses as readonly string[]).includes(w.status) &&
+      inCurrent(w.requestedAt)
   );
   const prevRevenueWithdrawals = state.withdrawals.filter(
-    (w) => countedStatuses.includes(w.status) && inPrev(w.createdAt)
+    (w) =>
+      (countedStatuses as readonly string[]).includes(w.status) &&
+      inPrev(w.requestedAt)
   );
 
   const atlasRevenue = computeDelta(
@@ -227,10 +231,10 @@ export function projectSummary(
   );
   const sortedPending = [...currentPending].sort(
     (a, b) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime()
   );
   const prevPendingCount = state.withdrawals.filter(
-    (w) => w.status === "pending_admin" && inPrev(w.createdAt)
+    (w) => w.status === "pending_admin" && inPrev(w.requestedAt)
   ).length;
 
   const pendingApprovals = computeDelta(
@@ -260,7 +264,7 @@ export function projectSummary(
     (c) => c.status === "failed" && inCurrent(c.createdAt)
   ).length;
   const failedWithdrawalCur = state.withdrawals.filter(
-    (w) => w.status === "failed" && inCurrent(w.createdAt)
+    (w) => w.status === "failed" && inCurrent(w.requestedAt)
   ).length;
   const failedPlanPrev = state.planCharges.filter(
     (p) => p.status === "failed" && inPrev(p.createdAt)
@@ -269,7 +273,7 @@ export function projectSummary(
     (c) => c.status === "failed" && inPrev(c.createdAt)
   ).length;
   const failedWithdrawalPrev = state.withdrawals.filter(
-    (w) => w.status === "failed" && inPrev(w.createdAt)
+    (w) => w.status === "failed" && inPrev(w.requestedAt)
   ).length;
 
   const failedEvents = computeDelta(
@@ -279,10 +283,10 @@ export function projectSummary(
 
   const withdrawalsByStatus = {
     completed: state.withdrawals.filter(
-      (w) => w.status === "completed" && inCurrent(w.createdAt)
+      (w) => w.status === "completed" && inCurrent(w.requestedAt)
     ).length,
     processing: state.withdrawals.filter(
-      (w) => w.status === "pending_processing" && inCurrent(w.createdAt)
+      (w) => w.status === "pending_processing" && inCurrent(w.requestedAt)
     ).length,
     failed: failedWithdrawalCur,
   };
@@ -293,7 +297,7 @@ export function projectSummary(
     atlasRevenueWithdrawalCount: currentRevenueWithdrawals.length,
 
     pendingApprovals,
-    pendingOldestIso: sortedPending[0]?.createdAt ?? null,
+    pendingOldestIso: sortedPending[0]?.requestedAt ?? null,
 
     withdrawalVolume,
     withdrawalCount: currentRevenueWithdrawals.length,
@@ -312,58 +316,7 @@ export function projectSummary(
   };
 }
 
-function startOfUtcDay(ms: number): number {
-  const d = new Date(ms);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-}
-
-export function evaluateAutoApprove(
-  input: { merchantId: string; amount: number; fee: number },
-  state: MerchantMoneyState,
-  nowMs: number
-): AutoApproveEvaluation {
-  const total = input.amount + input.fee;
-
-  const wallet = state.wallets[input.merchantId];
-  const mainBalance = wallet?.main.balance ?? 0;
-
-  if (mainBalance < total) {
-    return { outcome: "fails_balance", reasons: [] };
-  }
-
-  const reasons: ApprovalRequiredReason[] = [];
-
-  if (total > state.config.thresholdGHS) {
-    reasons.push("exceeds_threshold");
-  }
-
-  const dest = state.destinations[input.merchantId];
-  if (dest?.pendingChange) {
-    reasons.push("destination_change_pending");
-  }
-
-  const openDisputes = state.disputes.filter(
-    (d) => d.merchantId === input.merchantId && d.status === "open"
-  );
-  if (openDisputes.length > 0) {
-    reasons.push("open_dispute");
-  }
-
-  const dayStart = startOfUtcDay(nowMs);
-  const dayEnd = dayStart + 86_400_000;
-  const sameDayCount = state.withdrawals.filter((w) => {
-    if (w.merchantId !== input.merchantId) return false;
-    if (w.status === "rejected" || w.status === "failed") return false;
-    const t = new Date(w.createdAt).getTime();
-    return t >= dayStart && t < dayEnd;
-  }).length;
-  if (sameDayCount >= state.config.dailyCap) {
-    reasons.push("daily_cap_reached");
-  }
-
-  if (reasons.length > 0) {
-    return { outcome: "requires_approval", reasons };
-  }
-
-  return { outcome: "auto_approved", reasons: [] };
-}
+// AutoApproveEvaluation lives in the shared projection now. Re-export so
+// callers that read the type from this module keep working.
+export type { AutoApproveEvaluation, ApprovalRequiredReason };
+export type { MerchantMoneyEvent };

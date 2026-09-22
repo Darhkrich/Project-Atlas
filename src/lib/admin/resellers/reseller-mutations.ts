@@ -145,8 +145,6 @@ export function adjustResellerWallet(
     return { ok: false, error: "Amount must be non-zero." };
   }
 
-  // Wallet write goes to the public store. Adjustment method is
-  // "atlas_wallet" only until rails are implemented.
   const method: ResellerAdjustmentMethod = "atlas_wallet";
   const adjustResult = applyAdminWalletAdjustment({
     resellerId: id,
@@ -256,9 +254,6 @@ export function onboardReseller(
     lastActive: nowIso,
     tierName: tier?.name,
     tierId: tier?.id,
-    commissionsEarned: 0,
-    commissionsPending: 0,
-    commissionsPaid: 0,
     activityLog: [makeActivityEntry("Account created")],
     auditTrail: [makeAuditEntry("Created reseller account", actor)],
   };

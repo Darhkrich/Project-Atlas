@@ -4,7 +4,7 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-export interface UseUrlFiltersResult<T extends Record<string, string>> {
+export interface UseUrlFiltersResult<T extends object> {
   filters: T;
   setFilter: (key: keyof T, value: string) => void;
   setFilters: (patch: Partial<T>) => void;
@@ -12,7 +12,7 @@ export interface UseUrlFiltersResult<T extends Record<string, string>> {
   hasActive: boolean;
 }
 
-export function useUrlFilters<T extends Record<string, string>>(
+export function useUrlFilters<T extends object>(
   defaults: T
 ): UseUrlFiltersResult<T> {
   const router = useRouter();
@@ -21,10 +21,11 @@ export function useUrlFilters<T extends Record<string, string>>(
 
   const filters = useMemo(() => {
     const result = { ...defaults };
+    const record = result as Record<string, unknown>;
     for (const key of Object.keys(defaults)) {
       const value = searchParams.get(key);
       if (value !== null) {
-        result[key as keyof T] = value as T[keyof T];
+        record[key] = value;
       }
     }
     return result;
@@ -38,8 +39,13 @@ export function useUrlFilters<T extends Record<string, string>>(
   const setFilters = useCallback(
     (patch: Partial<T>) => {
       const next = new URLSearchParams(searchParams.toString());
+      const defaultsRecord = defaults as Record<string, unknown>;
       for (const [key, value] of Object.entries(patch)) {
-        if (value === undefined || value === null || value === defaults[key as keyof T]) {
+        if (
+          value === undefined ||
+          value === null ||
+          value === defaultsRecord[key]
+        ) {
           next.delete(key);
         } else if (value === "") {
           next.delete(key);
@@ -48,7 +54,9 @@ export function useUrlFilters<T extends Record<string, string>>(
         }
       }
       const query = next.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
     },
     [searchParams, pathname, router, defaults]
   );

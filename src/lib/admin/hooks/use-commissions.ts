@@ -24,14 +24,12 @@ import { useNow } from "@/lib/shared/hooks/use-now";
 import type {
   CommissionAuditEntry,
   PayoutRun,
-  PlatformMargin,
   ResellerCommission,
 } from "@/lib/admin/types/commission";
 
 export interface UseCommissionsResult {
   commissions: ResellerCommission[];
   commissionRows: CommissionRow[];
-  margins: PlatformMargin[];
   payoutRuns: PayoutRun[];
   audit: CommissionAuditEntry[];
   commissionSummary: CommissionSummary;
@@ -42,42 +40,28 @@ export interface UseCommissionsResult {
   error: string | null;
 }
 
+const EMPTY_DELTA = {
+  current: 0,
+  previous: 0,
+  changePct: null as number | null,
+  direction: "flat" as const,
+};
+
 const EMPTY_SUMMARY: CommissionSummary = {
   totalCommission: 0,
-  totalCommissionDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
+  totalCommissionDelta: EMPTY_DELTA,
   pendingCommission: 0,
-  pendingCommissionDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
+  pendingCommissionDelta: EMPTY_DELTA,
   paidCommission: 0,
-  paidCommissionDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
-  atlasBaseMargin: 0,
-  atlasBaseMarginDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
+  paidCommissionDelta: EMPTY_DELTA,
+  atlasType1Margin: 0,
+  atlasType1MarginDelta: EMPTY_DELTA,
+  atlasType2Margin: 0,
+  atlasType2MarginDelta: EMPTY_DELTA,
+  atlasType3Margin: 0,
+  atlasType3MarginDelta: EMPTY_DELTA,
   atlasExtraCut: 0,
-  atlasExtraCutDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
+  atlasExtraCutDelta: EMPTY_DELTA,
   todayCommission: 0,
   reversedCommission: 0,
   currency: "GHS",
@@ -85,12 +69,7 @@ const EMPTY_SUMMARY: CommissionSummary = {
 
 const EMPTY_PLATFORM_SUMMARY: PlatformSummary = {
   totalMargin: 0,
-  totalMarginDelta: {
-    current: 0,
-    previous: 0,
-    changePct: null,
-    direction: "flat",
-  },
+  totalMarginDelta: EMPTY_DELTA,
   todayMargin: 0,
   monthMargin: 0,
   avgMarginPercent: 0,
@@ -121,7 +100,6 @@ export function useCommissions(): UseCommissionsResult {
       return {
         commissions: [] as ResellerCommission[],
         commissionRows: [] as CommissionRow[],
-        margins: [] as PlatformMargin[],
         payoutRuns: [] as PayoutRun[],
         audit: [] as CommissionAuditEntry[],
         commissionSummary: EMPTY_SUMMARY,
@@ -137,16 +115,24 @@ export function useCommissions(): UseCommissionsResult {
 
       return {
         commissions: state.commissions,
-        commissionRows: projectCommissionRows(state.commissions, effectiveNow),
-        margins: state.margins,
+        commissionRows: projectCommissionRows(
+          state.commissions,
+          effectiveNow
+        ),
         payoutRuns: state.payoutRuns,
         audit: state.audit,
         commissionSummary: projectCommissionSummary(
           state.commissions,
           effectiveNow
         ),
-        platformSummary: projectPlatformSummary(state.margins, effectiveNow),
-        platformTrend: projectPlatformTrend(state.margins, effectiveNow),
+        platformSummary: projectPlatformSummary(
+          state.commissions,
+          effectiveNow
+        ),
+        platformTrend: projectPlatformTrend(
+          state.commissions,
+          effectiveNow
+        ),
         payoutSummary: projectPayoutSummary(state.payoutRuns),
         error: null as string | null,
       };
@@ -154,7 +140,6 @@ export function useCommissions(): UseCommissionsResult {
       return {
         commissions: [] as ResellerCommission[],
         commissionRows: [] as CommissionRow[],
-        margins: [] as PlatformMargin[],
         payoutRuns: [] as PayoutRun[],
         audit: [] as CommissionAuditEntry[],
         commissionSummary: EMPTY_SUMMARY,

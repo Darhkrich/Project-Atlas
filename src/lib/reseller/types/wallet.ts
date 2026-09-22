@@ -49,6 +49,7 @@ export interface ResellerCommissionLedgerEntry extends LedgerBase {
   service: string;
   commissionRate: number;
   grossOrderValue: number;
+  commissionId?: string;
 }
 
 export interface ResellerPurchaseLedgerEntry extends LedgerBase {
@@ -247,6 +248,6 @@ export interface ResellerRefundableSource {
 export interface WithdrawalAmountBounds {
   min: number;
   max: number;
-  fee: number;
+  fee: number;  
   total: number;
 }

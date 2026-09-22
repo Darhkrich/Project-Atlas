@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { useResellers } from "./use-resellers";
+import { useCommissions } from "./use-commissions";
+import { buildCommissionTotalsMap } from "@/lib/admin/resellers/helpers";
 import {
   projectAnalyticsSummary,
   projectByVerification,
@@ -11,15 +13,25 @@ import {
 
 export function useResellerAnalytics(topN: number) {
   const { resellers, loading } = useResellers();
+  const { commissions } = useCommissions();
+
+  const commissionTotalsById = useMemo(
+    () => buildCommissionTotalsMap(commissions),
+    [commissions]
+  );
 
   const value = useMemo(
     () => ({
-      summary: projectAnalyticsSummary(resellers),
-      revenueByReseller: projectRevenueByReseller(resellers, topN),
+      summary: projectAnalyticsSummary(resellers, commissionTotalsById),
+      revenueByReseller: projectRevenueByReseller(
+        resellers,
+        topN,
+        commissionTotalsById
+      ),
       revenueByTier: projectRevenueByTier(resellers),
       byVerification: projectByVerification(resellers),
     }),
-    [resellers, topN]
+    [resellers, topN, commissionTotalsById]
   );
 
   return { ...value, loading };

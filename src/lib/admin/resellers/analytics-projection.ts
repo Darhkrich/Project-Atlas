@@ -1,5 +1,6 @@
 import type { Reseller } from "@/lib/admin/types/reseller";
 import { TIER_ORDER } from "./dashboard-labels";
+import type { CommissionTotals } from "./helpers";
 
 export interface RevenueByResellerRow {
   id: string;
@@ -41,11 +42,14 @@ export interface AnalyticsSummary {
   currency: string;
 }
 
+const ZERO_TOTALS: CommissionTotals = { earned: 0, pending: 0, paid: 0 };
+
 /* ------------------------------ Projections --------------------------- */
 
 export function projectRevenueByReseller(
   resellers: Reseller[],
-  limit: number
+  limit: number,
+  commissionTotalsById: Map<string, CommissionTotals>
 ): RevenueByResellerRow[] {
   return [...resellers]
     .sort((a, b) => b.totalRevenue - a.totalRevenue)
@@ -54,7 +58,8 @@ export function projectRevenueByReseller(
       id: r.id,
       name: r.businessName,
       revenue: r.totalRevenue,
-      commissions: r.commissionsEarned,
+      commissions:
+        (commissionTotalsById.get(r.id) ?? ZERO_TOTALS).earned,
       tier: r.tierName ?? "",
       tierId: r.tierId ?? "",
       status: r.status,
@@ -62,7 +67,9 @@ export function projectRevenueByReseller(
     }));
 }
 
-export function projectRevenueByTier(resellers: Reseller[]): RevenueByTierRow[] {
+export function projectRevenueByTier(
+  resellers: Reseller[]
+): RevenueByTierRow[] {
   const map = new Map<string, RevenueByTierRow>();
   for (const r of resellers) {
     const existing = map.get(r.tierId);
@@ -83,7 +90,9 @@ export function projectRevenueByTier(resellers: Reseller[]): RevenueByTierRow[] 
   );
 }
 
-export function projectByVerification(resellers: Reseller[]): VerificationCount[] {
+export function projectByVerification(
+  resellers: Reseller[]
+): VerificationCount[] {
   const order: Reseller["verificationStatus"][] = [
     "verified",
     "pending",
@@ -104,7 +113,10 @@ export function projectByVerification(resellers: Reseller[]): VerificationCount[
   }));
 }
 
-export function projectAnalyticsSummary(resellers: Reseller[]): AnalyticsSummary {
+export function projectAnalyticsSummary(
+  resellers: Reseller[],
+  commissionTotalsById: Map<string, CommissionTotals>
+): AnalyticsSummary {
   let revenue = 0;
   let earned = 0;
   let paid = 0;
@@ -112,8 +124,9 @@ export function projectAnalyticsSummary(resellers: Reseller[]): AnalyticsSummary
 
   for (const r of resellers) {
     revenue += r.totalRevenue;
-    earned += r.commissionsEarned;
-    paid += r.commissionsPaid;
+    const totals = commissionTotalsById.get(r.id) ?? ZERO_TOTALS;
+    earned += totals.earned;
+    paid += totals.paid;
     if (r.status === "active") active += 1;
   }
 

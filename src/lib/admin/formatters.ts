@@ -1,4 +1,5 @@
-export function formatCurrency(amount: number, currency: string): string {
+export function formatCurrency(amount: number, currency?: string): string {
+  void currency;
   return `GH₵ ${amount.toLocaleString("en-GH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

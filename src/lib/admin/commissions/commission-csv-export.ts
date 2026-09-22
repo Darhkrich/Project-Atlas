@@ -1,7 +1,6 @@
-import type {
-  PayoutRun,
-  PlatformMargin,
-} from "../types/commission";
+// lib/admin/commissions/commission-csv-export.ts
+
+import type { PayoutRun, ResellerCommission } from "../types/commission";
 import type { CommissionRow } from "./commission-projection";
 
 function esc(value: string | number | undefined | null): string {
@@ -11,6 +10,29 @@ function esc(value: string | number | undefined | null): string {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
+}
+
+function type1Of(c: ResellerCommission): number {
+  return Math.round((c.atlasPrice - c.providerCost) * 100) / 100;
+}
+
+function type2Of(c: ResellerCommission): number {
+  return (
+    Math.round((c.atlasPrice - c.providerCost - c.baseCommission) * 100) /
+    100
+  );
+}
+
+function type3Of(c: ResellerCommission): number {
+  return (
+    Math.round(
+      (c.atlasPrice -
+        c.providerCost -
+        c.baseCommission +
+        c.atlasExtraCut) *
+        100
+    ) / 100
+  );
 }
 
 export function commissionsToCsv(rows: CommissionRow[]): string {
@@ -64,29 +86,33 @@ export function commissionsToCsv(rows: CommissionRow[]): string {
   return lines.join("\n");
 }
 
-export function marginsToCsv(rows: PlatformMargin[]): string {
+export function marginsToCsv(rows: CommissionRow[]): string {
   const header = [
-    "Margin ID",
+    "Commission ID",
     "Order",
     "Service",
     "Provider Cost",
     "Atlas Price",
-    "Margin",
-    "Margin %",
+    "Type 1 Margin",
+    "Type 2 Margin",
+    "Type 3 Margin",
     "Date",
   ];
   const lines = [header.join(",")];
-  for (const m of rows) {
+  for (const r of rows) {
+    if (r.status !== "paid") continue;
+    const c = r.raw;
     lines.push(
       [
-        esc(m.id),
-        esc(m.orderId),
-        esc(m.service),
-        esc(m.providerCost),
-        esc(m.atlasPrice),
-        esc(m.margin),
-        esc(m.marginPercentage),
-        esc(m.date),
+        esc(r.id),
+        esc(r.orderId),
+        esc(r.service),
+        esc(r.providerCost),
+        esc(r.atlasPrice),
+        esc(type1Of(c)),
+        esc(type2Of(c)),
+        esc(type3Of(c)),
+        esc(r.createdAt),
       ].join(",")
     );
   }
@@ -101,6 +127,7 @@ export function payoutRunsToCsv(rows: PayoutRun[]): string {
     "Resellers",
     "Status",
     "Commission IDs",
+    "Failure Reason",
   ];
   const lines = [header.join(",")];
   for (const p of rows) {
@@ -112,6 +139,7 @@ export function payoutRunsToCsv(rows: PayoutRun[]): string {
         esc(p.resellerCount),
         esc(p.status),
         esc(p.commissionIds.join("; ")),
+        esc(p.failureReason ?? ""),
       ].join(",")
     );
   }

@@ -1,10 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useResellers } from "./use-resellers";
+import { useCommissions } from "./use-commissions";
 import { useNow } from "./use-now";
+import { buildCommissionTotalsMap } from "@/lib/admin/resellers/helpers";
 import {
   getResellerWalletStore,
   isResellerWalletStoreLoaded,
@@ -55,6 +58,7 @@ const EMPTY_THRESHOLD: ResellerCommissionConfig = {
 
 export function useResellerWallets(): UseResellerWalletsResult {
   const { resellers, loading: resellersLoading } = useResellers();
+  const { commissions } = useCommissions();
   const nowMs = useNow();
   const [tick, setTick] = useState(0);
   const [configTick, setConfigTick] = useState(0);
@@ -75,6 +79,11 @@ export function useResellerWallets(): UseResellerWalletsResult {
     };
   }, []);
 
+  const commissionTotalsById = useMemo(
+    () => buildCommissionTotalsMap(commissions),
+    [commissions]
+  );
+
   const value = useMemo(() => {
     const state = getResellerWalletStore();
     const walletConfig = getWalletConfig();
@@ -85,7 +94,12 @@ export function useResellerWallets(): UseResellerWalletsResult {
       updatedBy: walletConfig.updatedBy,
     };
 
-    const wallets = projectWalletsWithReasons(resellers, state, config);
+    const wallets = projectWalletsWithReasons(
+      resellers,
+      state,
+      config,
+      commissionTotalsById
+    );
 
     return {
       wallets,
@@ -94,7 +108,7 @@ export function useResellerWallets(): UseResellerWalletsResult {
       resellerCount: resellers.length,
       walletCount: wallets.length,
     };
-  }, [tick, configTick, resellers]);
+  }, [tick, configTick, resellers, commissionTotalsById]);
 
   return {
     ...value,

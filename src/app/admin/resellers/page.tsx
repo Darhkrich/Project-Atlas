@@ -37,6 +37,7 @@ import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
 import { useResellers } from "@/lib/admin/hooks/use-resellers";
 import { useResellerWallets } from "@/lib/admin/hooks/use-reseller-wallets";
+import { useCommissions } from "@/lib/admin/hooks/use-commissions";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
 import { mockStorefronts } from "@/lib/admin/mock/storefronts";
@@ -60,6 +61,7 @@ import {
   type WalletAdjustMethod,
 } from "@/lib/admin/resellers/constants";
 import { resellersToCsv } from "@/lib/admin/resellers/csv-export";
+import { buildCommissionTotalsMap } from "@/lib/admin/resellers/helpers";
 import {
   suspendReseller,
   reactivateReseller,
@@ -137,6 +139,7 @@ function ResellersPageInner() {
   const admin = useCurrentAdmin();
   const { resellers, loading } = useResellers();
   const { wallets: walletRows } = useResellerWallets();
+  const { commissions } = useCommissions();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -165,8 +168,6 @@ function ResellersPageInner() {
     [admin]
   );
 
-  // Lookup map: resellerId -> wallet balance. Built from the wallet store
-  // projection. Every reader of a balance on this page goes through this map.
   const walletBalanceById = useMemo(() => {
     const map = new Map<string, number>();
     for (const w of walletRows) {
@@ -174,6 +175,11 @@ function ResellersPageInner() {
     }
     return map;
   }, [walletRows]);
+
+  const commissionTotalsById = useMemo(
+    () => buildCommissionTotalsMap(commissions),
+    [commissions]
+  );
 
   useEffect(() => {
     try {
@@ -292,10 +298,16 @@ function ResellersPageInner() {
           const bBal = walletBalanceById.get(b.id) ?? 0;
           return bBal - aBal;
         }
-        case "commissionsEarned":
-          return b.commissionsEarned - a.commissionsEarned;
-        case "commissionsPending":
-          return b.commissionsPending - a.commissionsPending;
+        case "commissionsEarned": {
+          const aVal = commissionTotalsById.get(a.id)?.earned ?? 0;
+          const bVal = commissionTotalsById.get(b.id)?.earned ?? 0;
+          return bVal - aVal;
+        }
+        case "commissionsPending": {
+          const aVal = commissionTotalsById.get(a.id)?.pending ?? 0;
+          const bVal = commissionTotalsById.get(b.id)?.pending ?? 0;
+          return bVal - aVal;
+        }
         case "businessName":
           return a.businessName.localeCompare(b.businessName);
         case "lastActive":
@@ -306,7 +318,7 @@ function ResellersPageInner() {
       }
     });
     return sorted;
-  }, [resellers, filters, walletBalanceById]);
+  }, [resellers, filters, walletBalanceById, commissionTotalsById]);
 
   const pageSize = Math.max(5, Number(filters.pageSize) || PAGE_SIZE);
   const page = Math.max(1, Number(filters.page) || 1);
@@ -355,6 +367,11 @@ function ResellersPageInner() {
       );
     }).length;
 
+    let pendingPayoutTotal = 0;
+    for (const totals of commissionTotalsById.values()) {
+      pendingPayoutTotal += totals.pending;
+    }
+
     return {
       totalResellers: resellers.length,
       activeResellers: resellers.filter((r) => r.status === "active").length,
@@ -363,13 +380,10 @@ function ResellersPageInner() {
       ).length,
       suspendedResellers: resellers.filter((r) => r.status === "suspended")
         .length,
-      pendingPayoutTotal: resellers.reduce(
-        (s, r) => s + r.commissionsPending,
-        0
-      ),
+      pendingPayoutTotal: Math.round(pendingPayoutTotal * 100) / 100,
       newThisMonth,
     };
-  }, [resellers]);
+  }, [resellers, commissionTotalsById]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -600,7 +614,11 @@ function ResellersPageInner() {
     const selectedResellers = resellers.filter((r) =>
       selectedIds.includes(r.id)
     );
-    const csv = resellersToCsv(selectedResellers, walletBalanceById);
+    const csv = resellersToCsv(
+      selectedResellers,
+      walletBalanceById,
+      commissionTotalsById
+    );
     downloadCsv(
       `atlas-resellers-selected-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
@@ -614,7 +632,11 @@ function ResellersPageInner() {
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
-    const csv = resellersToCsv(filtered, walletBalanceById);
+    const csv = resellersToCsv(
+      filtered,
+      walletBalanceById,
+      commissionTotalsById
+    );
     downloadCsv(
       `atlas-resellers-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
@@ -736,18 +758,25 @@ function ResellersPageInner() {
       {
         key: "commissions",
         header: "Commissions",
-        cell: (r) => (
-          <div className="text-xs">
-            <p className="font-medium text-neutral-900 dark:text-neutral-100">
-              {formatCurrency(r.commissionsEarned)}
-            </p>
-            {r.commissionsPending > 0 && (
-              <p className="text-warning-700 dark:text-warning-300">
-                {formatCurrency(r.commissionsPending)} pending
+        cell: (r) => {
+          const totals = commissionTotalsById.get(r.id) ?? {
+            earned: 0,
+            pending: 0,
+            paid: 0,
+          };
+          return (
+            <div className="text-xs">
+              <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                {formatCurrency(totals.earned)}
               </p>
-            )}
-          </div>
-        ),
+              {totals.pending > 0 && (
+                <p className="text-warning-700 dark:text-warning-300">
+                  {formatCurrency(totals.pending)} pending
+                </p>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: "verification",
@@ -768,8 +797,8 @@ function ResellersPageInner() {
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedIds, walletBalanceById]
+     
+    [selectedIds, walletBalanceById, commissionTotalsById]
   );
 
   const displayColumns = useMemo(
@@ -809,9 +838,9 @@ function ResellersPageInner() {
   const filterValues: ResellerFilterValues = {
     q: filters.q,
     status: filters.status,
-  verification: filters.verification,
+    verification: filters.verification,
     tier: filters.tier,
-    joinedBFrom: filters.joinedFrom,
+    joinedFrom: filters.joinedFrom,
     joinedTo: filters.joinedTo,
     sort: filters.sort,
     page: filters.page,

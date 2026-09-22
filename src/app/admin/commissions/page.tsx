@@ -25,7 +25,7 @@ import {
   DEFAULT_COMMISSION_FILTERS,
   type CommissionFilters,
 } from "@/lib/admin/commissions/commission-constants";
-import { bulkCancelCommissions } from "@/lib/admin/commissions/commission-mutations";
+import { cancelOrderCommission } from "@/lib/admin/commissions/commission-mutations";
 import type { ResellerCommission } from "@/lib/admin/types/commission";
 
 interface Toast {
@@ -83,24 +83,30 @@ function CommissionsPageInner() {
     () =>
       admin
         ? {
-            id: admin.id ?? admin.email,
             name: admin.name,
             email: admin.email,
           }
-        : null,
+        : { name: "System", email: "system@atlas.com" },
     [admin]
   );
 
   const confirmCancel = (reason: string) => {
-    if (!cancelIntent || !actor) return;
+    if (!cancelIntent) return;
     setSubmitting(true);
-    const result = bulkCancelCommissions(cancelIntent.ids, reason, actor);
+    let okCount = 0;
+    let failCount = 0;
+    for (const id of cancelIntent.ids) {
+      const result = cancelOrderCommission(id, reason, actor);
+      if (result.ok) okCount += 1;
+      else failCount += 1;
+    }
     setSubmitting(false);
     setToast({
-      kind: result.ok ? "success" : "error",
-      text: result.ok
-        ? "Cancelled " + result.updatedCount + " commissions."
-        : "Some commissions could not be cancelled.",
+      kind: failCount === 0 ? "success" : "error",
+      text:
+        failCount === 0
+          ? "Cancelled " + okCount + " commissions."
+          : "Cancelled " + okCount + " of " + cancelIntent.ids.length + ".",
     });
     setCancelIntent(null);
     setSelectedCommission(null);
@@ -112,7 +118,7 @@ function CommissionsPageInner() {
     if (filters.tab === "margin") {
       downloadCsv(
         "atlas-platform-margins-" + date + ".csv",
-        marginsToCsv(state.margins)
+        marginsToCsv(state.commissionRows)
       );
       return;
     }
@@ -148,11 +154,8 @@ function CommissionsPageInner() {
       </span>
       <span aria-hidden="true">·</span>
       <span>
-        {formatCurrency(
-          state.commissionSummary.atlasBaseMargin +
-            state.commissionSummary.atlasExtraCut
-        )}{" "}
-        Atlas revenue
+        {formatCurrency(state.commissionSummary.atlasType3Margin)} Atlas
+        revenue
       </span>
     </>
   );
@@ -210,9 +213,8 @@ function CommissionsPageInner() {
             clearFilters={clearFilters}
             hasActive={hasActive}
             onViewCommission={setSelectedCommission}
-            onBulkCancel={(ids) => setCancelIntent({ ids })} onBulkPay={function (ids: string[]): void {
-              throw new Error("Function not implemented.");
-            } }          />
+            onBulkCancel={(ids) => setCancelIntent({ ids })}
+          />
         </div>
       )}
 
@@ -223,7 +225,7 @@ function CommissionsPageInner() {
           aria-labelledby="commissions-tab-margin"
         >
           <PlatformMarginView
-            margins={state.margins}
+            rows={state.commissionRows}
             trend={state.platformTrend}
             loading={state.loading}
           />
@@ -244,8 +246,8 @@ function CommissionsPageInner() {
                   Reseller tier configuration
                 </p>
                 <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                  Commission rates and the extra cut percentage are set on the
-                  reseller tier editor.
+                  Commission rates and the extra cut percentage are set on
+                  the reseller tier editor.
                 </p>
               </div>
               <a
@@ -272,9 +274,8 @@ function CommissionsPageInner() {
         audit={drawerAudit}
         nowMs={nowMs}
         canManage={Boolean(admin)}
-        onCancel={(c) => setCancelIntent({ ids: [c.id] })} onMarkPaid={function (commission: ResellerCommission): void {
-          throw new Error("Function not implemented.");
-        } }      />
+        onCancel={(c) => setCancelIntent({ ids: [c.id] })}
+      />
 
       <CommissionCancelModal
         open={cancelIntent !== null}

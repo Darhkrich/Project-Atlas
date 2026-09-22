@@ -1,6 +1,6 @@
 // lib/admin/types/settings.ts
 
-import type { export export NotificationChannel } from "./notification";
+import type { NotificationChannel } from "./notification";
 
 export type PlatformEnvironment = "development" | "staging" | "production";
 

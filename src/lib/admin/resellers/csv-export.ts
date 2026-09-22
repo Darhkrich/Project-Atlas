@@ -1,6 +1,7 @@
 import type { Reseller } from "@/lib/admin/types/reseller";
 import type { ResellerCommission } from "@/lib/admin/types/commission";
 import { STATUS_LABEL, VERIFICATION_LABEL } from "./constants";
+import { CommissionTotals } from "./helpers";
 
 function escape(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -8,9 +9,12 @@ function escape(value: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+const ZERO_TOTALS: CommissionTotals = { earned: 0, pending: 0, paid: 0 };
+
 export function resellersToCsv(
   resellers: Reseller[],
-  walletBalanceById: Map<string, number>
+  walletBalanceById: Map<string, number>,
+  commissionTotalsById: Map<string, CommissionTotals>
 ): string {
   const header = [
     "id",
@@ -32,25 +36,28 @@ export function resellersToCsv(
     "lastActive",
   ];
 
-  const rows = resellers.map((r) => [
-    r.id,
-    r.businessName,
-    r.storeName ?? "",
-    r.contactPerson,
-    r.email,
-    r.phone,
-    STATUS_LABEL[r.status] ?? r.status,
-    VERIFICATION_LABEL[r.verificationStatus] ?? r.verificationStatus,
-    r.tierName ?? "",
-    walletBalanceById.get(r.id) ?? 0,
-    r.totalOrders,
-    r.totalRevenue,
-    r.commissionsEarned,
-    r.commissionsPending,
-    r.commissionsPaid,
-    r.joinedAt,
-    r.lastActive,
-  ]);
+  const rows = resellers.map((r) => {
+    const totals = commissionTotalsById.get(r.id) ?? ZERO_TOTALS;
+    return [
+      r.id,
+      r.businessName,
+      r.storeName ?? "",
+      r.contactPerson,
+      r.email,
+      r.phone,
+      STATUS_LABEL[r.status] ?? r.status,
+      VERIFICATION_LABEL[r.verificationStatus] ?? r.verificationStatus,
+      r.tierName ?? "",
+      walletBalanceById.get(r.id) ?? 0,
+      r.totalOrders,
+      r.totalRevenue,
+      totals.earned,
+      totals.pending,
+      totals.paid,
+      r.joinedAt,
+      r.lastActive,
+    ];
+  });
 
   return [header, ...rows]
     .map((row) => row.map(escape).join(","))

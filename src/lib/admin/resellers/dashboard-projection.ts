@@ -8,18 +8,20 @@ import type {
   TopReseller,
 } from "@/lib/admin/types/reseller-dashboard";
 import { TIER_ORDER } from "./dashboard-labels";
+import type { CommissionTotals } from "./helpers";
 
 /**
- * Every function here is pure. Input is the reseller array, output is a
- * projection the dashboard renders. No module state, no cached results,
- * no fabricated data. If a value is not derivable from Reseller[], it
- * does not belong on the dashboard.
+ * Every function here is pure. Commission totals come in as a map.
+ * No module state, no cached results, no fabricated data.
  */
+
+const ZERO_TOTALS: CommissionTotals = { earned: 0, pending: 0, paid: 0 };
 
 /* ------------------------------ Summary ------------------------------- */
 
 export function projectSummary(
-  resellers: Reseller[]
+  resellers: Reseller[],
+  commissionTotalsById: Map<string, CommissionTotals>
 ): ResellerDashboardSummary {
   let active = 0;
   let pending = 0;
@@ -30,7 +32,7 @@ export function projectSummary(
     if (r.status === "active") active += 1;
     else if (r.status === "pending") pending += 1;
     else if (r.status === "suspended") suspended += 1;
-    commissionsPaid += r.commissionsPaid;
+    commissionsPaid += (commissionTotalsById.get(r.id) ?? ZERO_TOTALS).paid;
   }
 
   return {
@@ -38,7 +40,7 @@ export function projectSummary(
     activeResellers: active,
     pendingVerification: pending,
     suspendedResellers: suspended,
-    totalCommissionsPaid: commissionsPaid,
+    totalCommissionsPaid: Math.round(commissionsPaid * 100) / 100,
     asOf: new Date().toISOString(),
   };
 }
@@ -46,24 +48,10 @@ export function projectSummary(
 /* ------------------------------ Growth -------------------------------- */
 
 const MONTH_LABELS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-/**
- * Groups resellers by joinedAt month. Returns the trailing `months` count,
- * oldest first, zero-filling gaps so the chart does not compress.
- */
 export function projectGrowth(
   resellers: Reseller[],
   months = 8
@@ -99,6 +87,7 @@ export function projectGrowth(
 
 export function projectTopResellers(
   resellers: Reseller[],
+  commissionTotalsById: Map<string, CommissionTotals>,
   limit = 5
 ): TopReseller[] {
   return [...resellers]
@@ -110,7 +99,7 @@ export function projectTopResellers(
       tier: r.tierName ?? "Unassigned",
       tierId: r.tierId ?? "unassigned",
       revenue: r.totalRevenue,
-      commissions: r.commissionsEarned,
+      commissions: (commissionTotalsById.get(r.id) ?? ZERO_TOTALS).earned,
       status: r.status,
       verificationStatus: r.verificationStatus,
       href: `/admin/resellers/${r.id}`,
@@ -120,24 +109,26 @@ export function projectTopResellers(
 /* ------------------------------ Tier commissions ---------------------- */
 
 export function projectCommissionsByTier(
-  resellers: Reseller[]
+  resellers: Reseller[],
+  commissionTotalsById: Map<string, CommissionTotals>
 ): TierCommissionPoint[] {
   const map = new Map<string, TierCommissionPoint>();
 
   for (const r of resellers) {
     const tierId = r.tierId ?? "unassigned";
     const tierName = r.tierName ?? "Unassigned";
+    const totals = commissionTotalsById.get(r.id) ?? ZERO_TOTALS;
     const existing = map.get(tierId);
 
     if (existing) {
-      existing.paid += r.commissionsPaid;
-      existing.pending += r.commissionsPending;
+      existing.paid += totals.paid;
+      existing.pending += totals.pending;
     } else {
       map.set(tierId, {
         tier: tierName,
         tierId,
-        paid: r.commissionsPaid,
-        pending: r.commissionsPending,
+        paid: totals.paid,
+        pending: totals.pending,
       });
     }
   }
@@ -151,17 +142,22 @@ export function projectCommissionsByTier(
 
 export function projectTopPendingCommissions(
   resellers: Reseller[],
+  commissionTotalsById: Map<string, CommissionTotals>,
   limit = 5
 ): PendingCommissionPoint[] {
   return [...resellers]
-    .filter((r) => r.commissionsPending > 0)
-    .sort((a, b) => b.commissionsPending - a.commissionsPending)
-    .slice(0, limit)
     .map((r) => ({
+      r,
+      totals: commissionTotalsById.get(r.id) ?? ZERO_TOTALS,
+    }))
+    .filter(({ totals }) => totals.pending > 0)
+    .sort((a, b) => b.totals.pending - a.totals.pending)
+    .slice(0, limit)
+    .map(({ r, totals }) => ({
       id: r.id,
       name: r.businessName,
       tier: r.tierName ?? "Unassigned",
-      pending: r.commissionsPending,
+      pending: totals.pending,
       href: `/admin/resellers/${r.id}`,
     }));
 }
@@ -187,10 +183,6 @@ function activityTypeFromAction(action: string): RecentActivity["type"] {
   return "registration";
 }
 
-/**
- * Flattens every reseller's activityLog and auditTrail into one stream,
- * tagged with the reseller it belongs to. Sorted newest first.
- */
 export function projectRecentActivity(
   resellers: Reseller[],
   limit = 10

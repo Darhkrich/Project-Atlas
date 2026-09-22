@@ -20,7 +20,10 @@ function planName(code: Merchant["subscription"]["planId"]): string {
   return subscriptionPlans.find((p) => p.code === code)?.name ?? code;
 }
 
-export function merchantsToCsv(merchants: Merchant[]): string {
+export function merchantsToCsv(
+  merchants: Merchant[],
+  balanceById: Map<string, number>
+): string {
   const header = [
     "id",
     "businessName",
@@ -64,7 +67,7 @@ export function merchantsToCsv(merchants: Merchant[]): string {
     m.subscription.endDate,
     m.totalOrders,
     m.totalRevenue,
-    m.walletBalance ?? 0,
+    balanceById.get(m.id) ?? 0,
     m.createdAt,
     m.lastActive,
   ]);

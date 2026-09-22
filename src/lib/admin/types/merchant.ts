@@ -100,7 +100,6 @@ export interface Merchant {
 
   recentOrders?: MerchantRecentOrder[];
   recentPayments?: MerchantRecentPayment[];
-  walletBalance?: number;
   walletTransactions?: MerchantWalletTransaction[];
 
   activityLog: MerchantActivityEntry[];

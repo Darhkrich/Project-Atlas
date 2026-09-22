@@ -40,6 +40,48 @@ export function computeCommissionTotals(
   };
 }
 
+/**
+ * One-pass build of commission totals for every reseller. Callers pass
+ * the live commission array from the store. Missing resellers are not
+ * present in the map; readers use `?? { earned: 0, pending: 0, paid: 0 }`.
+ */
+export function buildCommissionTotalsMap(
+  commissions: ResellerCommission[]
+): Map<string, CommissionTotals> {
+  const map = new Map<string, CommissionTotals>();
+  const pendingById = new Map<string, number>();
+  const paidById = new Map<string, number>();
+
+  for (const c of commissions) {
+    if (c.status === "paid") {
+      paidById.set(
+        c.resellerId,
+        (paidById.get(c.resellerId) ?? 0) + c.totalCommission
+      );
+    } else if (c.status === "pending") {
+      pendingById.set(
+        c.resellerId,
+        (pendingById.get(c.resellerId) ?? 0) + c.totalCommission
+      );
+    }
+  }
+
+  const ids = new Set<string>([
+    ...pendingById.keys(),
+    ...paidById.keys(),
+  ]);
+  for (const id of ids) {
+    const pending = round2(pendingById.get(id) ?? 0);
+    const paid = round2(paidById.get(id) ?? 0);
+    map.set(id, {
+      earned: round2(paid + pending),
+      pending,
+      paid,
+    });
+  }
+  return map;
+}
+
 /* ------------------------------ Tiers ----------------------------------- */
 
 export function tierByName(

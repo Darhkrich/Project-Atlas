@@ -68,6 +68,7 @@ type NotifyChannel = "email" | "sms" | "push";
 
 interface MerchantDetailDrawerProps {
   merchant: Merchant | null;
+  walletBalance: number;
   onClose: () => void;
   onChangePlan: (id: string, planId: SubscriptionPlan) => void;
   onSuspend: (id: string, reason: string) => void;
@@ -86,6 +87,7 @@ interface MerchantDetailDrawerProps {
 
 export function MerchantDetailDrawer({
   merchant,
+  walletBalance,
   onClose,
   ...rest
 }: MerchantDetailDrawerProps) {
@@ -111,6 +113,7 @@ export function MerchantDetailDrawer({
       <MerchantDetailBody
         key={merchant.id}
         merchant={merchant}
+        walletBalance={walletBalance}
         titleId={titleId}
         onClose={onClose}
         {...rest}
@@ -127,6 +130,7 @@ interface BodyProps
 
 function MerchantDetailBody({
   merchant,
+  walletBalance,
   titleId,
   onClose,
   onChangePlan,
@@ -494,7 +498,7 @@ function MerchantDetailBody({
                 Wallet balance
               </p>
               <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                {formatCurrency(merchant.walletBalance ?? 0)}
+                {formatCurrency(walletBalance)}
               </p>
             </section>
 

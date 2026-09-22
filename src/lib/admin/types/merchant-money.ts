@@ -1,6 +1,64 @@
-import type { PlanCode } from "@/config/subscription-plans";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// lib/admin/types/merchant-money.ts
+//
+// Admin view types for the merchant money surface. Shared wallet types
+// re-export from the shared core. Admin-native event types (checkout,
+// plan charge, refund, dispute, dunning) are declared here. Admin-only
+// view types (LedgerRow, WithdrawalQueueRow, PaymentsSummary) are also
+// declared here.
 
-export type MerchantWalletType = "billing" | "main";
+import type { PlanCode } from "@/config/subscription-plans";
+import type {
+  WalletApprovalReason,
+  WalletAutoApproveConfig,
+  WalletWithdrawalFailureReason,
+  WalletWithdrawalStatus,
+} from "@/lib/domains/wallet/enums";
+import type {
+  MerchantWalletRecord,
+  MerchantSavedPaymentMethod,
+  MerchantAutoPayConfig,
+  MerchantWithdrawalHistoryEntry,
+  MerchantWithdrawalRequest,
+  RegisteredDestination,
+} from "@/lib/domains/wallet/merchant-money/types";
+
+// ---------------------------------------------------------------------------
+// Re-exports from shared core.
+// ---------------------------------------------------------------------------
+
+export type {
+  MerchantWalletType,
+  MerchantWalletRecord,
+  MerchantWalletLedgerEntry,
+  MerchantSavedPaymentMethod,
+  MerchantAutoPayConfig,
+  MerchantWithdrawalRequest,
+  MerchantWithdrawalHistoryEntry,
+  RegisteredDestination,
+  MerchantMoneyActor,
+  MerchantWalletView,
+  MerchantPendingWithdrawalRow,
+  MerchantLedgerRow,
+  MerchantWalletQuickStats,
+  MerchantBillingSummary,
+  MerchantMainSummary,
+  WithdrawalAmountBounds,
+} from "@/lib/domains/wallet/merchant-money/types";
+
+export type { MerchantWalletRecord as MerchantWallet } from "@/lib/domains/wallet/merchant-money/types";
+export type { MerchantWithdrawalRequest as WithdrawalRequest } from "@/lib/domains/wallet/merchant-money/types";
+
+export type {
+  WalletWithdrawalStatus as WithdrawalStatus,
+  WalletWithdrawalFailureReason as WithdrawalFailureReason,
+  WalletApprovalReason as ApprovalRequiredReason,
+  WalletAutoApproveConfig as AutoApproveConfig,
+} from "@/lib/domains/wallet/enums";
+
+// ---------------------------------------------------------------------------
+// Admin-native unions.
+// ---------------------------------------------------------------------------
 
 export type StorefrontPaymentMethod = "momo" | "card" | "bank" | "wallet";
 
@@ -22,25 +80,6 @@ export type GhanaBankProvider =
 
 export type WithdrawalMethod = "momo" | "bank";
 
-export type WithdrawalStatus =
-  | "pending_admin"
-  | "pending_processing"
-  | "completed"
-  | "failed"
-  | "rejected";
-
-export type WithdrawalFailureReason =
-  | "insufficient_balance"
-  | "destination_mismatch"
-  | "system_error"
-  | "rail_error";
-
-export type ApprovalRequiredReason =
-  | "exceeds_threshold"
-  | "daily_cap_reached"
-  | "open_dispute"
-  | "destination_change_pending";
-
 export type PlanChargeStatus = "successful" | "failed" | "pending";
 
 export type PlanChargeSource = "billing_wallet" | "card";
@@ -57,18 +96,14 @@ export type DisputeStatus = "open" | "resolved" | "dismissed";
 
 export type DunningChannel = "email" | "sms" | "app";
 
-export interface MerchantWallet {
-  merchantId: string;
-  type: MerchantWalletType;
-  balance: number;
-  currency: "GHS";
-  updatedAt: string;
-}
+// ---------------------------------------------------------------------------
+// Admin-native event shapes.
+// ---------------------------------------------------------------------------
 
 export interface MerchantWalletTransaction {
   id: string;
   merchantId: string;
-  walletType: MerchantWalletType;
+  walletType: "billing" | "main";
   direction: "credit" | "debit";
   amount: number;
   balanceAfter: number;
@@ -83,20 +118,6 @@ export interface MerchantWalletTransaction {
   createdAt: string;
 }
 
-export interface WithdrawalDestination {
-  merchantId: string;
-  method: WithdrawalMethod;
-  provider: GhanaMomoProvider | GhanaBankProvider;
-  accountNumber: string;
-  nameOnAccount: string;
-  verifiedAt?: string;
-  pendingChange?: {
-    reason: string;
-    requestedAt: string;
-    requestedBy: string;
-  };
-}
-
 export interface MerchantCard {
   id: string;
   merchantId: string;
@@ -104,14 +125,6 @@ export interface MerchantCard {
   last4: string;
   tokenRef: string;
   addedAt: string;
-}
-
-export interface AutoApproveConfig {
-  thresholdGHS: number;
-  feeRatePercent: number;
-  dailyCap: number;
-  updatedAt: string;
-  updatedBy: string;
 }
 
 export interface PlanChargeEvent {
@@ -145,31 +158,6 @@ export interface CheckoutEvent {
   createdAt: string;
 }
 
-export interface WithdrawalRequest {
-  id: string;
-  kind: "withdrawal";
-  merchantId: string;
-  amount: number;
-  fee: number;
-  total: number;
-  destinationSnapshot: {
-    method: WithdrawalMethod;
-    provider: GhanaMomoProvider | GhanaBankProvider;
-    maskedAccount: string;
-    nameOnAccount: string;
-  };
-  status: WithdrawalStatus;
-  autoApproved: boolean;
-  approvalRequiredReasons: ApprovalRequiredReason[];
-  rejectionReason?: string;
-  failureReason?: WithdrawalFailureReason;
-  approvedBy?: string;
-  approvedAt?: string;
-  completedAt?: string;
-  transactionRef: string;
-  createdAt: string;
-}
-
 export interface RefundEvent {
   id: string;
   kind: "refund";
@@ -183,12 +171,6 @@ export interface RefundEvent {
   createdAt: string;
   settledAt?: string;
 }
-
-export type MerchantMoneyEvent =
-  | PlanChargeEvent
-  | CheckoutEvent
-  | WithdrawalRequest
-  | RefundEvent;
 
 export interface DisputeEvent {
   id: string;
@@ -212,23 +194,39 @@ export interface DunningEvent {
   acknowledged: boolean;
 }
 
+export type MerchantMoneyEvent =
+  | PlanChargeEvent
+  | CheckoutEvent
+  | (MerchantWithdrawalRequest & { kind: "withdrawal" })
+  | RefundEvent;
+
+// ---------------------------------------------------------------------------
+// The admin view state. Assembled by the hook from the shared store plus
+// admin-native overlays. Not a single physical store.
+// ---------------------------------------------------------------------------
+
 export interface MerchantMoneyState {
   wallets: Record<
     string,
-    { billing: MerchantWallet; main: MerchantWallet }
+    { billing: MerchantWalletRecord; main: MerchantWalletRecord }
   >;
   walletTransactions: MerchantWalletTransaction[];
-  destinations: Record<string, WithdrawalDestination>;
-  cards: Record<string, MerchantCard[]>;
-  autopay: Record<string, { enabled: boolean; cardRef?: string }>;
-  withdrawals: WithdrawalRequest[];
+  destinations: Record<string, RegisteredDestination>;
+  savedMethods: Record<string, MerchantSavedPaymentMethod[]>;
+  autopay: Record<string, MerchantAutoPayConfig>;
+  withdrawals: MerchantWithdrawalRequest[];
+  withdrawalHistory: MerchantWithdrawalHistoryEntry[];
   planCharges: PlanChargeEvent[];
   checkouts: CheckoutEvent[];
   refunds: RefundEvent[];
   disputes: DisputeEvent[];
   dunning: DunningEvent[];
-  config: AutoApproveConfig;
+  config: WalletAutoApproveConfig;
 }
+
+// ---------------------------------------------------------------------------
+// View rows and summary types, computed by admin projections.
+// ---------------------------------------------------------------------------
 
 export interface LedgerRow {
   id: string;
@@ -259,13 +257,13 @@ export interface WithdrawalQueueRow {
   destinationMasked: string;
   destinationVerified: boolean;
   destinationPendingChange: boolean;
-  approvalRequiredReasons: ApprovalRequiredReason[];
-  status: WithdrawalStatus;
+  approvalRequiredReasons: WalletApprovalReason[];
+  status: WalletWithdrawalStatus;
   statusLabel: string;
   statusVariant: "success" | "warning" | "danger" | "info" | "neutral";
   autoApproved: boolean;
   createdAt: string;
-  raw: WithdrawalRequest;
+  raw: MerchantWithdrawalRequest;
 }
 
 export interface MetricWithDelta {
@@ -305,5 +303,6 @@ export interface PaymentsSummary {
 
 export interface AutoApproveEvaluation {
   outcome: "auto_approved" | "requires_approval" | "fails_balance";
-  reasons: ApprovalRequiredReason[];
+  reasons: WalletApprovalReason[];
 }
+

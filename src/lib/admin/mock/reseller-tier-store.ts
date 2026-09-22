@@ -119,7 +119,7 @@ export function subscribeToTierStore(listener: Listener): () => void {
 
 export function getTiers(): ResellerTier[] {
   ensureLoaded();
-  return state.tiers;
+  return [...state.tiers];
 }
 
 export function getTierById(id: string): ResellerTier | undefined {
@@ -129,7 +129,7 @@ export function getTierById(id: string): ResellerTier | undefined {
 
 export function getTierAudit(): TierAuditEntry[] {
   ensureLoaded();
-  return state.audit;
+  return [...state.audit];
 }
 
 export function getTierAuditFor(tierId: string): TierAuditEntry[] {
@@ -140,6 +140,13 @@ export function getTierAuditFor(tierId: string): TierAuditEntry[] {
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+}
+
+export function resetTierStoreForTest(): void {
+  state.tiers = structuredClone(SEED);
+  state.audit = [];
+  state.loaded = true;
+  notify();
 }
 
 export function validateTierInput(
@@ -269,14 +276,9 @@ export function updateTier(
       to: `${input.extraCutPercent}%`,
     });
   }
-  const rateKeys: (keyof TierPercentRates)[] = [
-    "data",
-    "airtime",
-    "bills",
-    "tv",
-    "exam_pins",
-    "other",
-  ];
+  const rateKeys = Object.keys(
+    current.baseCommissionRates
+  ) as (keyof TierPercentRates)[];
   for (const key of rateKeys) {
     if (current.baseCommissionRates[key] !== input.baseCommissionRates[key]) {
       changes.push({

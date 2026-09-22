@@ -1,20 +1,19 @@
+// lib/admin/mock/commission-store.ts
+
 import type {
   CommissionAuditEntry,
   PayoutRun,
-  PlatformMargin,
   ResellerCommission,
 } from "../types/commission";
 import {
   mockCommissionAudit,
   mockPayoutRuns,
-  mockPlatformMargins,
   mockResellerCommissions,
 } from "./commission-seed";
 
 export interface CommissionStoreState {
   commissions: ResellerCommission[];
   audit: CommissionAuditEntry[];
-  margins: PlatformMargin[];
   payoutRuns: PayoutRun[];
 }
 
@@ -22,7 +21,6 @@ function loadSeed(): CommissionStoreState {
   return {
     commissions: structuredClone(mockResellerCommissions),
     audit: structuredClone(mockCommissionAudit),
-    margins: structuredClone(mockPlatformMargins),
     payoutRuns: structuredClone(mockPayoutRuns),
   };
 }
@@ -71,6 +69,15 @@ export function getCommissionAuditFor(
     );
 }
 
+export function internalAddCommission(
+  row: ResellerCommission
+): ResellerCommission {
+  const s = ensureStore();
+  s.commissions = [row, ...s.commissions];
+  notify();
+  return row;
+}
+
 export function internalPatchCommission(
   id: string,
   updater: (c: ResellerCommission) => ResellerCommission
@@ -90,6 +97,25 @@ export function internalAppendCommissionAudit(
   s.audit = [entry, ...s.audit];
   notify();
   return entry;
+}
+
+export function internalAddPayoutRun(run: PayoutRun): PayoutRun {
+  const s = ensureStore();
+  s.payoutRuns = [run, ...s.payoutRuns];
+  notify();
+  return run;
+}
+
+export function internalPatchPayoutRun(
+  id: string,
+  updater: (p: PayoutRun) => PayoutRun
+): PayoutRun | null {
+  const s = ensureStore();
+  const idx = s.payoutRuns.findIndex((p) => p.id === id);
+  if (idx === -1) return null;
+  s.payoutRuns[idx] = updater(s.payoutRuns[idx]);
+  notify();
+  return s.payoutRuns[idx];
 }
 
 export function resetCommissionStoreForTest(): void {

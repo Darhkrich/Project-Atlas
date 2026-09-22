@@ -45,18 +45,18 @@ import {
   projectWithdrawalQueue,
 } from "@/lib/admin/ecommerce/payments/payment-projection";
 import {
-  approveWithdrawal,
-  rejectWithdrawal,
-  updateAutoApproveConfig,
-} from "@/lib/admin/mock/merchant-money-mutations";
+  adminApproveWithdrawal,
+  adminRejectWithdrawal,
+} from "@/lib/admin/ecommerce/payments/payment-mutations";
+import { adminUpdateAutoApproveConfig } from "@/lib/admin/ecommerce/payments/payment-config";
 import type {
   LedgerRow,
   MerchantMoneyEvent,
   MetricWithDelta,
   PaymentsSummary,
   WithdrawalQueueRow,
-  WithdrawalRequest,
 } from "@/lib/admin/types/merchant-money";
+import type { MerchantWithdrawalRequest } from "@/lib/domains/wallet/merchant-money/types";
 
 const DEFAULT_FILTERS: PaymentsFilterValues = {
   tab: "ledger",
@@ -95,6 +95,13 @@ const EMPTY_SUMMARY: PaymentsSummary = {
 interface Toast {
   kind: "success" | "error";
   text: string;
+}
+
+function last4FromMasked(masked: string | undefined): string | undefined {
+  if (!masked) return undefined;
+  const digits = masked.replace(/\D+/g, "");
+  if (digits.length === 0) return undefined;
+  return digits.slice(-4);
 }
 
 export default function EcommercePaymentsPage() {
@@ -151,9 +158,9 @@ function PaymentsPageInner() {
     null
   );
   const [pendingApprove, setPendingApprove] =
-    useState<WithdrawalRequest | null>(null);
+    useState<MerchantWithdrawalRequest | null>(null);
   const [pendingReject, setPendingReject] =
-    useState<WithdrawalRequest | null>(null);
+    useState<MerchantWithdrawalRequest | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -295,9 +302,12 @@ function PaymentsPageInner() {
     }
   };
 
-  const handleApprove = (withdrawal: WithdrawalRequest) => {
+  const handleApprove = (
+    withdrawal: MerchantWithdrawalRequest,
+    note: string
+  ) => {
     setSubmitting(true);
-    const result = approveWithdrawal(withdrawal.id, admin, "");
+    const result = adminApproveWithdrawal(withdrawal.id, admin, note);
     setSubmitting(false);
     if (!result.ok) {
       setToast({ kind: "error", text: result.error ?? "Approval failed." });
@@ -311,9 +321,12 @@ function PaymentsPageInner() {
     setSelectedEvent(null);
   };
 
-  const handleReject = (withdrawal: WithdrawalRequest, reason: string) => {
+  const handleReject = (
+    withdrawal: MerchantWithdrawalRequest,
+    reason: string
+  ) => {
     setSubmitting(true);
-    const result = rejectWithdrawal(withdrawal.id, admin, reason);
+    const result = adminRejectWithdrawal(withdrawal.id, admin, reason);
     setSubmitting(false);
     if (!result.ok) {
       setToast({ kind: "error", text: result.error ?? "Rejection failed." });
@@ -330,10 +343,13 @@ function PaymentsPageInner() {
     dailyCap: number;
   }) => {
     setSubmitting(true);
-    const result = updateAutoApproveConfig(patch, admin);
+    const result = adminUpdateAutoApproveConfig(patch, admin);
     setSubmitting(false);
     if (!result.ok) {
-      setToast({ kind: "error", text: result.error ?? "Config update failed." });
+      setToast({
+        kind: "error",
+        text: result.error ?? "Config update failed.",
+      });
     } else {
       setToast({ kind: "success", text: "Auto-approve rules updated." });
     }
@@ -350,6 +366,25 @@ function PaymentsPageInner() {
       <span>{formatCurrency(summary.atlasRevenue.current)} Atlas revenue</span>
     </>
   );
+
+  const selectedBillingWallet =
+    selectedEvent && state
+      ? state.wallets[selectedEvent.merchantId]?.billing
+      : undefined;
+  const selectedMainWallet =
+    selectedEvent && state
+      ? state.wallets[selectedEvent.merchantId]?.main
+      : undefined;
+  const selectedSavedMethod =
+    selectedEvent && state
+      ? state.savedMethods[selectedEvent.merchantId]?.[0]
+      : undefined;
+  const selectedCardLast4 = last4FromMasked(selectedSavedMethod?.maskedLabel);
+  const selectedCardBrand = selectedSavedMethod?.provider;
+  const selectedAutoPayEnabled =
+    selectedEvent && state
+      ? Boolean(state.autopay[selectedEvent.merchantId]?.enabled)
+      : false;
 
   return (
     <div className="space-y-6">
@@ -524,17 +559,15 @@ function PaymentsPageInner() {
             </div>
           ) : (
             <WithdrawalQueueTable
-              rows={paginated as WithdrawalQueueRow[]}
-              pageSize={pageSize}
-              currentPage={safePage}
-              totalRows={totalRows}
-              nowMs={nowMs}
-              canApprove={Boolean(admin)}
-              onView={(row) => setSelectedEvent(row.raw)}
-              onApprove={(row) => setPendingApprove(row.raw)}
-              onReject={(row) => setPendingReject(row.raw)}
-              onPageChange={(p) => setFilters({ page: String(p) })}
-            />
+                    rows={paginated as WithdrawalQueueRow[]}
+                    pageSize={pageSize}
+                    currentPage={safePage}
+                    totalRows={totalRows}
+                    nowMs={nowMs}
+                    onView={(row) => setSelectedEvent({ ...row.raw, kind: "withdrawal" as const })}
+                    onApprove={(row) => setPendingApprove(row.raw)}
+                    onReject={(row) => setPendingReject(row.raw)}
+                    onPageChange={(p) => setFilters({ page: String(p) })} canApprove={false}            />
           )}
         </div>
       )}
@@ -560,42 +593,20 @@ function PaymentsPageInner() {
         onClose={() => setSelectedEvent(null)}
         event={selectedEvent}
         merchant={selectedMerchant}
-        billingWallet={
-          selectedEvent && state
-            ? state.wallets[selectedEvent.merchantId]?.billing
-            : undefined
-        }
-        mainWallet={
-          selectedEvent && state
-            ? state.wallets[selectedEvent.merchantId]?.main
-            : undefined
-        }
-        cardLast4={
-          selectedEvent && state
-            ? state.cards[selectedEvent.merchantId]?.[0]?.last4
-            : undefined
-        }
-        cardBrand={
-          selectedEvent && state
-            ? state.cards[selectedEvent.merchantId]?.[0]?.brand
-            : undefined
-        }
-        autoPayEnabled={
-          selectedEvent && state
-            ? Boolean(state.autopay[selectedEvent.merchantId]?.enabled)
-            : false
-        }
+        billingWallet={selectedBillingWallet}
+        mainWallet={selectedMainWallet}
+        cardLast4={selectedCardLast4}
+        cardBrand={selectedCardBrand}
+        autoPayEnabled={selectedAutoPayEnabled}
         nowMs={nowMs}
-        canApprove={Boolean(admin)}
         onApprove={(w) => {
           setSelectedEvent(null);
           setPendingApprove(w);
-        }}
+        } }
         onReject={(w) => {
           setSelectedEvent(null);
           setPendingReject(w);
-        }}
-      />
+        } } canApprove={false}      />
 
       <WithdrawalApproveModal
         open={pendingApprove !== null}
@@ -613,8 +624,7 @@ function PaymentsPageInner() {
         }
         submitting={submitting}
         onSubmit={(note) => {
-          if (pendingApprove) handleApprove(pendingApprove);
-          void note;
+          if (pendingApprove) handleApprove(pendingApprove, note);
         }}
         onClose={() => setPendingApprove(null)}
       />

@@ -1,9 +1,13 @@
+// lib/admin/types/reseller.ts
+
 export type ResellerStatus = "active" | "suspended" | "pending";
+
 export type VerificationStatus =
   | "verified"
   | "pending"
   | "rejected"
   | "not_submitted";
+
 export type CommissionStatus = "pending" | "paid" | "cancelled";
 
 export interface ResellerActivityEntry {
@@ -39,10 +43,6 @@ export interface Reseller {
 
   tierName?: string;
   tierId?: string;
-
-  commissionsEarned: number;
-  commissionsPending: number;
-  commissionsPaid: number;
 
   activityLog: ResellerActivityEntry[];
   auditTrail?: ResellerAuditEntry[];

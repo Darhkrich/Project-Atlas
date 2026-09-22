@@ -31,6 +31,7 @@ import {
 } from "@/components/admin/merchants/merchant-action-modals";
 import { subscriptionPlans } from "@/config/subscription-plans";
 import { mockMerchants } from "@/lib/admin/mock/merchants";
+import { useMerchantMoney } from "@/lib/admin/hooks/use-merchant-money";
 import { formatCurrency } from "@/lib/admin/formatters";
 import {
   MERCHANT_STATUS_LABELS,
@@ -134,6 +135,7 @@ function MerchantsSkeleton() {
 
 function MerchantsPageInner() {
   const admin = useCurrentAdmin();
+  const { state: moneyState } = useMerchantMoney();
 
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,6 +158,18 @@ function MerchantsPageInner() {
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebouncedValue(filters.q, 300);
+
+  // Main wallet balance per merchant, sourced from the shared merchant
+  // money store. Replaces the removed Merchant.walletBalance field.
+  const balanceById = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!moneyState) return map;
+    for (const merchantId of Object.keys(moneyState.wallets)) {
+      const pair = moneyState.wallets[merchantId];
+      map.set(merchantId, pair.main.balance);
+    }
+    return map;
+  }, [moneyState]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -634,7 +648,7 @@ function MerchantsPageInner() {
 
   const handleBulkExport = () => {
     const selected = merchants.filter((m) => selectedIds.includes(m.id));
-    const csv = merchantsToCsv(selected);
+    const csv = merchantsToCsv(selected, balanceById);
     downloadCsv(
       `atlas-merchants-selected-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
@@ -674,7 +688,7 @@ function MerchantsPageInner() {
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
-    const csv = merchantsToCsv(filtered);
+    const csv = merchantsToCsv(filtered, balanceById);
     downloadCsv(
       `atlas-merchants-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
@@ -820,7 +834,7 @@ function MerchantsPageInner() {
         header: "Wallet",
         cell: (m) => (
           <span className="text-neutral-800 dark:text-neutral-200">
-            {formatCurrency(m.walletBalance ?? 0)}
+            {formatCurrency(balanceById.get(m.id) ?? 0)}
           </span>
         ),
       },
@@ -847,7 +861,7 @@ function MerchantsPageInner() {
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedIds]
+    [selectedIds, balanceById]
   );
 
   const displayColumns = useMemo(
@@ -877,6 +891,10 @@ function MerchantsPageInner() {
       )}
     </>
   );
+
+  const selectedWalletBalance = selectedMerchant
+    ? balanceById.get(selectedMerchant.id) ?? 0
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -1091,6 +1109,7 @@ function MerchantsPageInner() {
 
       <MerchantDetailDrawer
         merchant={selectedMerchant}
+        walletBalance={selectedWalletBalance}
         onClose={() => setSelectedId(null)}
         onChangePlan={handleChangePlan}
         onSuspend={handleSuspend}

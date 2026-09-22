@@ -1,7 +1,7 @@
 import type {
   RegisteredDestination,
   ResellerAdjustmentLedgerEntry,
-  ResellerAdjustmentMethod,
+   ResellerAdjustmentMethod,
   ResellerFundingLedgerEntry,
   ResellerWithdrawalHistoryEntry,
   ResellerWithdrawalLedgerEntry,

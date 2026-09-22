@@ -1,7 +1,8 @@
+// lib/admin/mock/commission-seed.ts
+
 import type {
   CommissionAuditEntry,
   PayoutRun,
-  PlatformMargin,
   ResellerCommission,
 } from "../types/commission";
 
@@ -14,6 +15,7 @@ const ago = (ms: number) => new Date(REFERENCE_NOW_MS - ms).toISOString();
 /**
  * Tier rates pulled from lib/admin/mock/reseller-tier-store.ts.
  * baseCommission = atlasPrice * (rate / 100), rounded to 2 decimals.
+ * resellerExtraCut = extraAmount * (1 - extraCutPercent / 100).
  */
 export const mockResellerCommissions: ResellerCommission[] = [
   {
@@ -36,6 +38,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     effectiveExtraCutPercent: 20,
     status: "pending",
     createdAt: ago(HOUR),
+    payoutRunId: "PAYOUT-003",
     timeline: [
       {
         timestamp: ago(HOUR),
@@ -64,6 +67,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     effectiveExtraCutPercent: 25,
     status: "pending",
     createdAt: ago(HOUR * 2),
+    payoutRunId: "PAYOUT-003",
     timeline: [
       {
         timestamp: ago(HOUR * 2),
@@ -93,6 +97,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     status: "paid",
     createdAt: ago(DAY),
     paidAt: ago(DAY / 2),
+    payoutRunId: "PAYOUT-001",
     timeline: [
       {
         timestamp: ago(DAY),
@@ -126,6 +131,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     effectiveExtraCutPercent: 25,
     status: "cancelled",
     createdAt: ago(DAY * 2),
+    payoutRunId: "PAYOUT-002",
     timeline: [
       {
         timestamp: ago(DAY * 2),
@@ -160,6 +166,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     status: "paid",
     createdAt: ago(DAY * 3),
     paidAt: ago(DAY * 2),
+    payoutRunId: "PAYOUT-001",
     timeline: [
       {
         timestamp: ago(DAY * 3),
@@ -194,6 +201,7 @@ export const mockResellerCommissions: ResellerCommission[] = [
     status: "reversed",
     createdAt: ago(DAY * 4),
     reversedAt: ago(DAY * 3),
+    recoveryId: "REC-0001",
     timeline: [
       {
         timestamp: ago(DAY * 4),
@@ -232,55 +240,11 @@ export const mockCommissionAudit: CommissionAuditEntry[] = [
   },
 ];
 
-export const mockPlatformMargins: PlatformMargin[] = [
-  {
-    id: "MARGIN-001",
-    orderId: "ATX-983820",
-    service: "MTN Data 1GB",
-    providerCost: 4.0,
-    atlasPrice: 5.0,
-    margin: 1.0,
-    marginPercentage: 20,
-    date: ago(HOUR),
-  },
-  {
-    id: "MARGIN-002",
-    orderId: "ATX-983815",
-    service: "ECG",
-    providerCost: 100,
-    atlasPrice: 120,
-    margin: 20,
-    marginPercentage: 16.7,
-    date: ago(HOUR * 2),
-  },
-  {
-    id: "MARGIN-003",
-    orderId: "ATX-983814",
-    service: "DSTV",
-    providerCost: 180,
-    atlasPrice: 200,
-    margin: 20,
-    marginPercentage: 10,
-    date: ago(DAY),
-  },
-  {
-    id: "MARGIN-004",
-    orderId: "ATX-983813",
-    service: "Airtime",
-    providerCost: 45,
-    atlasPrice: 50,
-    margin: 5,
-    marginPercentage: 10,
-    date: ago(DAY * 2),
-  },
-];
-
-
 export const mockPayoutRuns: PayoutRun[] = [
   {
     id: "PAYOUT-001",
     date: ago(DAY),
-    totalAmount: 12.5,
+    totalAmount: 11.25,
     resellerCount: 3,
     status: "completed",
     commissionIds: ["COMM-003", "COMM-005"],
@@ -298,7 +262,7 @@ export const mockPayoutRuns: PayoutRun[] = [
   {
     id: "PAYOUT-003",
     date: ago(HOUR),
-    totalAmount: 7.15,
+    totalAmount: 5.63,
     resellerCount: 2,
     status: "pending",
     commissionIds: ["COMM-001", "COMM-002"],

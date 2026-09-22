@@ -16,6 +16,9 @@ import type {
   ResellerWithdrawalHistoryEntry,
   ResellerWithdrawalRequest,
 } from "@/lib/reseller/types/wallet";
+import type { CommissionTotals } from "./helpers";
+
+const ZERO_TOTALS: CommissionTotals = { earned: 0, pending: 0, paid: 0 };
 
 function mapWithdrawalMethod(
   req: ResellerWithdrawalRequest | ResellerWithdrawalHistoryEntry
@@ -36,7 +39,8 @@ function mapHistoryStatus(
 
 export function projectWallet(
   reseller: Reseller,
-  state: ResellerWalletStoreState
+  state: ResellerWalletStoreState,
+  commissionTotalsById: Map<string, CommissionTotals>
 ): ResellerCommissionWallet {
   const walletRecord = state.wallets[reseller.id];
   const balance = walletRecord?.balance ?? 0;
@@ -55,7 +59,8 @@ export function projectWallet(
   );
 
   const sortedCommissions = [...commissions].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
   const recentCredits: WalletCredit[] = sortedCommissions
@@ -93,6 +98,8 @@ export function projectWallet(
     actor: h.resolvedBy,
   }));
 
+  const totals = commissionTotalsById.get(reseller.id) ?? ZERO_TOTALS;
+
   return {
     id: "CW-" + reseller.id,
     resellerId: reseller.id,
@@ -100,9 +107,9 @@ export function projectWallet(
     currency: "GHS",
     balance,
     isOverdrawn: balance < 0,
-    pendingBalance: reseller.commissionsPending,
-    totalEarned: reseller.commissionsEarned,
-    totalWithdrawn: reseller.commissionsPaid,
+    pendingBalance: totals.pending,
+    totalEarned: totals.earned,
+    totalWithdrawn: totals.paid,
     lastCreditAt: sortedCommissions[0]?.createdAt ?? null,
     recentCredits,
     withdrawalRequests,
@@ -112,9 +119,12 @@ export function projectWallet(
 
 export function projectWallets(
   resellers: Reseller[],
-  state: ResellerWalletStoreState
+  state: ResellerWalletStoreState,
+  commissionTotalsById: Map<string, CommissionTotals>
 ): ResellerCommissionWallet[] {
-  return resellers.map((r) => projectWallet(r, state));
+  return resellers.map((r) =>
+    projectWallet(r, state, commissionTotalsById)
+  );
 }
 
 export function deriveApprovalReasons(
@@ -152,10 +162,11 @@ export function deriveApprovalReasons(
 export function projectWalletsWithReasons(
   resellers: Reseller[],
   state: ResellerWalletStoreState,
-  config: ResellerCommissionConfig
+  config: ResellerCommissionConfig,
+  commissionTotalsById: Map<string, CommissionTotals>
 ): ResellerCommissionWallet[] {
   const byId = new Map(resellers.map((r) => [r.id, r] as const));
-  return projectWallets(resellers, state).map((w) => {
+  return projectWallets(resellers, state, commissionTotalsById).map((w) => {
     const reseller = byId.get(w.resellerId);
     if (!reseller) return w;
     const requests: WithdrawalRequest[] = w.withdrawalRequests.map((req) => ({
@@ -191,7 +202,6 @@ export function walletSummary(
   }
 
   return {
-    
     totalPending: pending,
     awaitingApproval: awaiting,
     overdrawnCount: overdrawn,
