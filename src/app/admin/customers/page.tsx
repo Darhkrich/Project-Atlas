@@ -18,13 +18,22 @@ import { CustomerListItem } from "@/components/admin/customers/customer-list-ite
 import { CustomerDetailDrawer } from "@/components/admin/customers/customer-detail-drawer";
 import { mockCustomers } from "@/lib/admin/mock/customers";
 import type { Customer } from "@/lib/admin/types/customer";
-import type { WalletAdjustMethod } from "@/lib/admin/customers/constants";
 import { PAGE_SIZE } from "@/lib/admin/customers/constants";
 import { customersToCsv } from "@/lib/admin/customers/csv-export";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
-import { Can, PERMISSIONS } from "@/lib/admin/rbac";
+import {
+  Can,
+  PERMISSIONS,
+  useCurrentAdmin,
+} from "@/lib/admin/rbac";
+import {
+  adjustCustomerWallet,
+  freezeCustomerWallet,
+  unfreezeCustomerWallet,
+  type CustomerActor,
+} from "@/lib/customer/wallet/wallet-mutations";
 
 const DEFAULT_FILTERS: CustomerFilterValues & { page: string } = {
   q: "",
@@ -79,6 +88,7 @@ function CustomersSkeleton() {
 }
 
 function CustomersPageInner() {
+  const currentAdmin = useCurrentAdmin();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -86,10 +96,18 @@ function CustomersPageInner() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkIntent, setBulkIntent] = useState<BulkIntent | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-
-  const { filters, setFilters, clearFilters, hasActive } =
-    useUrlFilters<CustomerUrlFilters>(DEFAULT_FILTERS);
+const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<CustomerUrlFilters>(DEFAULT_FILTERS as CustomerUrlFilters);
+  
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const actor: CustomerActor | null = currentAdmin
+    ? {
+        id: currentAdmin.id ?? currentAdmin.email,
+        name: currentAdmin.name,
+        email: currentAdmin.email,
+      }
+    : null;
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -230,17 +248,11 @@ function CustomersPageInner() {
     };
   }, [customers]);
 
-  const updateCustomer = (
-    id: string,
-    patch: (c: Customer) => Customer
-  ) => {
+  const updateCustomer = (id: string, patch: (c: Customer) => Customer) => {
     setCustomers((prev) => prev.map((c) => (c.id === id ? patch(c) : c)));
   };
 
-  const appendActivity = (
-    c: Customer,
-    action: string
-  ): Customer => {
+  const appendActivity = (c: Customer, action: string): Customer => {
     return {
       ...c,
       activityLog: [
@@ -263,26 +275,56 @@ function CustomersPageInner() {
   const handleAdjustWallet = (
     id: string,
     amount: number,
-    reason: string,
-    method: WalletAdjustMethod
+    reason: string
   ) => {
-    updateCustomer(id, (c) => {
-      const withBalance = {
-        ...c,
-        walletBalance: c.walletBalance + amount,
-      };
-      const direction = amount >= 0 ? "Credited" : "Debited";
-      return appendActivity(
-        withBalance,
-        `${direction} ${Math.abs(amount).toFixed(2)} GHS via ${method}. ${reason}`
+    if (!actor) return;
+    const result = adjustCustomerWallet(
+      { customerId: id, amount, reason },
+      actor
+    );
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Adjustment failed." });
+      return;
+    }
+    const target = customers.find((c) => c.id === id);
+    if (target) {
+      updateCustomer(id, (c) =>
+        appendActivity(
+          c,
+          `Wallet ${amount >= 0 ? "credited" : "debited"} ${Math.abs(
+            amount
+          ).toFixed(2)} GHS. ${reason}`
+        )
       );
-    });
+    }
     setToast({
       kind: "success",
       text: `Wallet ${amount >= 0 ? "credited" : "debited"} ${Math.abs(
         amount
       ).toFixed(2)} GHS.`,
     });
+  };
+
+  const handleFreezeWallet = (id: string, reason: string) => {
+    if (!actor) return;
+    const result = freezeCustomerWallet(id, reason, actor);
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Freeze failed." });
+      return;
+    }
+    updateCustomer(id, (c) => appendActivity(c, `Wallet frozen. ${reason}`));
+    setToast({ kind: "success", text: "Wallet frozen." });
+  };
+
+  const handleUnfreezeWallet = (id: string) => {
+    if (!actor) return;
+    const result = unfreezeCustomerWallet(id, actor);
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Unfreeze failed." });
+      return;
+    }
+    updateCustomer(id, (c) => appendActivity(c, "Wallet unfrozen."));
+    setToast({ kind: "success", text: "Wallet unfrozen." });
   };
 
   const handleAddTag = (id: string, tag: string) => {
@@ -300,10 +342,7 @@ function CustomersPageInner() {
 
   const handleSuspend = (id: string, reason: string) => {
     updateCustomer(id, (c) =>
-      appendActivity(
-        { ...c, status: "suspended" },
-        `Suspended: ${reason}`
-      )
+      appendActivity({ ...c, status: "suspended" }, `Suspended: ${reason}`)
     );
     setSelectedId(null);
     setToast({ kind: "success", text: "Customer suspended." });
@@ -604,6 +643,8 @@ function CustomersPageInner() {
         customer={selected}
         onClose={() => setSelectedId(null)}
         onAdjustWallet={handleAdjustWallet}
+        onFreezeWallet={handleFreezeWallet}
+        onUnfreezeWallet={handleUnfreezeWallet}
         onAddTag={handleAddTag}
         onRemoveTag={handleRemoveTag}
         onSuspend={handleSuspend}

@@ -1,20 +1,28 @@
 // lib/admin/types/merchant.ts
 
-import type { PlanCode } from "@/config/subscription-plans";
-import { subscriptionPlans } from "@/config/subscription-plans";
+import { getPlanByCode, getPlans } from "@/lib/domains/subscriptions";
 
 export type MerchantStatus = "active" | "suspended" | "pending";
-export type SubscriptionPlan = PlanCode;
+
+/**
+ * Plan code as referenced on a merchant record. Same value space as the
+ * plan store's `SubscriptionPlan.code`. Alias kept for readability at
+ * call sites that deal with merchant subscription state.
+ */
+export type MerchantSubscriptionPlanId = string;
+
 export type SubscriptionStatus =
   | "active"
   | "past_due"
   | "cancelled"
   | "expired";
+
 export type VerificationStatus =
   | "verified"
   | "pending"
   | "rejected"
   | "not_submitted";
+
 export type StoreStatus = "live" | "disabled";
 
 export interface StoreConfig {
@@ -32,7 +40,7 @@ export interface Subscription {
   lastPaymentDate: string;
   discountPercent?: number;
   amountPaid: number;
-  planId: SubscriptionPlan;
+  planId: MerchantSubscriptionPlanId;
   status: SubscriptionStatus;
   startDate: string;
   endDate: string;
@@ -75,7 +83,6 @@ export interface MerchantWalletTransaction {
 
 export interface MerchantPlanLimitsExceeded {
   products?: boolean;
-  transactions?: boolean;
 }
 
 export interface Merchant {
@@ -131,45 +138,56 @@ export const STORE_STATUS_LABELS: Record<StoreStatus, string> = {
   disabled: "Disabled",
 };
 
-export const SUBSCRIPTION_PLANS: { value: SubscriptionPlan; label: string }[] =
-  subscriptionPlans.map((p) => ({ value: p.code, label: p.name }));
-
-export function parsePlanPrice(price: string): number {
-  const match = price.match(/[\d,]+/);
-  if (!match) return 0;
-  return parseFloat(match[0].replace(/,/g, ""));
+/**
+ * Options for a plan select. Computed on demand so newly created plans
+ * appear without a reload. Replaces the earlier SUBSCRIPTION_PLANS
+ * constant, which captured the array at module load.
+ */
+export function getSubscriptionPlanOptions(): {
+  value: MerchantSubscriptionPlanId;
+  label: string;
+}[] {
+  return getPlans().map((p) => ({ value: p.code, label: p.name }));
 }
 
 export function getPlanMonthlyPriceGHS(
-  code: SubscriptionPlan
+  code: MerchantSubscriptionPlanId
 ): number | "custom" {
-  const plan = subscriptionPlans.find((p) => p.code === code);
+  const plan = getPlanByCode(code);
   if (!plan) return 0;
   return plan.monthlyPriceGHS;
 }
 
 export function getPlanAnnualPriceGHS(
-  code: SubscriptionPlan
+  code: MerchantSubscriptionPlanId
 ): number | "custom" {
-  const plan = subscriptionPlans.find((p) => p.code === code);
+  const plan = getPlanByCode(code);
   if (!plan) return 0;
   return plan.annualPriceGHS;
 }
 
 export function getMerchantMrr(m: Merchant): number {
-  if (m.subscription.planId === "enterprise") {
+  const plan = getPlanByCode(m.subscription.planId);
+
+  // Custom-priced plans use the negotiated contract amount.
+  if (plan && typeof plan.monthlyPriceGHS === "string") {
     return m.contractMrr ?? 0;
   }
+
   const v = getPlanMonthlyPriceGHS(m.subscription.planId);
   return typeof v === "number" ? v : 0;
 }
 
 export function getNextChargeAmount(m: Merchant): number | "custom" {
-  if (m.subscription.planId === "enterprise") {
+  const plan = getPlanByCode(m.subscription.planId);
+
+  // Custom-priced plans use the negotiated contract amount.
+  if (plan && typeof plan.monthlyPriceGHS === "string") {
     const mrr = m.contractMrr ?? 0;
     if (mrr === 0) return "custom";
     return m.subscription.billingCycle === "annual" ? mrr * 12 : mrr;
   }
+
   const base =
     m.subscription.billingCycle === "annual"
       ? getPlanAnnualPriceGHS(m.subscription.planId)

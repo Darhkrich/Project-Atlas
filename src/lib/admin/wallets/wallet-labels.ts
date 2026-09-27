@@ -8,15 +8,20 @@ import type {
 import type { QueueOwnerType } from "@/lib/admin/types/customer-wallet";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const QUEUE_OWNER_TYPE_LABEL: Record<QueueOwnerType, string> = {
   customer: "Atlas customer",
   storefront_user: "Storefront customer",
+  reseller: "Reseller",
+  merchant: "Merchant",
 };
 
 export const QUEUE_OWNER_TYPE_VARIANT: Record<QueueOwnerType, Variant> = {
   customer: "brand",
   storefront_user: "info",
+  reseller: "success",
+  merchant: "warning",
 };
 
 export const FUNDING_STATUS_LABEL: Record<WalletFundingStatus, string> = {
@@ -41,7 +46,7 @@ export const WITHDRAWAL_STATUS_LABEL: Record<WalletWithdrawalStatus, string> = {
 
 export const WITHDRAWAL_STATUS_VARIANT: Record<
   WalletWithdrawalStatus,
-  Variant
+  StatusVariant
 > = {
   pending_admin: "warning",
   pending_processing: "info",
@@ -136,11 +141,29 @@ export const AUTO_PAY_SOURCE_DESCRIPTION: Record<
   billing_wallet: "Atlas debits your billing wallet at each renewal.",
 };
 
+export const PAYOUT_DIRECTION_LABEL: Record<
+  "to_source" | "to_destination",
+  string
+> = {
+  to_source: "Refund to source",
+  to_destination: "Cash-out to destination",
+};
+
 export function maskSourceLabel(
   provider: string,
   maskedLabel: string
 ): string {
   return provider + " " + maskedLabel;
+}
+
+export function maskDestinationLabel(
+  provider: string,
+  maskedLabel: string,
+  nameOnAccount?: string
+): string {
+  const base = provider + " " + maskedLabel;
+  if (!nameOnAccount) return base;
+  return base + " (" + nameOnAccount + ")";
 }
 
 export function describeSource(
@@ -159,7 +182,9 @@ export function toneForDelta(
   polarity: "up_good" | "up_bad" | "neutral"
 ): string {
   if (direction === "flat") return "text-neutral-500 dark:text-neutral-400";
-  if (polarity === "neutral") return "text-neutral-500 dark:text-neutral-400";
+  if (polarity === "neutral") {
+    return "text-neutral-500 dark:text-neutral-400";
+  }
   const up = direction === "up";
   if (polarity === "up_good") {
     if (up) return "text-success-600 dark:text-success-400";
@@ -169,11 +194,6 @@ export function toneForDelta(
   return "text-success-600 dark:text-success-400";
 }
 
-/**
- * Backward-compatible aliases. Older consumers (wallet-projection from the
- * merchant payments batch) still import the WALLET_ prefixed names.
- * New code should use the shorter names above.
- */
 export const WALLET_FUNDING_METHOD_LABEL = FUNDING_METHOD_LABEL;
 export const WALLET_FUNDING_STATUS_LABEL = FUNDING_STATUS_LABEL;
 export const WALLET_FUNDING_STATUS_VARIANT = FUNDING_STATUS_VARIANT;

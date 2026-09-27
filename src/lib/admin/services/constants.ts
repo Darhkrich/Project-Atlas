@@ -1,6 +1,9 @@
-// lib/admin/services/constants.ts
+import type {
+  FilterGroup,
+  ServiceSection,
+} from "@/lib/domains/catalog";
 
-import type { ServiceSection } from "@/lib/services-page-data";
+export type { FilterGroup, ServiceSection };
 
 type BadgeVariant =
   | "success"
@@ -9,8 +12,6 @@ type BadgeVariant =
   | "info"
   | "neutral"
   | "brand";
-
-export type FilterGroup = "all" | "airtime" | "data" | "tv" | "bills" | "more";
 
 export const FILTER_GROUP_LABEL: Record<FilterGroup, string> = {
   all: "All",

@@ -24,7 +24,10 @@ import {
   MerchantFilters,
   type MerchantFilterValues,
 } from "@/components/admin/merchants/merchant-filters";
-import { MerchantDetailDrawer } from "@/components/admin/merchants/merchant-detail-drawer";
+import {
+  MerchantDetailDrawer,
+  type MerchantWalletPair,
+} from "@/components/admin/merchants/merchant-detail-drawer";
 import {
   MerchantNotifyModal,
   MerchantPlanChangeModal,
@@ -40,7 +43,7 @@ import {
   VERIFICATION_STATUS_LABELS,
   getMerchantMrr,
   type Merchant,
-  type SubscriptionPlan,
+  type MerchantSubscriptionPlanId,
 } from "@/lib/admin/types/merchant";
 import {
   MERCHANT_STATUS_VARIANT,
@@ -66,6 +69,12 @@ import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
+import {
+  adminAdjustMerchantWallet,
+  adminFreezeMerchantWallet,
+  adminUnfreezeMerchantWallet,
+} from "@/lib/admin/ecommerce/payments/payment-mutations";
+import type { MerchantWalletTypeLabel } from "@/components/admin/merchants/merchant-action-modals";
 
 const VIEWS_KEY = "atlas-merchant-views-v2";
 const COLUMNS_KEY = "atlas-merchant-columns-v2";
@@ -159,17 +168,37 @@ function MerchantsPageInner() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebouncedValue(filters.q, 300);
 
-  // Main wallet balance per merchant, sourced from the shared merchant
-  // money store. Replaces the removed Merchant.walletBalance field.
-  const balanceById = useMemo(() => {
-    const map = new Map<string, number>();
+  const walletPairById = useMemo(() => {
+    const map = new Map<string, MerchantWalletPair>();
     if (!moneyState) return map;
     for (const merchantId of Object.keys(moneyState.wallets)) {
       const pair = moneyState.wallets[merchantId];
-      map.set(merchantId, pair.main.balance);
+      map.set(merchantId, {
+        billing: {
+          balance: pair.billing.balance,
+          frozen: pair.billing.status === "frozen",
+        },
+        main: {
+          balance: pair.main.balance,
+          frozen: pair.main.status === "frozen",
+        },
+      });
     }
     return map;
   }, [moneyState]);
+
+  const mainBalanceById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const [id, pair] of walletPairById.entries()) {
+      map.set(id, pair.main.balance);
+    }
+    return map;
+  }, [walletPairById]);
+
+  const emptyPair: MerchantWalletPair = {
+    billing: { balance: 0, frozen: false },
+    main: { balance: 0, frozen: false },
+  };
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -245,7 +274,13 @@ function MerchantsPageInner() {
 
     if (q) {
       list = list.filter((m) =>
-        `${m.businessName} ${m.email} ${m.contactPerson} ${m.storeConfig.storeName}`
+        (m.businessName +
+          " " +
+          m.email +
+          " " +
+          m.contactPerson +
+          " " +
+          m.storeConfig.storeName)
           .toLowerCase()
           .includes(q)
       );
@@ -333,7 +368,7 @@ function MerchantsPageInner() {
 
   useEffect(() => {
     if (!focusedId) return;
-    const el = document.querySelector(`[data-merchant-id="${focusedId}"]`);
+    const el = document.querySelector('[data-merchant-id="' + focusedId + '"]');
     if (el instanceof HTMLElement) el.scrollIntoView({ block: "nearest" });
   }, [focusedId]);
 
@@ -390,10 +425,7 @@ function MerchantsPageInner() {
     setMerchants((prev) => prev.map((m) => (m.id === id ? patch(m) : m)));
   };
 
-  const applyAudit = (
-    merchant: Merchant,
-    action: string
-  ): Merchant => {
+  const applyAudit = (merchant: Merchant, action: string): Merchant => {
     const entry = buildAuditEntry({
       admin: admin ?? SYSTEM_ADMIN,
       action,
@@ -417,12 +449,25 @@ function MerchantsPageInner() {
     });
   };
 
-  /* ---------------------------- Single actions --------------------- */
+  const planNameFor = (code: string): string => {
+    return subscriptionPlans.find((p) => p.code === code)?.name ?? code;
+  };
 
-  const handleChangePlan = (id: string, planCode: SubscriptionPlan) => {
+  const handleChangePlan = (
+    id: string,
+    planCode: MerchantSubscriptionPlanId
+  ) => {
     const target = merchants.find((m) => m.id === id);
     if (!target) return;
     const impact = planChangeImpact(target, planCode);
+    const planName = planNameFor(planCode);
+    const deltaSuffix =
+      impact.mrrDelta !== 0
+        ? " (" +
+          (impact.mrrDelta > 0 ? "+" : "") +
+          formatCurrency(impact.mrrDelta) +
+          ")"
+        : "";
     updateMerchant(id, (m) => {
       const next: Merchant = {
         ...m,
@@ -430,27 +475,20 @@ function MerchantsPageInner() {
       };
       const withActivity: Merchant = {
         ...next,
-        activityLog: appendActivity(
-          next,
-          `Plan changed to ${
-            subscriptionPlans.find((p) => p.code === planCode)?.name ?? planCode
-          }`
-        ),
+        activityLog: appendActivity(next, "Plan changed to " + planName),
       };
       return applyAudit(
         withActivity,
-        `Plan changed: ${impact.fromPlan} → ${planCode}${
-          impact.mrrDelta !== 0
-            ? ` (${impact.mrrDelta > 0 ? "+" : ""}${formatCurrency(impact.mrrDelta)})`
-            : ""
-        }`
+        "Plan changed: " +
+          impact.fromPlan +
+          " to " +
+          planCode +
+          deltaSuffix
       );
     });
     setToast({
       kind: "success",
-      text: `Plan updated to ${
-        subscriptionPlans.find((p) => p.code === planCode)?.name ?? planCode
-      }.`,
+      text: "Plan updated to " + planName + ".",
     });
   };
 
@@ -461,7 +499,7 @@ function MerchantsPageInner() {
         merchantStatus: "suspended",
         storeStatus: "disabled",
       };
-      return applyAudit(next, `Suspended: ${reason}`);
+      return applyAudit(next, "Suspended: " + reason);
     });
     setSelectedId(null);
     setToast({ kind: "success", text: "Merchant suspended." });
@@ -486,7 +524,9 @@ function MerchantsPageInner() {
         storeStatus: m.storeStatus === "live" ? "disabled" : "live",
       };
       const action =
-        next.storeStatus === "live" ? "Enabled storefront" : "Disabled storefront";
+        next.storeStatus === "live"
+          ? "Enabled storefront"
+          : "Disabled storefront";
       return applyAudit(next, action);
     });
     setToast({ kind: "success", text: "Storefront status updated." });
@@ -504,17 +544,22 @@ function MerchantsPageInner() {
         ...next,
         activityLog: appendActivity(
           next,
-          `Contract MRR updated to ${formatCurrency(value)}`
+          "Contract MRR updated to " + formatCurrency(value)
         ),
       };
       return applyAudit(
         withActivity,
-        `Contract MRR: ${formatCurrency(previous)} → ${formatCurrency(value)}. ${reason}`
+        "Contract MRR: " +
+          formatCurrency(previous) +
+          " to " +
+          formatCurrency(value) +
+          ". " +
+          reason
       );
     });
     setToast({
       kind: "success",
-      text: `Contract MRR updated to ${formatCurrency(value)}.`,
+      text: "Contract MRR updated to " + formatCurrency(value) + ".",
     });
   };
 
@@ -533,7 +578,7 @@ function MerchantsPageInner() {
   const handleRejectVerification = (id: string, reason: string) => {
     updateMerchant(id, (m) => {
       const next: Merchant = { ...m, verificationStatus: "rejected" };
-      return applyAudit(next, `Verification rejected: ${reason}`);
+      return applyAudit(next, "Verification rejected: " + reason);
     });
     setToast({ kind: "success", text: "Verification rejected." });
   };
@@ -546,22 +591,26 @@ function MerchantsPageInner() {
     void message;
     const target = merchants.find((m) => m.id === id);
     if (!target) return;
+    const channelUpper = channel.toUpperCase();
     updateMerchant(id, (m) => {
       const withActivity: Merchant = {
         ...m,
         activityLog: appendActivity(
           m,
-          `Notification sent via ${channel.toUpperCase()}`
+          "Notification sent via " + channelUpper
         ),
       };
       return applyAudit(
         withActivity,
-        `Notification sent to ${target.email} via ${channel.toUpperCase()}`
+        "Notification sent to " +
+          target.email +
+          " via " +
+          channelUpper
       );
     });
     setToast({
       kind: "success",
-      text: `${channel.toUpperCase()} sent to ${target.businessName}.`,
+      text: channelUpper + " sent to " + target.businessName + ".",
     });
   };
 
@@ -578,23 +627,100 @@ function MerchantsPageInner() {
       };
       return applyAudit(
         withActivity,
-        `Reset security. Password reset link sent to ${target.email}`
+        "Reset security. Password reset link sent to " + target.email
       );
     });
     setToast({
       kind: "success",
-      text: `Security reset for ${target.businessName}.`,
+      text: "Security reset for " + target.businessName + ".",
     });
   };
 
-  /* ------------------------------ Bulk ----------------------------- */
+  const handleAdjustWallet = (
+    id: string,
+    walletType: MerchantWalletTypeLabel,
+    amount: number,
+    reason: string
+  ) => {
+    if (!admin) return;
+    const target = merchants.find((m) => m.id === id);
+    if (!target) return;
+    const result = adminAdjustMerchantWallet(
+      id,
+      target.businessName,
+      walletType,
+      amount,
+      reason,
+      { id: admin.id ?? admin.email, name: admin.name, email: admin.email }
+    );
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Adjustment failed." });
+      return;
+    }
+    const walletName = walletType === "billing" ? "Billing" : "Main";
+    const verb = amount >= 0 ? "credited" : "debited";
+    setToast({
+      kind: "success",
+      text:
+        walletName +
+        " wallet " +
+        verb +
+        " " +
+        formatCurrency(Math.abs(amount)) +
+        ".",
+    });
+  };
+
+  const handleFreezeWallet = (
+    id: string,
+    walletType: MerchantWalletTypeLabel,
+    reason: string
+  ) => {
+    if (!admin) return;
+    const result = adminFreezeMerchantWallet(id, walletType, reason, {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    });
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Freeze failed." });
+      return;
+    }
+    const walletName = walletType === "billing" ? "Billing" : "Main";
+    setToast({
+      kind: "success",
+      text: walletName + " wallet frozen.",
+    });
+  };
+
+  const handleUnfreezeWallet = (
+    id: string,
+    walletType: MerchantWalletTypeLabel
+  ) => {
+    if (!admin) return;
+    const result = adminUnfreezeMerchantWallet(id, walletType, {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    });
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Unfreeze failed." });
+      return;
+    }
+    const walletName = walletType === "billing" ? "Billing" : "Main";
+    setToast({
+      kind: "success",
+      text: walletName + " wallet unfrozen.",
+    });
+  };
 
   const handleBulkSuspend = () => {
     setBulkIntent({ kind: "suspend", ids: selectedIds });
   };
 
-  const handleBulkPlan = (planCode: SubscriptionPlan) => {
+  const handleBulkPlan = (planCode: MerchantSubscriptionPlanId) => {
     const idSet = new Set(selectedIds);
+    const planName = planNameFor(planCode);
     setMerchants((prev) =>
       prev.map((m) => {
         if (!idSet.has(m.id)) return m;
@@ -606,41 +732,42 @@ function MerchantsPageInner() {
           ...next,
           activityLog: appendActivity(
             next,
-            `Plan changed to ${
-              subscriptionPlans.find((p) => p.code === planCode)?.name ??
-              planCode
-            } (bulk)`
+            "Plan changed to " + planName + " (bulk)"
           ),
         };
         return applyAudit(
           withActivity,
-          `Plan changed to ${planCode} (bulk action)`
+          "Plan changed to " + planCode + " (bulk action)"
         );
       })
     );
     setToast({
       kind: "success",
-      text: `Plan updated for ${selectedIds.length} merchants.`,
+      text: "Plan updated for " + selectedIds.length + " merchants.",
     });
     setSelectedIds([]);
     setBulkPlanOpen(false);
   };
 
-  const handleBulkNotify = (channel: "email" | "sms" | "push", message: string) => {
+  const handleBulkNotify = (
+    channel: "email" | "sms" | "push",
+    message: string
+  ) => {
     void message;
     const idSet = new Set(selectedIds);
+    const channelUpper = channel.toUpperCase();
     setMerchants((prev) =>
       prev.map((m) => {
         if (!idSet.has(m.id)) return m;
         return applyAudit(
           m,
-          `Notification sent via ${channel.toUpperCase()} (bulk)`
+          "Notification sent via " + channelUpper + " (bulk)"
         );
       })
     );
     setToast({
       kind: "success",
-      text: `Notification queued for ${selectedIds.length} merchants.`,
+      text: "Notification queued for " + selectedIds.length + " merchants.",
     });
     setSelectedIds([]);
     setBulkNotifyOpen(false);
@@ -648,14 +775,16 @@ function MerchantsPageInner() {
 
   const handleBulkExport = () => {
     const selected = merchants.filter((m) => selectedIds.includes(m.id));
-    const csv = merchantsToCsv(selected, balanceById);
+    const csv = merchantsToCsv(selected, mainBalanceById);
     downloadCsv(
-      `atlas-merchants-selected-${new Date().toISOString().slice(0, 10)}.csv`,
+      "atlas-merchants-selected-" +
+        new Date().toISOString().slice(0, 10) +
+        ".csv",
       csv
     );
     setToast({
       kind: "success",
-      text: `Exported ${selected.length} merchants.`,
+      text: "Exported " + selected.length + " merchants.",
     });
     setSelectedIds([]);
   };
@@ -677,25 +806,21 @@ function MerchantsPageInner() {
       );
       setToast({
         kind: "success",
-        text: `Suspended ${bulkIntent.ids.length} merchants.`,
+        text: "Suspended " + bulkIntent.ids.length + " merchants.",
       });
     }
     setSelectedIds([]);
     setBulkIntent(null);
   };
 
-  /* ------------------------------ Export --------------------------- */
-
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
-    const csv = merchantsToCsv(filtered, balanceById);
+    const csv = merchantsToCsv(filtered, mainBalanceById);
     downloadCsv(
-      `atlas-merchants-${new Date().toISOString().slice(0, 10)}.csv`,
+      "atlas-merchants-" + new Date().toISOString().slice(0, 10) + ".csv",
       csv
     );
   };
-
-  /* ---------------------------- Saved views ------------------------ */
 
   const handleSaveView = (name: string) => {
     const snapshot: Record<string, string> = {};
@@ -718,11 +843,9 @@ function MerchantsPageInner() {
     setFilters({ ...DEFAULT_FILTERS, ...view.filters, page: "1" });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+  const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
-
-  /* ------------------------------ Table ---------------------------- */
 
   const allColumns: Column<Merchant>[] = useMemo(
     () => [
@@ -732,7 +855,7 @@ function MerchantsPageInner() {
         cell: (m) => (
           <input
             type="checkbox"
-            aria-label={`Select ${m.businessName}`}
+            aria-label={"Select " + m.businessName}
             checked={selectedIds.includes(m.id)}
             onChange={() => toggleSelected(m.id)}
             onClick={(e) => e.stopPropagation()}
@@ -778,8 +901,7 @@ function MerchantsPageInner() {
         header: "Plan",
         cell: (m) => (
           <Badge variant="info" size="sm">
-            {subscriptionPlans.find((p) => p.code === m.subscription.planId)
-              ?.name ?? m.subscription.planId}
+            {planNameFor(m.subscription.planId)}
           </Badge>
         ),
       },
@@ -834,7 +956,7 @@ function MerchantsPageInner() {
         header: "Wallet",
         cell: (m) => (
           <span className="text-neutral-800 dark:text-neutral-200">
-            {formatCurrency(balanceById.get(m.id) ?? 0)}
+            {formatCurrency(mainBalanceById.get(m.id) ?? 0)}
           </span>
         ),
       },
@@ -860,8 +982,7 @@ function MerchantsPageInner() {
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedIds, balanceById]
+    [selectedIds, mainBalanceById]
   );
 
   const displayColumns = useMemo(
@@ -892,9 +1013,9 @@ function MerchantsPageInner() {
     </>
   );
 
-  const selectedWalletBalance = selectedMerchant
-    ? balanceById.get(selectedMerchant.id) ?? 0
-    : 0;
+  const selectedWalletPair = selectedMerchant
+    ? walletPairById.get(selectedMerchant.id) ?? emptyPair
+    : emptyPair;
 
   return (
     <div className="space-y-6">
@@ -918,13 +1039,25 @@ function MerchantsPageInner() {
           })
         }
         onFilterActive={() =>
-          setFilters({ subscriptionStatus: "active", merchantStatus: "", page: "1" })
+          setFilters({
+            subscriptionStatus: "active",
+            merchantStatus: "",
+            page: "1",
+          })
         }
         onFilterPastDue={() =>
-          setFilters({ subscriptionStatus: "past_due", merchantStatus: "", page: "1" })
+          setFilters({
+            subscriptionStatus: "past_due",
+            merchantStatus: "",
+            page: "1",
+          })
         }
         onFilterSuspended={() =>
-          setFilters({ merchantStatus: "suspended", subscriptionStatus: "", page: "1" })
+          setFilters({
+            merchantStatus: "suspended",
+            subscriptionStatus: "",
+            page: "1",
+          })
         }
         onSortByMrr={() => setFilters({ sort: "mrr", page: "1" })}
       />
@@ -1035,7 +1168,7 @@ function MerchantsPageInner() {
             <label key={key} className="flex items-center gap-1 text-xs">
               <input
                 type="checkbox"
-                aria-label={`Toggle ${COLUMN_LABEL[key]} column`}
+                aria-label={"Toggle " + COLUMN_LABEL[key] + " column"}
                 checked={isVisible}
                 disabled={isLastVisible}
                 onChange={() => toggleColumn(key)}
@@ -1091,25 +1224,23 @@ function MerchantsPageInner() {
           )}
         </div>
       ) : (
-        <>
-          <AdminDataTable
-            columns={displayColumns}
-            data={paginated}
-            isLoading={false}
-            rowKey={(m) => m.id}
-            onRowClick={(m) => setSelectedId(m.id)}
-            emptyMessage="No merchants found."
-            caption="Merchants"
-            pageSize={pageSize}
-            currentPage={safePage}
-            onPageChange={(p) => setFilters({ page: String(p) })}
-          />
-        </>
+        <AdminDataTable
+          columns={displayColumns}
+          data={paginated}
+          isLoading={false}
+          rowKey={(m) => m.id}
+          onRowClick={(m) => setSelectedId(m.id)}
+          emptyMessage="No merchants found."
+          caption="Merchants"
+          pageSize={pageSize}
+          currentPage={safePage}
+          onPageChange={(p) => setFilters({ page: String(p) })}
+        />
       )}
 
       <MerchantDetailDrawer
         merchant={selectedMerchant}
-        walletBalance={selectedWalletBalance}
+        walletPair={selectedWalletPair}
         onClose={() => setSelectedId(null)}
         onChangePlan={handleChangePlan}
         onSuspend={handleSuspend}
@@ -1120,6 +1251,9 @@ function MerchantsPageInner() {
         onRejectVerification={handleRejectVerification}
         onSendNotification={handleSendNotification}
         onResetSecurity={handleResetSecurity}
+        onAdjustWallet={handleAdjustWallet}
+        onFreezeWallet={handleFreezeWallet}
+        onUnfreezeWallet={handleUnfreezeWallet}
       />
 
       <MerchantPlanChangeModal
@@ -1131,7 +1265,7 @@ function MerchantsPageInner() {
 
       <MerchantNotifyModal
         open={bulkNotifyOpen}
-        merchantName={`${selectedIds.length} merchants`}
+        merchantName={selectedIds.length + " merchants"}
         onClose={() => setBulkNotifyOpen(false)}
         onConfirm={(channel, message) => handleBulkNotify(channel, message)}
       />
@@ -1140,7 +1274,7 @@ function MerchantsPageInner() {
         open={bulkIntent !== null}
         title={
           bulkIntent?.kind === "suspend"
-            ? `Suspend ${bulkIntent.ids.length} merchants?`
+            ? "Suspend " + bulkIntent.ids.length + " merchants?"
             : ""
         }
         description={

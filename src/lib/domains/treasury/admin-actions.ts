@@ -1,12 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // lib/domains/treasury/admin-actions.ts
 //
-// Admin-initiated treasury mutations. These are the actions that require
-// dual approval above threshold. Automatic money movement writes through
-// the emit helper instead, not through this file.
+// Admin-initiated treasury mutations. Automatic money movement writes
+// through the emit helper instead.
 //
-// Every mutation in this file writes both an activity log entry and an
-// audit trail entry. In Layer 1 both are console.warn stubs. Layer 3
-// replaces them with the real audit store.
+// Layer 3 A2: closePeriod closes a past calendar month. Once closed, no
+// new event may target that period. Reconciliation on an event in a
+// closed period is refused. Approve / reject / settle are state
+// transitions on committed events and are not gated.
 
 import type {
   TreasuryActor,
@@ -22,35 +23,27 @@ import {
   internalReplaceEvent,
   notifyTreasury,
 } from "./store";
+import { newEventId } from "./emit";
 import { isDualApprovalRequired } from "./helpers";
-
-interface AuditEntry {
-  action: string;
-  eventId: string;
-  actor: string;
-  meta?: Record<string, unknown>;
-}
-
-interface ActivityEntry {
-  eventId: string;
-  message: string;
-}
-
-function writeAudit(entry: AuditEntry): void {
-  if (typeof console !== "undefined") {
-    console.warn("[admin-audit]", entry);
-  }
-}
-
-function writeActivity(entry: ActivityEntry): void {
-  if (typeof console !== "undefined") {
-    console.warn("[activity]", entry);
-  }
-}
-
-function newEventId(): string {
-  return "AT-" + crypto.randomUUID().slice(0, 8).toUpperCase();
-}
+import { projectTreasurySummary } from "./projection";
+import { computeUserLiabilities } from "./liabilities";
+import {
+  getPeriodCloses,
+  getPeriodCloseById,
+  internalAppendPeriodClose,
+} from "./period-store";
+import {
+  computeCloseReadiness,
+  getCurrentPeriodId,
+  getPeriodRange,
+} from "./period-projection";
+import { isDateInClosedPeriod } from "./period-projection";
+import type {
+  ClosePeriodInput,
+  PeriodClose,
+  PeriodCloseSnapshot,
+} from "./period-types";
+import { appendAuditEntry } from "@/lib/domains/audit";
 
 export interface TreasuryMutationResult {
   ok: boolean;
@@ -88,30 +81,30 @@ export function fundTreasury(
   };
 
   const event: TreasuryEvent = {
-    id: newEventId(),
-    kind: "admin_funding_credit",
-    direction: "in",
-    amount: Math.round(input.amount * 100) / 100,
-    currency: "GHS",
-    counterparty,
-    reference: input.reference.trim(),
-    description: input.description.trim() || "Admin funding",
-    approvalStatus: requiresDual ? "pending" : "auto",
-    reconciliationStatus: "unmatched",
-    createdAt: nowIso,
-    createdBy: actor,
-    settledAt: requiresDual ? undefined : nowIso,
+      id: newEventId(),
+      kind: "admin_funding_credit",
+      direction: "in",
+      amount: Math.round(input.amount * 100) / 100,
+      currency: "GHS",
+      reference: input.reference.trim(),
+      description: input.description.trim() || "Admin funding",
+      approvalStatus: requiresDual ? "pending" : "auto",
+      reconciliationStatus: "unmatched",
+      createdAt: nowIso,
+      createdBy: actor,
+      settledAt: requiresDual ? undefined : nowIso,
+      counterparty: null
   };
 
   internalAppendEvent(event);
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.fund",
-    eventId: event.id,
-    actor: actor.email,
-    meta: { amount: event.amount, source: input.source },
+    resourceType: "treasury_event",
+    resourceId: event.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { amount: event.amount, source: input.source },
   });
-  writeActivity({ eventId: event.id, message: "Treasury funded " + event.amount });
   notifyTreasury();
 
   return { ok: true, event };
@@ -160,15 +153,12 @@ export function transferToBank(
 
   internalAppendEvent(event);
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.transfer_to_bank",
-    eventId: event.id,
-    actor: actor.email,
-    meta: { amount: event.amount, destination: input.destinationName },
-  });
-  writeActivity({
-    eventId: event.id,
-    message: "Bank transfer created, awaiting approval",
+    resourceType: "treasury_event",
+    resourceId: event.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { amount: event.amount, destination: input.destinationName },
   });
   notifyTreasury();
 
@@ -215,15 +205,16 @@ export function createAdjustment(
 
   internalAppendEvent(event);
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.adjustment",
-    eventId: event.id,
-    actor: actor.email,
-    meta: { direction: input.direction, amount: event.amount, reason: input.reason },
-  });
-  writeActivity({
-    eventId: event.id,
-    message: "Adjustment " + input.direction + " " + event.amount,
+    resourceType: "treasury_event",
+    resourceId: event.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      direction: input.direction,
+      amount: event.amount,
+      reason: input.reason,
+    },
   });
   notifyTreasury();
 
@@ -242,7 +233,8 @@ export function approveOutbound(
   if (event.createdBy.id === actor.id) {
     return {
       ok: false,
-      error: "The creator cannot approve their own outbound. A different admin must approve.",
+      error:
+        "The creator cannot approve their own outbound. A different admin must approve.",
     };
   }
 
@@ -258,15 +250,12 @@ export function approveOutbound(
     return { ok: false, error: "Event not found." };
   }
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.approve_outbound",
-    eventId,
-    actor: actor.email,
-    meta: { amount: event.amount, kind: event.kind },
-  });
-  writeActivity({
-    eventId,
-    message: "Outbound approved by " + actor.name,
+    resourceType: "treasury_event",
+    resourceId: eventId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { amount: event.amount, kind: event.kind },
   });
   notifyTreasury();
 
@@ -291,7 +280,8 @@ export function rejectOutbound(
   if (event.createdBy.id === actor.id) {
     return {
       ok: false,
-      error: "The creator cannot reject their own outbound. A different admin must reject.",
+      error:
+        "The creator cannot reject their own outbound. A different admin must reject.",
     };
   }
 
@@ -299,8 +289,8 @@ export function rejectOutbound(
   const next: TreasuryEvent = {
     ...event,
     approvalStatus: "rejected",
-    approvedBy: actor,
-    approvedAt: nowIso,
+    rejectedBy: actor,
+    rejectedAt: nowIso,
     rejectionReason: trimmed,
   };
 
@@ -308,15 +298,12 @@ export function rejectOutbound(
     return { ok: false, error: "Event not found." };
   }
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.reject_outbound",
-    eventId,
-    actor: actor.email,
-    meta: { reason: trimmed },
-  });
-  writeActivity({
-    eventId,
-    message: "Outbound rejected by " + actor.name,
+    resourceType: "treasury_event",
+    resourceId: eventId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { reason: trimmed },
   });
   notifyTreasury();
 
@@ -343,14 +330,11 @@ export function settleOutbound(
     return { ok: false, error: "Event not found." };
   }
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.settle_outbound",
-    eventId,
-    actor: actor.email,
-  });
-  writeActivity({
-    eventId,
-    message: "Outbound settled by " + actor.name,
+    resourceType: "treasury_event",
+    resourceId: eventId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
   });
   notifyTreasury();
 
@@ -376,9 +360,15 @@ export function reconcileEvent(
 ): TreasuryMutationResult {
   const event = getTreasuryEventById(eventId);
   if (!event) return { ok: false, error: "Event not found." };
-  if (
-    !isAllowedReconciliationTransition(event.reconciliationStatus, status)
-  ) {
+
+  if (isDateInClosedPeriod(event.createdAt, getPeriodCloses())) {
+    return {
+      ok: false,
+      error: "Cannot reconcile an event in a closed period.",
+    };
+  }
+
+  if (!isAllowedReconciliationTransition(event.reconciliationStatus, status)) {
     return {
       ok: false,
       error:
@@ -399,15 +389,12 @@ export function reconcileEvent(
     return { ok: false, error: "Event not found." };
   }
 
-  writeAudit({
+  appendAuditEntry({
     action: "treasury.reconcile",
-    eventId,
-    actor: actor.email,
-    meta: { status, reference },
-  });
-  writeActivity({
-    eventId,
-    message: "Reconciliation marked " + status,
+    resourceType: "treasury_event",
+    resourceId: eventId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { status, reference },
   });
   notifyTreasury();
 
@@ -422,4 +409,111 @@ export function countUnmatched(): number {
   return getTreasuryEvents().filter(
     (e) => e.reconciliationStatus === "unmatched"
   ).length;
+}
+
+// ---------------------------------------------------------------------------
+// Period close.
+// ---------------------------------------------------------------------------
+
+export interface ClosePeriodResult {
+  ok: boolean;
+  close?: PeriodClose;
+  error?: string;
+}
+
+export function closePeriod(
+  input: ClosePeriodInput,
+  actor: TreasuryActor
+): ClosePeriodResult {
+  const currentPeriodId = getCurrentPeriodId(input.nowMs);
+
+  if (input.periodId === currentPeriodId) {
+    return {
+      ok: false,
+      error: "The current period cannot be closed. Only completed periods.",
+    };
+  }
+  if (input.periodId > currentPeriodId) {
+    return {
+      ok: false,
+      error: "Cannot close a future period.",
+    };
+  }
+  if (getPeriodCloseById(input.periodId)) {
+    return { ok: false, error: "Period is already closed." };
+  }
+
+  const events = getTreasuryEvents();
+  const readiness = computeCloseReadiness(events, input.periodId);
+  if (!readiness.ready) {
+    return {
+      ok: false,
+      error:
+        "Period has " +
+        readiness.blockers.join(" and ") +
+        ". Resolve before closing.",
+    };
+  }
+
+  // Snapshot uses user liabilities only. Coverage semantics against the
+  // full pool set is a follow-up batch concern.
+  let liabilities: number;
+  try {
+    liabilities = computeUserLiabilities();
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        "Cannot compute liabilities for the period snapshot. " +
+        (err instanceof Error ? err.message : "Unknown error"),
+    };
+  }
+
+  const range = getPeriodRange(input.periodId);
+  const eventsInPeriod = events.filter((e) => {
+    const t = new Date(e.createdAt).getTime();
+    return t >= range.startMs && t < range.endMs;
+  });
+
+  const summary = projectTreasurySummary(eventsInPeriod, liabilities);
+
+  const snapshot: PeriodCloseSnapshot = {
+    cashAtBank: summary.cashAtBank,
+    committedOutbound: summary.committedOutbound,
+    available: summary.available,
+    userLiabilities: summary.userLiabilities,
+    freeCash: summary.freeCash,
+    coverageStatus: summary.coverageStatus,
+    coverageRatio: summary.coverageRatio,
+    eventCount: eventsInPeriod.length,
+    unmatchedCount: summary.unmatchedCount,
+  };
+
+  const nowIso = new Date().toISOString();
+  const close: PeriodClose = {
+    id: "PC-" + input.periodId,
+    periodId: input.periodId,
+    openedAt: new Date(range.startMs).toISOString(),
+    closedAt: nowIso,
+    closedBy: actor,
+    snapshot,
+    unmatchedCountAtClose: summary.unmatchedCount,
+    notes: input.notes?.trim() || undefined,
+  };
+
+  internalAppendPeriodClose(close);
+
+  appendAuditEntry({
+    action: "treasury.period_close",
+    resourceType: "treasury_period",
+    resourceId: input.periodId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      eventCount: snapshot.eventCount,
+      cashAtBank: snapshot.cashAtBank,
+      freeCash: snapshot.freeCash,
+    },
+  });
+
+  return { ok: true, close };
 }

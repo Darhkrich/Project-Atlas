@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
@@ -15,25 +17,15 @@ import {
   type PaymentsFilterValues,
 } from "@/components/admin/ecommerce/payments/payments-filters";
 import { PaymentsLedgerTable } from "@/components/admin/ecommerce/payments/payments-ledger-table";
-import { WithdrawalQueueTable } from "@/components/admin/ecommerce/payments/withdrawal-queue-table";
 import { PaymentDetailDrawer } from "@/components/admin/ecommerce/payments/payment-detail-drawer";
-import { WithdrawalApproveModal } from "@/components/admin/ecommerce/payments/withdrawal-approve-modal";
-import { WithdrawalRejectModal } from "@/components/admin/ecommerce/payments/withdrawal-reject-modal";
-import { AutoApproveConfigModal } from "@/components/admin/ecommerce/payments/auto-approve-config-modal";
 import { useMerchantMoney } from "@/lib/admin/hooks/use-merchant-money";
 import { useMerchants } from "@/lib/admin/hooks/use-merchants";
 import { useNow } from "@/lib/admin/hooks/use-now";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
-import { useCurrentAdmin } from "@/lib/admin/rbac";
-import { Can } from "@/lib/admin/rbac/can";
-import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
-import {
-  ledgerToCsv,
-  withdrawalQueueToCsv,
-} from "@/lib/admin/ecommerce/payments/payment-csv-export";
+import { ledgerToCsv } from "@/lib/admin/ecommerce/payments/payment-csv-export";
 import {
   PAGE_SIZE,
   datePresetToSinceMs,
@@ -42,21 +34,13 @@ import {
 import {
   projectLedger,
   projectSummary,
-  projectWithdrawalQueue,
 } from "@/lib/admin/ecommerce/payments/payment-projection";
-import {
-  adminApproveWithdrawal,
-  adminRejectWithdrawal,
-} from "@/lib/admin/ecommerce/payments/payment-mutations";
-import { adminUpdateAutoApproveConfig } from "@/lib/admin/ecommerce/payments/payment-config";
 import type {
   LedgerRow,
   MerchantMoneyEvent,
   MetricWithDelta,
   PaymentsSummary,
-  WithdrawalQueueRow,
 } from "@/lib/admin/types/merchant-money";
-import type { MerchantWithdrawalRequest } from "@/lib/domains/wallet/merchant-money/types";
 
 const DEFAULT_FILTERS: PaymentsFilterValues = {
   tab: "ledger",
@@ -91,11 +75,6 @@ const EMPTY_SUMMARY: PaymentsSummary = {
   failedEvents: EMPTY_DELTA,
   failedBreakdown: { plan: 0, checkout: 0, withdrawal: 0 },
 };
-
-interface Toast {
-  kind: "success" | "error";
-  text: string;
-}
 
 function last4FromMasked(masked: string | undefined): string | undefined {
   if (!masked) return undefined;
@@ -137,9 +116,8 @@ function PaymentsSkeleton() {
 }
 
 function PaymentsPageInner() {
-  const admin = useCurrentAdmin();
   const nowMs = useNow();
-  const { state, loading: moneyLoading, config } = useMerchantMoney();
+  const { state, loading: moneyLoading } = useMerchantMoney();
   const { merchants, loading: merchantsLoading } = useMerchants();
 
   const { filters, setFilters, clearFilters, hasActive } =
@@ -157,20 +135,7 @@ function PaymentsPageInner() {
   const [selectedEvent, setSelectedEvent] = useState<MerchantMoneyEvent | null>(
     null
   );
-  const [pendingApprove, setPendingApprove] =
-    useState<MerchantWithdrawalRequest | null>(null);
-  const [pendingReject, setPendingReject] =
-    useState<MerchantWithdrawalRequest | null>(null);
-  const [configOpen, setConfigOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState<Toast | null>(null);
   const [activeCard, setActiveCard] = useState<SummaryCardKey | null>(null);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 6000);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   const sinceMs = useMemo(() => {
     if (!nowMs) return 0;
@@ -216,27 +181,6 @@ function PaymentsPageInner() {
     sinceMs,
   ]);
 
-  const withdrawalRows = useMemo(() => {
-    if (!state) return [] as WithdrawalQueueRow[];
-    const all = projectWithdrawalQueue(state, merchants);
-    const q = debouncedSearch.trim().toLowerCase();
-    let filtered = all;
-    if (q) {
-      filtered = filtered.filter(
-        (r) =>
-          r.merchantName.toLowerCase().includes(q) ||
-          r.merchantId.toLowerCase().includes(q) ||
-          r.id.toLowerCase().includes(q)
-      );
-    }
-    if (filters.preset !== "all" && sinceMs > 0) {
-      filtered = filtered.filter(
-        (r) => new Date(r.createdAt).getTime() >= sinceMs
-      );
-    }
-    return filtered;
-  }, [state, merchants, debouncedSearch, filters.preset, sinceMs]);
-
   const summary = useMemo(() => {
     if (!state || !nowMs) return EMPTY_SUMMARY;
     return projectSummary(state, sinceMs, nowMs);
@@ -245,16 +189,14 @@ function PaymentsPageInner() {
   const pageSize = Math.max(5, Number(filters.pageSize) || PAGE_SIZE);
   const page = Math.max(1, Number(filters.page) || 1);
 
-  const currentRows =
-    filters.tab === "withdrawals" ? withdrawalRows : ledgerRows;
-  const totalRows = currentRows.length;
+  const totalRows = ledgerRows.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
 
   const paginated = useMemo(() => {
     const start = (safePage - 1) * pageSize;
-    return currentRows.slice(start, start + pageSize);
-  }, [currentRows, safePage, pageSize]);
+    return ledgerRows.slice(start, start + pageSize);
+  }, [ledgerRows, safePage, pageSize]);
 
   const selectedMerchant = useMemo(() => {
     if (!selectedEvent) return null;
@@ -264,11 +206,11 @@ function PaymentsPageInner() {
   const onToggleCard = (key: SummaryCardKey | null) => {
     setActiveCard(key);
     if (key === "pendingApprovals") {
-      setFilters({ tab: "withdrawals", preset: "all", page: "1" });
+      setFilters({ tab: "withdrawals", page: "1" });
       return;
     }
     if (key === "atlasRevenue" || key === "withdrawalVolume") {
-      setFilters({ tab: "withdrawals", preset: "30d", page: "1" });
+      setFilters({ tab: "withdrawals", page: "1" });
       return;
     }
     if (key === "planCharges") {
@@ -289,71 +231,10 @@ function PaymentsPageInner() {
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
     const date = new Date().toISOString().slice(0, 10);
-    if (filters.tab === "withdrawals") {
-      downloadCsv(
-        "atlas-merchant-withdrawals-" + date + ".csv",
-        withdrawalQueueToCsv(withdrawalRows)
-      );
-    } else {
-      downloadCsv(
-        "atlas-merchant-payments-" + date + ".csv",
-        ledgerToCsv(ledgerRows)
-      );
-    }
-  };
-
-  const handleApprove = (
-    withdrawal: MerchantWithdrawalRequest,
-    note: string
-  ) => {
-    setSubmitting(true);
-    const result = adminApproveWithdrawal(withdrawal.id, admin, note);
-    setSubmitting(false);
-    if (!result.ok) {
-      setToast({ kind: "error", text: result.error ?? "Approval failed." });
-    } else {
-      setToast({
-        kind: "success",
-        text: "Withdrawal approved and moved to processing.",
-      });
-    }
-    setPendingApprove(null);
-    setSelectedEvent(null);
-  };
-
-  const handleReject = (
-    withdrawal: MerchantWithdrawalRequest,
-    reason: string
-  ) => {
-    setSubmitting(true);
-    const result = adminRejectWithdrawal(withdrawal.id, admin, reason);
-    setSubmitting(false);
-    if (!result.ok) {
-      setToast({ kind: "error", text: result.error ?? "Rejection failed." });
-    } else {
-      setToast({ kind: "success", text: "Withdrawal rejected." });
-    }
-    setPendingReject(null);
-    setSelectedEvent(null);
-  };
-
-  const handleConfigSave = (patch: {
-    thresholdGHS: number;
-    feeRatePercent: number;
-    dailyCap: number;
-  }) => {
-    setSubmitting(true);
-    const result = adminUpdateAutoApproveConfig(patch, admin);
-    setSubmitting(false);
-    if (!result.ok) {
-      setToast({
-        kind: "error",
-        text: result.error ?? "Config update failed.",
-      });
-    } else {
-      setToast({ kind: "success", text: "Auto-approve rules updated." });
-    }
-    setConfigOpen(false);
+    downloadCsv(
+      "atlas-merchant-payments-" + date + ".csv",
+      ledgerToCsv(ledgerRows)
+    );
   };
 
   const loading = moneyLoading || merchantsLoading;
@@ -361,7 +242,12 @@ function PaymentsPageInner() {
     <>
       <span>{merchants.length} merchants</span>
       <span aria-hidden="true">-</span>
-      <span>{summary.pendingApprovals.current} awaiting approval</span>
+      <Link
+        href="/admin/payments?tab=wallets"
+        className="underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      >
+        {summary.pendingApprovals.current} awaiting approval
+      </Link>
       <span aria-hidden="true">-</span>
       <span>{formatCurrency(summary.atlasRevenue.current)} Atlas revenue</span>
     </>
@@ -390,7 +276,7 @@ function PaymentsPageInner() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Merchant Payments"
-        description="Plan billing, storefront sales, refunds, and withdrawals across every merchant."
+        description="Plan billing, storefront sales, and refunds across every merchant. Withdrawal approvals live in Operations."
         meta={headerMeta}
         actions={<ExportMenu onExport={handleExport} formats={["csv"]} />}
       />
@@ -415,52 +301,41 @@ function PaymentsPageInner() {
           aria-labelledby="payments-tab-ledger"
           className="space-y-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <PaymentsFilters
-              value={filters}
-              hasActive={hasActive}
-              searchInputRef={searchInputRef}
-              onChange={(patch) => setFilters(patch)}
-              onClear={clearFilters}
-            />
-            <Can permission={PERMISSIONS.PAYMENTS_CONFIG}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfigOpen(true)}
-              >
-                Auto-approve rules
-              </Button>
-            </Can>
-          </div>
+          <PaymentsFilters
+            value={filters}
+            hasActive={hasActive}
+            searchInputRef={searchInputRef}
+            onChange={(patch) => setFilters(patch)}
+            onClear={clearFilters}
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-500 dark:text-neutral-400">
               Columns:
             </span>
-            {(
-              ["amount", "fee", "status", "created"] as LedgerColumnKey[]
-            ).map((key) => {
-              const checked = visibleColumns.includes(key);
-              return (
-                <label key={key} className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    aria-label={"Toggle " + key + " column"}
-                    checked={checked}
-                    onChange={() =>
-                      setVisibleColumns((prev) =>
-                        prev.includes(key)
-                          ? prev.filter((k) => k !== key)
-                          : [...prev, key]
-                      )
-                    }
-                    className="h-3 w-3"
-                  />
-                  {key}
-                </label>
-              );
-            })}
+            {(["amount", "fee", "status", "created"] as LedgerColumnKey[]).map(
+              (key) => {
+                const checked = visibleColumns.includes(key);
+                return (
+                  <label key={key} className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      aria-label={"Toggle " + key + " column"}
+                      checked={checked}
+                      onChange={() =>
+                        setVisibleColumns((prev) =>
+                          prev.includes(key)
+                            ? prev.filter((k) => k !== key)
+                            : [...prev, key]
+                        )
+                      }
+                      className="h-3 w-3"
+                    />
+                    {key}
+                  </label>
+                );
+              }
+            )}
           </div>
 
           {loading ? (
@@ -493,7 +368,7 @@ function PaymentsPageInner() {
                 <EmptyState
                   variant="no_data"
                   title="No merchant money events yet"
-                  description="Events appear here as merchants bill, sell, refund, and withdraw."
+                  description="Events appear here as merchants bill, sell, and refund."
                 />
               )}
             </div>
@@ -517,58 +392,51 @@ function PaymentsPageInner() {
           aria-labelledby="payments-tab-withdrawals"
           className="space-y-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <PaymentsFilters
-              value={filters}
-              hasActive={hasActive}
-              searchInputRef={searchInputRef}
-              onChange={(patch) => setFilters(patch)}
-              onClear={clearFilters}
-            />
-            <Can permission={PERMISSIONS.PAYMENTS_CONFIG}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfigOpen(true)}
+          <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-900">
+            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+              Merchant withdrawals are reviewed in Operations
+            </h3>
+            <p className="mt-2 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
+              Above-threshold withdrawals for merchants, resellers, customers,
+              and storefront users are approved from a single queue in
+              Operations. Admins see every pool in one place instead of
+              switching between section pages.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href="/admin/payments?tab=wallets"
+                className="inline-flex h-9 items-center rounded-md bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                Auto-approve rules
-              </Button>
-            </Can>
+                Open Operations wallet queue
+              </Link>
+            </div>
+            <dl className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <dt className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Awaiting approval
+                </dt>
+                <dd className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {summary.pendingApprovals.current}
+                </dd>
+              </div>
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <dt className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Withdrawal volume
+                </dt>
+                <dd className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {formatCurrency(summary.withdrawalVolume.current)}
+                </dd>
+              </div>
+              <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
+                <dt className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Atlas fee revenue
+                </dt>
+                <dd className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
+                  {formatCurrency(summary.atlasRevenue.current)}
+                </dd>
+              </div>
+            </dl>
           </div>
-
-          {loading ? (
-            <div
-              aria-busy="true"
-              aria-label="Loading withdrawals"
-              className="space-y-2"
-            >
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-12 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"
-                />
-              ))}
-            </div>
-          ) : withdrawalRows.length === 0 ? (
-            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-              <EmptyState
-                variant="no_data"
-                title="No withdrawals yet"
-                description="Withdrawal requests appear here as merchants cash out."
-              />
-            </div>
-          ) : (
-            <WithdrawalQueueTable
-                    rows={paginated as WithdrawalQueueRow[]}
-                    pageSize={pageSize}
-                    currentPage={safePage}
-                    totalRows={totalRows}
-                    nowMs={nowMs}
-                    onView={(row) => setSelectedEvent({ ...row.raw, kind: "withdrawal" as const })}
-                    onApprove={(row) => setPendingApprove(row.raw)}
-                    onReject={(row) => setPendingReject(row.raw)}
-                    onPageChange={(p) => setFilters({ page: String(p) })} canApprove={false}            />
-          )}
         </div>
       )}
 
@@ -599,73 +467,8 @@ function PaymentsPageInner() {
         cardBrand={selectedCardBrand}
         autoPayEnabled={selectedAutoPayEnabled}
         nowMs={nowMs}
-        onApprove={(w) => {
-          setSelectedEvent(null);
-          setPendingApprove(w);
-        } }
-        onReject={(w) => {
-          setSelectedEvent(null);
-          setPendingReject(w);
-        } } canApprove={false}      />
-
-      <WithdrawalApproveModal
-        open={pendingApprove !== null}
-        withdrawal={pendingApprove}
-        merchantName={
-          pendingApprove
-            ? merchants.find((m) => m.id === pendingApprove.merchantId)
-                ?.businessName ?? pendingApprove.merchantId
-            : ""
-        }
-        settlementBalance={
-          pendingApprove && state
-            ? state.wallets[pendingApprove.merchantId]?.main.balance ?? 0
-            : 0
-        }
-        submitting={submitting}
-        onSubmit={(note) => {
-          if (pendingApprove) handleApprove(pendingApprove, note);
-        }}
-        onClose={() => setPendingApprove(null)}
+        canApprove={false}
       />
-
-      <WithdrawalRejectModal
-        open={pendingReject !== null}
-        withdrawal={pendingReject}
-        merchantName={
-          pendingReject
-            ? merchants.find((m) => m.id === pendingReject.merchantId)
-                ?.businessName ?? pendingReject.merchantId
-            : ""
-        }
-        submitting={submitting}
-        onSubmit={(reason) => {
-          if (pendingReject) handleReject(pendingReject, reason);
-        }}
-        onClose={() => setPendingReject(null)}
-      />
-
-      <AutoApproveConfigModal
-        open={configOpen}
-        config={config}
-        submitting={submitting}
-        onSubmit={handleConfigSave}
-        onClose={() => setConfigOpen(false)}
-      />
-
-      {toast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={
-            toast.kind === "success"
-              ? "rounded-md border border-success-200 bg-success-50 p-3 text-sm text-success-800 dark:border-success-800/60 dark:bg-success-900/20 dark:text-success-200"
-              : "rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
-          }
-        >
-          {toast.text}
-        </div>
-      )}
     </div>
   );
 }

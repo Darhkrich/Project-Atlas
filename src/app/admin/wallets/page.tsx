@@ -1,331 +1,432 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { WalletSummaryCards } from "@/components/admin/wallets/wallet-summary-cards";
-import { WalletDetailDrawer } from "@/components/admin/wallets/wallet-detail-drawer";
-import { WithdrawalRequestsQueue } from "@/components/admin/wallets/withdrawal-requests-queue";
-import { WithdrawalRequestDetail } from "@/components/admin/wallets/withdrawal-request-detail";
-import { WalletSparkline } from "@/components/admin/wallets/wallet-sparkline";
-import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
 import { Button } from "@/components/admin/ui/button";
 import { Badge } from "@/components/admin/ui/badge";
-import { Input } from "@/components/admin/ui/input";
-import { mockWallets, mockWithdrawalRequests } from "@/lib/admin/mock/wallets";
-import { formatCurrency } from "@/lib/admin/formatters";
+import { ErrorState } from "@/components/admin/ui/error-state";
+import { EmptyState } from "@/components/admin/ui/empty-state";
 import {
-  Wallet,
+  AdminDataTable,
+  type Column,
+} from "@/components/admin/ui/admin-data-table";
+import { Can, useCan } from "@/lib/admin/rbac/can";
+import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
+import { WalletSummaryCards } from "@/components/admin/wallets/wallet-summary-cards";
+import { WalletDetailDrawer } from "@/components/admin/wallets/wallet-detail-drawer";
+import { useWalletRegistry } from "@/lib/admin/hooks/use-wallet-registry";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
+import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { formatAbsolute, formatRelative } from "@/lib/admin/support/format";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
+import {
+  REGISTRY_PAGE_SIZE,
+  REGISTRY_PAGE_SIZE_OPTIONS,
+  REGISTRY_POOLS,
+} from "@/lib/admin/wallets/registry-constants";
+import {
+  REGISTRY_POOL_LABELS,
+  REGISTRY_POOL_VARIANTS,
   WALLET_STATUS_LABELS,
-  OWNER_TYPE_LABELS,
-  WithdrawalRequest,
-  AdjustmentDirection,
-} from "@/lib/admin/types/wallet";
+  WALLET_STATUS_VARIANTS,
+} from "@/lib/admin/wallets/registry-labels";
+import type {
+  RegistryRow,
+  WalletPoolType,
+} from "@/lib/admin/wallets/registry-types";
+import type { RegistryFilterValues } from "@/lib/admin/wallets/registry-projection";
 
-const statusVariantMap: Record<string, "success" | "danger"> = {
-  active: "success",
-  frozen: "danger",
+interface WalletRegistryFilters extends RegistryFilterValues {
+  page: string;
+  pageSize: string;
+}
+
+const DEFAULT_FILTERS: WalletRegistryFilters = {
+  search: "",
+  pool: "",
+  status: "",
+  page: "1",
+  pageSize: String(REGISTRY_PAGE_SIZE),
 };
 
-const ownerTypeVariantMap: Record<string, "info" | "success" | "warning"> = {
-  customer: "info",
-  reseller: "success",
-  merchant: "warning",
-};
+function escapeCsv(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
 export default function WalletsPage() {
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [ownerTypeFilter, setOwnerTypeFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
-  const [selectedRequest, setSelectedRequest] = useState<WithdrawalRequest | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  const canView = useCan(PERMISSIONS.WALLETS_VIEW);
 
-  const allColumns = [
-    {
-      key: "owner",
-      header: "Owner",
-      cell: (w: Wallet) => (
-        <div>
-          <p className="font-medium">{w.ownerName}</p>
-          <Badge variant={ownerTypeVariantMap[w.ownerType]}>
-            {OWNER_TYPE_LABELS[w.ownerType]}
-          </Badge>
-        </div>
-      ),
-    },
-    {
-      key: "walletId",
-      header: "Wallet ID",
-      cell: (w: Wallet) => <span className="font-mono text-xs">{w.id}</span>,
-    },
-    {
-      key: "balance",
-      header: "Available",
-      cell: (w: Wallet) => (
-        <span className="font-semibold">{formatCurrency(w.balance)}</span>
-      ),
-    },
-    {
-      key: "pending",
-      header: "Pending",
-      cell: (w: Wallet) => (
-        <span className="text-warning-600">{formatCurrency(w.pendingBalance)}</span>
-      ),
-    },
-    {
-      key: "trend",
-      header: "Trend",
-      cell: (w: Wallet) => <WalletSparkline data={w.trend} />,
-    },
-    {
-      key: "risk",
-      header: "Risk",
-      cell: (w: Wallet) => (
-        <Badge
-          variant={
-            w.riskLevel === "high"
-              ? "danger"
-              : w.riskLevel === "medium"
-              ? "warning"
-              : "success"
-          }
-        >
-          {w.riskLevel}
-        </Badge>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      cell: (w: Wallet) => (
-        <Badge variant={statusVariantMap[w.status]}>{WALLET_STATUS_LABELS[w.status]}</Badge>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      cell: (w: Wallet) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedWallet(w);
-          }}
-        >
-          View
-        </Button>
-      ),
-    },
-  ];
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<WalletRegistryFilters>(DEFAULT_FILTERS);
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setVisibleColumns(allColumns.map((c) => c.key));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setWallets(mockWallets);
-      setWithdrawalRequests(mockWithdrawalRequests);
-      setLoading(false);
-    }, 500);
-  }, []);
-
-  const filteredWallets = wallets.filter((w) => {
-    if (
-      search &&
-      !w.ownerName.toLowerCase().includes(search.toLowerCase()) &&
-      !w.id.toLowerCase().includes(search.toLowerCase())
-    )
-      return false;
-    if (ownerTypeFilter && w.ownerType !== ownerTypeFilter) return false;
-    if (statusFilter && w.status !== statusFilter) return false;
-    return true;
+  const { rows, summary, loading, error, nowMs } = useWalletRegistry({
+    search: debouncedSearch,
+    pool: filters.pool as WalletPoolType | "",
+    status: filters.status as "active" | "frozen" | "",
   });
 
-  const columns = allColumns.filter((c) => visibleColumns.includes(c.key));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const summaryData = {
-    totalBalance: wallets.reduce((sum, w) => sum + w.balance, 0),
-    customerBalance: wallets
-      .filter((w) => w.ownerType === "customer")
-      .reduce((sum, w) => sum + w.balance, 0),
-    resellerBalance: wallets
-      .filter((w) => w.ownerType === "reseller")
-      .reduce((sum, w) => sum + w.balance, 0),
-    merchantBalance: wallets
-      .filter((w) => w.ownerType === "merchant")
-      .reduce((sum, w) => sum + w.balance, 0),
-    pendingWithdrawals: withdrawalRequests
-      .filter((r) => r.status === "pending")
-      .reduce((sum, r) => sum + r.amount, 0),
-  };
+  const selected = useMemo(
+    () => (selectedId ? rows.find((r) => r.id === selectedId) ?? null : null),
+    [rows, selectedId]
+  );
 
-  const handleAdjust = (
-    walletId: string,
-    direction: AdjustmentDirection,
-    amount: number,
-    reason: string
-  ) => {
-    setWallets((prev) =>
-      prev.map((w) => {
-        if (w.id !== walletId) return w;
-        const previous = w.balance;
-        const newBalance =
-          direction === "credit" ? w.balance + amount : w.balance - amount;
-        const newAdj = {
-          id: `ADJ-${Date.now()}`,
-          admin: "current_admin@atlas.com",
-          timestamp: new Date().toISOString(),
-          direction,
-          amount,
-          reason,
-          previousBalance: previous,
-          newBalance,
-        };
-        return {
-          ...w,
-          balance: newBalance,
-          adjustments: [newAdj, ...w.adjustments],
-        };
-      })
+  const pageSize = Math.max(
+    5,
+    Number(filters.pageSize) || REGISTRY_PAGE_SIZE
+  );
+  const page = Math.max(1, Number(filters.page) || 1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginated = useMemo(
+    () => rows.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [rows, safePage, pageSize]
+  );
+
+  const onSelectPool = useCallback(
+    (pool: WalletPoolType | "") => {
+      setFilters({ pool, page: "1" });
+    },
+    [setFilters]
+  );
+
+  const handleExport = useCallback(() => {
+    const header = [
+      "walletId",
+      "pool",
+      "ownerId",
+      "ownerName",
+      "balance",
+      "status",
+      "lastActivityAt",
+    ];
+    const lines = [header.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          escapeCsv(r.id),
+          escapeCsv(r.pool),
+          escapeCsv(r.ownerId),
+          escapeCsv(r.ownerName),
+          escapeCsv(r.balance),
+          escapeCsv(r.status),
+          escapeCsv(r.lastActivityAt ?? ""),
+        ].join(",")
+      );
+    }
+    downloadCsv(
+      "atlas-wallets-" + new Date().toISOString().slice(0, 10) + ".csv",
+      lines.join("\r\n")
     );
-    setSelectedWallet(null);
-  };
+  }, [rows]);
 
-  const handleToggleStatus = (walletId: string) => {
-    setWallets((prev) =>
-      prev.map((w) =>
-        w.id === walletId
-          ? { ...w, status: w.status === "active" ? "frozen" : "active" }
-          : w
-      )
-    );
-  };
+  const columns: Column<RegistryRow>[] = useMemo(
+    () => [
+      {
+        key: "owner",
+        header: "Owner",
+        cell: (r) => (
+          <div className="min-w-0">
+            <p className="truncate font-medium text-neutral-900 dark:text-neutral-100">
+              {r.ownerName}
+            </p>
+            <p className="truncate font-mono text-xs text-neutral-500 dark:text-neutral-400">
+              {r.ownerId}
+            </p>
+          </div>
+        ),
+      },
+      {
+        key: "pool",
+        header: "Pool",
+        cell: (r) => (
+          <Badge variant={REGISTRY_POOL_VARIANTS[r.pool]}>
+            {REGISTRY_POOL_LABELS[r.pool]}
+          </Badge>
+        ),
+      },
+      {
+        key: "walletId",
+        header: "Wallet",
+        cell: (r) => (
+          <span className="font-mono text-xs text-neutral-600 dark:text-neutral-400">
+            {r.id}
+          </span>
+        ),
+      },
+      {
+        key: "balance",
+        header: "Balance",
+        align: "right",
+        cell: (r) => (
+          <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+            {formatCurrency(r.balance)}
+          </span>
+        ),
+      },
+      {
+        key: "status",
+        header: "Status",
+        cell: (r) => (
+          <Badge variant={WALLET_STATUS_VARIANTS[r.status]}>
+            {WALLET_STATUS_LABELS[r.status]}
+          </Badge>
+        ),
+      },
+      {
+        key: "lastActivity",
+        header: "Last activity",
+        align: "right",
+        cell: (r) =>
+          r.lastActivityAt ? (
+            <span
+              title={formatAbsolute(r.lastActivityAt)}
+              className="text-xs text-neutral-600 dark:text-neutral-400"
+            >
+              {nowMs ? formatRelative(r.lastActivityAt, nowMs) : "—"}
+            </span>
+          ) : (
+            <span className="text-xs text-neutral-400 dark:text-neutral-500">
+              No activity
+            </span>
+          ),
+      },
+    ],
+    [nowMs]
+  );
 
-  const handleApproveWithdrawal = (id: string) => {
-    setWithdrawalRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: "approved" } : r))
+  if (!canView) {
+    return (
+      <ErrorState
+        title="You do not have access to wallets"
+        description="Ask an administrator to grant you the wallets:view permission."
+      />
     );
-  };
-
-  const handleRejectWithdrawal = (id: string) => {
-    setWithdrawalRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: "rejected" } : r))
-    );
-  };
+  }
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Wallets"
-        description="Manage platform wallets, balances, withdrawals, and adjustments."
+        description="Liabilities registry. Who Atlas holds money on behalf of, across every pool. Read-only."
+        meta={
+          <>
+            <span>{formatNumber(summary.totalWallets)} wallets</span>
+            <span aria-hidden="true">·</span>
+            <span>{formatCurrency(summary.totalBalance)} liabilities</span>
+            {summary.totalFrozen > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="text-danger-700 dark:text-danger-300">
+                  {summary.totalFrozen} frozen
+                </span>
+              </>
+            )}
+          </>
+        }
+        actions={
+          <Can permission={PERMISSIONS.EXPORT}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={rows.length === 0}
+            >
+              Export CSV
+            </Button>
+          </Can>
+        }
       />
 
-      <WalletSummaryCards data={summaryData} />
-
-      <WithdrawalRequestsQueue
-        requests={withdrawalRequests}
-        onApprove={handleApproveWithdrawal}
-        onReject={handleRejectWithdrawal}
-        onViewDetail={setSelectedRequest}
-      />
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <Input
-          placeholder="Search wallets..."
-          className="max-w-xs"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      {error ? (
+        <ErrorState
+          title="Could not load wallets"
+          description={error.message}
         />
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={ownerTypeFilter}
-          onChange={(e) => setOwnerTypeFilter(e.target.value)}
-        >
-          <option value="">All Owner Types</option>
-          <option value="customer">Customer</option>
-          <option value="reseller">Reseller</option>
-          <option value="merchant">Merchant</option>
-        </select>
-        <select
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="frozen">Frozen</option>
-        </select>
-      </div>
+      ) : (
+        <>
+          <WalletSummaryCards
+            summary={summary}
+            activePool={filters.pool as WalletPoolType | ""}
+            onSelectPool={onSelectPool}
+          />
 
-      {/* Column visibility & page size */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Rows per page:</span>
-          <select
-            className="h-8 rounded-md border border-neutral-300 px-2 text-xs"
-            value={pageSize}
-            onChange={(e) => setPageSize(Number(e.target.value))}
+          <div
+            role="region"
+            aria-label="Wallet filters"
+            className="flex flex-wrap items-end gap-2"
           >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs">Columns:</span>
-          {allColumns
-            .filter((c) => c.key !== "actions")
-            .map((col) => (
-              <label key={col.key} className="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.includes(col.key)}
-                  onChange={(e) => {
-                    if (e.target.checked) setVisibleColumns((prev) => [...prev, col.key]);
-                    else setVisibleColumns((prev) => prev.filter((k) => k !== col.key));
-                  }}
-                  className="h-3 w-3"
-                />
-                {col.header}
+            <div className="min-w-56 flex-1">
+              <label
+                htmlFor="wallet-search"
+                className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
+              >
+                Search
               </label>
-            ))}
-        </div>
-      </div>
+              <input
+                id="wallet-search"
+                ref={searchInputRef}
+                aria-label="Search wallets"
+                placeholder="Owner name, wallet id, owner id"
+                value={filters.search}
+                onChange={(e) =>
+                  setFilters({ search: e.target.value, page: "1" })
+                }
+                className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              />
+            </div>
 
-      <AdminDataTable
-        columns={columns}
-        data={filteredWallets}
-        isLoading={loading}
-        rowKey={(w) => w.id}
-        onRowClick={(w) => setSelectedWallet(w)}
-        pageSize={pageSize}
-        currentPage={page}
-        onPageChange={setPage}
-        emptyMessage="No wallets found."
-      />
+            <div>
+              <label
+                htmlFor="wallet-pool"
+                className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
+              >
+                Pool
+              </label>
+              <select
+                id="wallet-pool"
+                aria-label="Filter by pool"
+                value={filters.pool}
+                onChange={(e) =>
+                  setFilters({
+                    pool: e.target.value as WalletPoolType | "",
+                    page: "1",
+                  })
+                }
+                className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              >
+                <option value="">All pools</option>
+                {REGISTRY_POOLS.map((p) => (
+                  <option key={p} value={p}>
+                    {REGISTRY_POOL_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="wallet-status"
+                className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
+              >
+                Status
+              </label>
+              <select
+                id="wallet-status"
+                aria-label="Filter by status"
+                value={filters.status}
+                onChange={(e) =>
+                  setFilters({
+                    status: e.target.value as "active" | "frozen" | "",
+                    page: "1",
+                  })
+                }
+                className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              >
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="frozen">Frozen</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="wallet-page-size"
+                className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
+              >
+                Rows
+              </label>
+              <select
+                id="wallet-page-size"
+                aria-label="Rows per page"
+                value={filters.pageSize}
+                onChange={(e) =>
+                  setFilters({ pageSize: e.target.value, page: "1" })
+                }
+                className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              >
+                {REGISTRY_PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasActive && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+
+          {loading ? (
+            <div
+              aria-busy="true"
+              aria-label="Loading wallets"
+              className="space-y-2"
+            >
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-12 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"
+                />
+              ))}
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              {hasActive ? (
+                <EmptyState
+                  variant="no_results"
+                  title="No wallets match these filters"
+                  description="Try a different search or clear the filters."
+                  action={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  variant="no_data"
+                  title="No wallets yet"
+                  description="Wallets appear here as users fund and transact."
+                />
+              )}
+            </div>
+          ) : (
+            <AdminDataTable
+              columns={columns}
+              data={paginated}
+              isLoading={false}
+              rowKey={(r) => r.id}
+              onRowClick={(r) => setSelectedId(r.id)}
+              emptyMessage="No wallets found."
+              caption="Wallets"
+              pageSize={pageSize}
+              currentPage={safePage}
+              totalCount={rows.length}
+              onPageChange={(p) => setFilters({ page: String(p) })}
+            />
+          )}
+        </>
+      )}
 
       <WalletDetailDrawer
-        wallet={selectedWallet}
-        onClose={() => setSelectedWallet(null)}
-        onAdjust={handleAdjust}
-        onToggleStatus={handleToggleStatus}
-      />
-
-      <WithdrawalRequestDetail
-        request={selectedRequest}
-        onClose={() => setSelectedRequest(null)}
-        onApprove={handleApproveWithdrawal}
-        onReject={handleRejectWithdrawal}
+        wallet={selected}
+        nowMs={nowMs}
+        onClose={() => setSelectedId(null)}
       />
     </div>
   );

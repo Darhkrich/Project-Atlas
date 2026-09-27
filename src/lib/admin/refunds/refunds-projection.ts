@@ -1,4 +1,8 @@
-import type { AtlasTreasury } from "@/lib/admin/types/atlas-treasury";
+export interface RefundsTreasurySnapshot {
+  balance: number;
+  currency: "GHS";
+  settlements?: unknown[];
+}
 import type {
   Refund,
   RefundAudience,
@@ -111,7 +115,7 @@ export function filterRefunds(
 
 export function projectRefundsSummary(
   refunds: Refund[],
-  treasury: AtlasTreasury,
+  treasury: RefundsTreasurySnapshot,
   nowMs: number
 ): RefundSummary {
   let volumeToday = 0;

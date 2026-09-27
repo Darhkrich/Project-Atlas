@@ -1,14 +1,12 @@
 // lib/admin/commissions/commission-mutations.ts
 //
 // Single write path for the admin commission store. Order settlement
-// calls recordOrderCommission on order creation, then
-// settleOrderCommission when the order completes. Refund approval calls
-// reverseOrderCommission. Failed orders call cancelOrderCommission.
+// calls recordOrderCommission then settleOrderCommission. Refund
+// approval calls reverseOrderCommission. Failed orders call
+// cancelOrderCommission.
 //
-// Payout runs batch paid commissions into outbound settlement runs.
-// createPayoutRun sums totalCommission across the selected rows; the
-// wallet balance check that guards against overdrawing is a backend
-// concern, noted as a Section 6 item.
+// Layer 3 A1: every mutation call writes one audit entry. The reversal
+// itself is audited here, not in the bridge.
 
 import type {
   CommissionAuditEntry,
@@ -31,6 +29,7 @@ import {
   reverseResellerCommission,
   type CommissionBridgeInput,
 } from "./reseller-commision-bridge";
+import { appendAuditEntry, type AuditActor } from "@/lib/domains/audit";
 
 export interface CommissionActor {
   name: string;
@@ -48,6 +47,10 @@ const SYSTEM_ACTOR: CommissionActor = {
   name: "System",
   email: "system@atlas.com",
 };
+
+function toAuditActor(actor: CommissionActor): AuditActor {
+  return { id: actor.email, name: actor.name, email: actor.email };
+}
 
 function makeAudit(input: {
   commissionId: string;
@@ -86,7 +89,7 @@ function toBridgeInput(row: ResellerCommission): CommissionBridgeInput {
 }
 
 // ---------------------------------------------------------------------------
-// Breakdown computation. The tier store is the source of rates.
+// Breakdown computation.
 // ---------------------------------------------------------------------------
 
 export interface CommissionBreakdown {
@@ -210,6 +213,19 @@ export function recordOrderCommission(
       at: nowIso,
     })
   );
+
+  appendAuditEntry({
+    action: "commission.create",
+    resourceType: "commission",
+    resourceId: row.id,
+    actor: toAuditActor(actor),
+    metadata: {
+      resellerId: input.resellerId,
+      orderId: input.orderId,
+      totalCommission: row.totalCommission,
+    },
+  });
+
   return { ok: true, commission: row };
 }
 
@@ -257,6 +273,19 @@ export function settleOrderCommission(
       at: nowIso,
     })
   );
+
+  appendAuditEntry({
+    action: "commission.settle",
+    resourceType: "commission",
+    resourceId: commissionId,
+    actor: toAuditActor(actor),
+    metadata: {
+      resellerId: row.resellerId,
+      netCredited: bridge.netCredited,
+      recoveryApplied: bridge.recoveryApplied,
+    },
+  });
+
   return { ok: true, commission: paid };
 }
 
@@ -300,6 +329,15 @@ export function cancelOrderCommission(
       at: nowIso,
     })
   );
+
+  appendAuditEntry({
+    action: "commission.cancel",
+    resourceType: "commission",
+    resourceId: commissionId,
+    actor: toAuditActor(actor),
+    metadata: { resellerId: row.resellerId, reason: trimmed },
+  });
+
   return { ok: true, commission: cancelled };
 }
 
@@ -358,6 +396,19 @@ export function reverseOrderCommission(
       at: nowIso,
     })
   );
+
+  appendAuditEntry({
+    action: "commission.reverse",
+    resourceType: "commission",
+    resourceId: commissionId,
+    actor: toAuditActor(actor),
+    metadata: {
+      resellerId: row.resellerId,
+      recoveryId: bridge.recoveryId,
+      reason: trimmed,
+    },
+  });
+
   return { ok: true, commission: finalRow };
 }
 
@@ -425,7 +476,18 @@ export function createPayoutRun(
     }));
   }
 
-  void actor;
+  appendAuditEntry({
+    action: "payout_run.create",
+    resourceType: "payout_run",
+    resourceId: run.id,
+    actor: toAuditActor(actor),
+    metadata: {
+      commissionCount: run.commissionIds.length,
+      resellerCount: run.resellerCount,
+      totalAmount: run.totalAmount,
+    },
+  });
+
   return { ok: true, payoutRun: run };
 }
 
@@ -444,7 +506,15 @@ export function completePayoutRun(
     status: "completed",
   }));
   if (!next) return { ok: false, error: "Payout run not found." };
-  void actor;
+
+  appendAuditEntry({
+    action: "payout_run.complete",
+    resourceType: "payout_run",
+    resourceId: payoutRunId,
+    actor: toAuditActor(actor),
+    metadata: { totalAmount: next.totalAmount },
+  });
+
   return { ok: true, payoutRun: next };
 }
 
@@ -469,6 +539,14 @@ export function failPayoutRun(
     failureReason: trimmed,
   }));
   if (!next) return { ok: false, error: "Payout run not found." };
-  void actor;
+
+  appendAuditEntry({
+    action: "payout_run.fail",
+    resourceType: "payout_run",
+    resourceId: payoutRunId,
+    actor: toAuditActor(actor),
+    metadata: { totalAmount: next.totalAmount, reason: trimmed },
+  });
+
   return { ok: true, payoutRun: next };
 }

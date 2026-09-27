@@ -14,10 +14,10 @@ import { SettingsField } from "@/components/admin/ui/settings-field";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
 import {
-  ALL_PLAN_CODES,
+  getAllPlanCodes,
+  planCodeLabelFor,
+  planCodeVariantFor,
   ALL_TEMPLATE_CATEGORIES,
-  PLAN_CODE_LABEL,
-  PLAN_CODE_VARIANT,
   TEMPLATE_CATEGORY_LABEL,
 } from "@/lib/admin/templates/template-labels";
 import { Badge } from "@/components/admin/ui/badge";
@@ -86,6 +86,8 @@ export function TemplateEditorModal({
   const [fieldError, setFieldError] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const planCodes = useMemo(() => getAllPlanCodes(), []);
+
   useEffect(() => {
     if (!open) return;
     setDraft(template ? draftFrom(template) : EMPTY_DRAFT);
@@ -139,7 +141,11 @@ export function TemplateEditorModal({
     <ModalShell
       open={open}
       onClose={onClose}
-      title={mode === "create" ? "Add template" : "Edit " + (template?.name ?? "template")}
+      title={
+        mode === "create"
+          ? "Add template"
+          : "Edit " + (template?.name ?? "template")
+      }
       description={
         mode === "create"
           ? "Define a new ecommerce template and the plans it is available to."
@@ -247,7 +253,7 @@ export function TemplateEditorModal({
             id="tpl-plans"
             className="flex flex-wrap gap-2 rounded-md border border-neutral-300 p-2 dark:border-neutral-700"
           >
-            {ALL_PLAN_CODES.map((code) => {
+            {planCodes.map((code) => {
               const active = draft.allowedPlans.includes(code);
               return (
                 <button
@@ -258,7 +264,7 @@ export function TemplateEditorModal({
                   className="rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                 >
                   <Badge
-                    variant={active ? PLAN_CODE_VARIANT[code] : "neutral"}
+                    variant={active ? planCodeVariantFor(code) : "neutral"}
                     size="sm"
                   >
                     {active && (
@@ -268,7 +274,7 @@ export function TemplateEditorModal({
                         className="mr-1 h-3 w-3"
                       />
                     )}
-                    {PLAN_CODE_LABEL[code]}
+                    {planCodeLabelFor(code)}
                   </Badge>
                 </button>
               );

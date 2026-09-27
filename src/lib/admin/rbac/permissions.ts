@@ -19,6 +19,12 @@ export const PERMISSIONS = {
   RESELLERS_NOTIFY: "resellers:notify",
   RESELLERS_PROMOTIONS_MANAGE: "resellers:promotions_manage",
   
+  
+  REVENUE_VIEW: "revenue:view",
+  REVENUE_EXPORT: "revenue:export",
+
+
+
   MERCHANTS_VIEW: "merchants:view",
   MERCHANTS_EDIT: "merchants:edit",
   MERCHANTS_SUSPEND: "merchants:suspend",
@@ -62,6 +68,8 @@ export const PERMISSIONS = {
   TREASURY_APPROVE: "treasury:approve",
   TREASURY_FUND: "treasury:fund",
   TREASURY_CONFIG: "treasury:config",
+  TREASURY_PROVIDER_PAYOUT: "treasury:provider_payout",
+  TREASURY_PROVIDER_PAYOUT_APPROVE: "treasury:provider_payout_approve",
 
   PAYMENTS_VIEW: "payments:view",
   PAYMENTS_REFUND: "payments:refund",
@@ -182,6 +190,17 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
         value: PERMISSIONS.RESELLERS_PROMOTIONS_MANAGE,
         label: "Manage reseller promotions",
       },
+    ],
+  },
+
+
+  {
+    module: "revenue",
+    label: "Revenue",
+    description: "Platform flows and financial health across all streams.",
+    permissions: [
+      { value: PERMISSIONS.REVENUE_VIEW, label: "View revenue" },
+      { value: PERMISSIONS.REVENUE_EXPORT, label: "Export revenue" },
     ],
   },
 
@@ -340,6 +359,8 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
         value: PERMISSIONS.WALLETS_CONFIG,
         label: "Configure wallet withdrawal rules",
       },
+      { value: PERMISSIONS.TREASURY_PROVIDER_PAYOUT, label: "Create provider payout batches" },
+      { value: PERMISSIONS.TREASURY_PROVIDER_PAYOUT_APPROVE, label: "Approve provider payout batches" },
     ],
   },
 
@@ -356,6 +377,8 @@ export const PERMISSION_MODULES: PermissionModuleGroup[] = [
       { value: PERMISSIONS.TREASURY_CONFIG, label: "Configure thresholds and reserve floor" },
     ],
   },
+
+  
 
   {
     module: "services",

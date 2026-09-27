@@ -191,9 +191,9 @@ export function PaymentDetailDrawer({
               <Row
                 label="Destination"
                 value={
-                  event.destinationSnapshot.provider +
+                  event.destinationProvider +
                   " " +
-                  event.destinationSnapshot.maskedAccount
+                  event.destinationMaskedLabel
                 }
               />
               <Row
@@ -248,7 +248,7 @@ export function PaymentDetailDrawer({
               )}
               <Row
                 label="Requested"
-                value={fmtRelative(event.createdAt, nowMs)}
+                value={fmtRelative(event.requestedAt, nowMs)}
               />
               {event.approvedAt && (
                 <Row label="Approved" value={formatAbsolute(event.approvedAt)} />

@@ -8,6 +8,7 @@ import type {
 } from "@/lib/domains/wallet/enums";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type NarrowVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
 export const LEDGER_KIND_LABEL: Record<
   StorefrontWalletLedgerEntry["kind"],
@@ -16,6 +17,7 @@ export const LEDGER_KIND_LABEL: Record<
   funding: "Wallet funding",
   purchase: "Purchase",
   refund: "Refund",
+  adjustment: "Admin adjustment",
 };
 
 export const LEDGER_KIND_VARIANT: Record<
@@ -25,6 +27,7 @@ export const LEDGER_KIND_VARIANT: Record<
   funding: "brand",
   purchase: "neutral",
   refund: "info",
+  adjustment: "brand",
 };
 
 export const FUNDING_STATUS_LABEL: Record<WalletFundingStatus, string> = {
@@ -33,7 +36,7 @@ export const FUNDING_STATUS_LABEL: Record<WalletFundingStatus, string> = {
   failed: "Failed",
 };
 
-export const FUNDING_STATUS_VARIANT: Record<WalletFundingStatus, Variant> = {
+export const FUNDING_STATUS_VARIANT: Record<WalletFundingStatus, NarrowVariant> = {
   successful: "success",
   pending: "warning",
   failed: "danger",
@@ -47,7 +50,7 @@ export const REFUND_STATUS_LABEL: Record<WalletWithdrawalStatus, string> = {
   rejected: "Not approved",
 };
 
-export const REFUND_STATUS_VARIANT: Record<WalletWithdrawalStatus, Variant> = {
+export const REFUND_STATUS_VARIANT: Record<WalletWithdrawalStatus, NarrowVariant> = {
   pending_admin: "warning",
   pending_processing: "info",
   completed: "success",
@@ -64,7 +67,7 @@ export const APPROVAL_REASON_LABEL: Record<WalletApprovalReason, string> = {
   detail_change_pending: "Verification in progress",
 };
 
-export const APPROVAL_REASON_VARIANT: Record<WalletApprovalReason, Variant> = {
+export const APPROVAL_REASON_VARIANT: Record<WalletApprovalReason, NarrowVariant> = {
   exceeds_threshold: "warning",
   insufficient_balance: "danger",
   daily_cap_reached: "warning",

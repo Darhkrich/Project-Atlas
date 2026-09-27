@@ -10,7 +10,7 @@ import { routes } from "@/lib/admin/routes";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { formatRelative, formatAbsolute } from "@/lib/shared/format";
 import { cn } from "@/lib/utils";
-import type { TreasuryEvent } from "@/lib/admin/types/treasury";
+import type { TreasuryEvent } from "@/lib/domains/treasury/types";
 import {
   TREASURY_KIND_LABELS,
   TREASURY_KIND_VARIANTS,
@@ -21,8 +21,8 @@ import {
   TREASURY_RECONCILIATION_LABELS,
   TREASURY_RECONCILIATION_VARIANTS,
   TREASURY_POOL_LABELS,
-} from "@/lib/admin/treasury/treasury-labels";
-import { isDualApprovalRequired } from "@/lib/admin/treasury/treasury-helpers";
+} from "@/lib/domains/treasury/labels";
+import { isDualApprovalRequired } from "@/lib/domains/treasury/helpers";
 
 interface TreasuryDetailDrawerProps {
   event: TreasuryEvent | null;

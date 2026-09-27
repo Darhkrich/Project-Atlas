@@ -1,9 +1,6 @@
 // lib/domains/wallet/merchant-money/projection.ts
 //
-// Pure projection functions over one merchant's wallet state. Every
-// function takes the state as input and returns a plain value. No store
-// reads, no side effects. Callers look up the state from the store
-// first, then project.
+// Pure projection functions over one merchant's wallet state.
 
 import type { WalletAutoApproveConfig, WalletApprovalReason } from "@/lib/domains/wallet/enums";
 import { computeWithdrawalTotal } from "@/lib/domains/wallet/fee";
@@ -30,10 +27,6 @@ import type {
 } from "./types";
 
 const THIRTY_DAYS_MS = 30 * 86_400_000;
-
-// ---------------------------------------------------------------------------
-// Delta helper. Shared by quick stats.
-// ---------------------------------------------------------------------------
 
 function computeDelta(
   current: number,
@@ -62,10 +55,6 @@ function startOfUtcDay(ms: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-// ---------------------------------------------------------------------------
-// Wallet view. Two wallets plus frozen flags.
-// ---------------------------------------------------------------------------
-
 export function projectWalletView(
   state: MerchantWalletState
 ): MerchantWalletView {
@@ -78,10 +67,6 @@ export function projectWalletView(
     mainFrozen: state.main.status === "frozen",
   };
 }
-
-// ---------------------------------------------------------------------------
-// Ledger rows. Filters by wallet type. Sorted newest first.
-// ---------------------------------------------------------------------------
 
 function describeLedgerEntry(entry: MerchantWalletLedgerEntry): {
   description: string;
@@ -154,6 +139,8 @@ export function projectLedgerRows(
       const { description, detail } = describeLedgerEntry(entry);
       const credit = isCreditKind(entry.kind);
       const row: MerchantLedgerRow = {
+        merchantId: state.billing.merchantId,
+        merchantName: state.billing.merchantName,
         id: entry.id,
         walletType: entry.walletType,
         kind: entry.kind,
@@ -213,10 +200,6 @@ export function projectLedgerRows(
   return rows;
 }
 
-// ---------------------------------------------------------------------------
-// Pending withdrawals and history.
-// ---------------------------------------------------------------------------
-
 export function projectPendingWithdrawals(
   state: MerchantWalletState
 ): MerchantPendingWithdrawalRow[] {
@@ -261,10 +244,6 @@ export function projectWithdrawalHistory(
       new Date(b.resolvedAt).getTime() - new Date(a.resolvedAt).getTime()
   );
 }
-
-// ---------------------------------------------------------------------------
-// Quick stats. Four metrics over a 30 day window with previous window.
-// ---------------------------------------------------------------------------
 
 export function projectQuickStats(
   state: MerchantWalletState,
@@ -323,12 +302,6 @@ export function projectQuickStats(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Billing summary. Plan charges live in the ledger as plan_charge entries.
-// nextChargeAmount and nextChargeDate are supplied by the caller because
-// the plan record lives outside this store.
-// ---------------------------------------------------------------------------
-
 export function projectBillingSummary(
   state: MerchantWalletState,
   autoPayEnabled: boolean,
@@ -363,10 +336,6 @@ export function projectBillingSummary(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Main summary. Customer payments and pending refunds.
-// ---------------------------------------------------------------------------
-
 export function projectMainSummary(
   state: MerchantWalletState
 ): MerchantMainSummary {
@@ -398,11 +367,6 @@ export function projectMainSummary(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Withdrawal amount bounds. Balance is already net of pending withdrawals
-// via derivation, so no double-subtract here.
-// ---------------------------------------------------------------------------
-
 export function deriveWithdrawAmountBounds(
   state: MerchantWalletState,
   config: WalletAutoApproveConfig
@@ -420,13 +384,6 @@ export function deriveWithdrawAmountBounds(
     total,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Auto-approve evaluation. Balance, threshold, destination change, daily
-// cap. Open disputes are not checked here because dispute state is
-// admin-owned and not part of the shared store. Callers that own dispute
-// state can add that check after this returns.
-// ---------------------------------------------------------------------------
 
 export function evaluateAutoApprove(
   state: MerchantWalletState,

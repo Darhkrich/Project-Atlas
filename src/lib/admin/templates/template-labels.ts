@@ -1,5 +1,5 @@
-import type { PlanCode } from "@/config/subscription-plans";
 import type { TemplateCategory } from "@/lib/admin/types/ecommerce-template";
+import { getPlans } from "@/lib/domains/subscriptions";
 
 type BadgeVariant =
   | "success"
@@ -37,26 +37,40 @@ export const ALL_TEMPLATE_CATEGORIES: TemplateCategory[] = [
   "other",
 ];
 
-export const PLAN_CODE_LABEL: Record<PlanCode, string> = {
+// Subscription plan codes are runtime strings. These maps lose key
+// exhaustiveness by design. Read via planCodeLabelFor / planCodeVariantFor
+// so a new plan without a hardcoded entry falls back cleanly.
+
+export const PLAN_CODE_LABEL: Record<string, string> = {
   starter: "Starter",
   growth: "Growth",
   pro: "Pro",
   enterprise: "Enterprise",
 };
 
-export const PLAN_CODE_VARIANT: Record<PlanCode, BadgeVariant> = {
+export const PLAN_CODE_VARIANT: Record<string, BadgeVariant> = {
   starter: "neutral",
   growth: "info",
   pro: "brand",
   enterprise: "success",
 };
 
-export const ALL_PLAN_CODES: PlanCode[] = [
-  "starter",
-  "growth",
-  "pro",
-  "enterprise",
-];
+export function planCodeLabelFor(code: string): string {
+  return PLAN_CODE_LABEL[code] ?? code;
+}
+
+export function planCodeVariantFor(code: string): BadgeVariant {
+  return PLAN_CODE_VARIANT[code] ?? "neutral";
+}
+
+/**
+ * Live list of plan codes. Derived from the store. Replaces the earlier
+ * hardcoded ALL_PLAN_CODES array, which did not update when plans were
+ * created or deleted.
+ */
+export function getAllPlanCodes(): string[] {
+  return getPlans().map((p) => p.code);
+}
 
 export const TEMPLATE_STATUS_LABEL = {
   active: "Active",

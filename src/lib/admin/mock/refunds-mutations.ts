@@ -1,4 +1,14 @@
-// Refund mutations. Layer 1 treasury writes are mock. No real money moves.
+// Refund mutations. Order refunds only. Wallet deposit refunds live on
+// each pool's own wallet-mutations file.
+//
+// Destination rule:
+//   - wallet: credit the payer's wallet. No treasury event.
+//   - original_rail: fire refund_rail_debit. No wallet credit.
+//
+// Order refund recipient map:
+//   direct           -> customer wallet
+//   storefront_user  -> storefront user wallet (compound key)
+//   reseller         -> reseller wallet
 
 import type { Order } from "../types/orders";
 import type {
@@ -8,36 +18,28 @@ import type {
   RefundReason,
   RefundSettlement,
 } from "../types/refund";
-import type { TreasuryEvent } from "../types/treasury";
 import {
   getRefunds,
   internalAppendRefund,
   internalReplaceRefund,
   notifyRefunds,
 } from "./refunds-store";
-import {
-  internalAppendEvent,
-  notifyTreasury,
-} from "./treasury-store";
 import { splitFor } from "../refunds/refunds-helpers";
-
-interface AuditEntry {
-  action: string;
-  refundId: string;
-  actor: string;
-  meta?: Record<string, unknown>;
-}
+import { appendAuditEntry } from "@/lib/domains/audit";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import type {
+  TreasuryActor,
+  TreasuryCounterparty,
+} from "@/lib/domains/treasury/types";
+import { creditCustomerWallet } from "@/lib/customer/wallet/wallet-mutations";
+import { creditResellerWallet } from "@/lib/reseller/wallet/wallet-mutations";
+import { creditStorefrontUserWallet } from "@/lib/domains/wallet/storefront-user-refund-mutations";
+import { walletIdFor } from "@/lib/domains/wallet/storefront-user-types";
 
 interface ActivityEntry {
   refundId: string;
   audience: Refund["audience"];
   message: string;
-}
-
-function writeAudit(entry: AuditEntry): void {
-  if (typeof console !== "undefined") {
-    console.warn("[admin-audit]", entry);
-  }
 }
 
 function writeActivity(entry: ActivityEntry): void {
@@ -94,9 +96,13 @@ function resellerForOrder(order: Order): { id: string; name: string } | null {
 
 function treasuryCounterpartyForRefund(
   refund: Refund
-): TreasuryEvent["counterparty"] {
+): TreasuryCounterparty {
   if (refund.audience === "direct") {
-    return { type: "customer", id: refund.customer.id, name: refund.customer.name };
+    return {
+      type: "customer",
+      id: refund.customer.id,
+      name: refund.customer.name,
+    };
   }
   if (refund.audience === "storefront_user") {
     return {
@@ -105,33 +111,58 @@ function treasuryCounterpartyForRefund(
       name: refund.customer.name,
     };
   }
-  return { type: "reseller", id: refund.customer.id, name: refund.customer.name };
+  return {
+    type: "reseller",
+    id: refund.customer.id,
+    name: refund.customer.name,
+  };
 }
 
-function buildTreasuryDebitEvent(
+function poolForRefund(
+  refund: Refund
+): "customer" | "storefront_user" | "reseller" {
+  if (refund.audience === "direct") return "customer";
+  if (refund.audience === "storefront_user") return "storefront_user";
+  return "reseller";
+}
+
+// Resolves the destination wallet ID for a refund. Only storefront_user
+// needs the compound key. Returns null when the required identity is
+// missing (legacy seeds without storefrontId).
+function destinationWalletIdFor(refund: Refund): string | null {
+  if (refund.audience === "storefront_user") {
+    if (!refund.storefrontId) return null;
+    return walletIdFor(refund.storefrontId, refund.customer.id);
+  }
+  return refund.customer.id;
+}
+
+function creditWalletForRefund(
   refund: Refund,
-  settledAt: string
-): TreasuryEvent {
-  return {
-    id: newId("AT"),
-    kind: "refund_rail_debit",
-    direction: "out",
-    amount: refund.amount,
-    currency: "GHS",
-    counterparty: treasuryCounterpartyForRefund(refund),
-    reference: refund.id,
-    description: "Refund payout for " + refund.order.orderId,
-    approvalStatus: "auto",
-    reconciliationStatus: "unmatched",
-    relatedEventId: refund.id,
-    createdAt: settledAt,
-    createdBy: {
-      id: "system",
-      name: "System",
-      email: "system@atlas.com",
-    },
-    settledAt,
-  };
+  actor: TreasuryActor
+): { ok: true } | { ok: false; reason: string } {
+  if (refund.audience === "direct") {
+    creditCustomerWallet(refund.id, refund.customer.id, refund.amount, actor);
+    return { ok: true };
+  }
+  if (refund.audience === "reseller") {
+    creditResellerWallet(refund.id, refund.customer.id, refund.amount, actor);
+    return { ok: true };
+  }
+  const walletId = destinationWalletIdFor(refund);
+  if (!walletId) {
+    return { ok: false, reason: "storefrontId missing on refund" };
+  }
+  const result = creditStorefrontUserWallet(
+    refund.id,
+    walletId,
+    refund.amount,
+    actor
+  );
+  if (!result.ok) {
+    return { ok: false, reason: result.error ?? "credit failed" };
+  }
+  return { ok: true };
 }
 
 export interface CreateRequestedRefundInput {
@@ -182,6 +213,8 @@ export function createRequestedRefund(
     },
     customer,
     reseller,
+    storefrontId:
+      audience === "storefront_user" ? input.order.storefrontId : undefined,
     amount: input.amount,
     settlements: [],
     atlasShareAmount: split.atlasShareAmount,
@@ -205,11 +238,12 @@ export function createRequestedRefund(
 
   internalAppendRefund(refund);
 
-  writeAudit({
+  appendAuditEntry({
     action: "refund.create_requested",
-    refundId,
-    actor: actor.email,
-    meta: { orderId: input.order.id, amount: input.amount },
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { orderId: input.order.id, amount: input.amount },
   });
   writeActivity({
     refundId,
@@ -252,10 +286,11 @@ export function approveRefund(
 
   internalReplaceRefund(refundId, next);
 
-  writeAudit({
+  appendAuditEntry({
     action: "refund.approve",
-    refundId,
-    actor: actor.email,
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
   });
   writeActivity({
     refundId,
@@ -306,11 +341,12 @@ export function rejectRefund(
 
   internalReplaceRefund(refundId, next);
 
-  writeAudit({
+  appendAuditEntry({
     action: "refund.reject",
-    refundId,
-    actor: actor.email,
-    meta: { reason: trimmed },
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { reason: trimmed },
   });
   writeActivity({
     refundId,
@@ -353,16 +389,59 @@ export function processRefund(
     actor,
   };
 
-  const treasuryEvent = buildTreasuryDebitEvent(refund, nowIso);
-
   const needsRecovery =
     refund.resellerShareAmount > 0 && refund.reseller !== null;
+
+  let atlasTreasuryDebitId: string | undefined;
+
+  if (destination === "wallet") {
+    const creditResult = creditWalletForRefund(refund, actor);
+    if (!creditResult.ok) {
+      writeActivity({
+        refundId,
+        audience: refund.audience,
+        message:
+          "Wallet credit skipped (" +
+          creditResult.reason +
+          "). Falling back to rail debit.",
+      });
+      const event = emitLedgerEvent({
+        kind: "refund_rail_debit",
+        direction: "out",
+        amount: refund.amount,
+        poolType: poolForRefund(refund),
+        ownerId: refund.customer.id,
+        counterparty: treasuryCounterpartyForRefund(refund),
+        reference: refund.id,
+        description: "Refund payout for " + refund.order.orderId,
+        actor,
+        relatedEventId: refund.id,
+        settledAt: nowIso,
+      });
+      atlasTreasuryDebitId = event.id;
+    }
+  } else {
+    const event = emitLedgerEvent({
+      kind: "refund_rail_debit",
+      direction: "out",
+      amount: refund.amount,
+      poolType: poolForRefund(refund),
+      ownerId: refund.customer.id,
+      counterparty: treasuryCounterpartyForRefund(refund),
+      reference: refund.id,
+      description: "Refund payout for " + refund.order.orderId,
+      actor,
+      relatedEventId: refund.id,
+      settledAt: nowIso,
+    });
+    atlasTreasuryDebitId = event.id;
+  }
 
   const next: Refund = {
     ...refund,
     status: "completed",
     completedAt: nowIso,
-    atlasTreasuryDebitId: treasuryEvent.id,
+    atlasTreasuryDebitId,
     settlements: [...refund.settlements, settlement],
     resellerRecovery: needsRecovery
       ? {
@@ -386,13 +465,13 @@ export function processRefund(
   };
 
   internalReplaceRefund(refundId, next);
-  internalAppendEvent(treasuryEvent);
 
-  writeAudit({
+  appendAuditEntry({
     action: "refund.process",
-    refundId,
-    actor: actor.email,
-    meta: { amount: refund.amount, destination },
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { amount: refund.amount, destination },
   });
   writeActivity({
     refundId,
@@ -400,7 +479,6 @@ export function processRefund(
     message: "Refund settled to " + destination,
   });
   notifyRefunds();
-  notifyTreasury();
 
   return { ok: true, refund: next };
 }
@@ -422,6 +500,12 @@ export function runAutomaticRefund(order: Order): RefundMutationResult {
   const amount = order.walletDebit.amount;
   const split = splitFor(audience, amount);
 
+  const systemActor = {
+    id: "system",
+    name: "System",
+    email: "system@atlas.com",
+  };
+
   const settlement: RefundSettlement = {
     id: settlementId,
     amount,
@@ -429,7 +513,7 @@ export function runAutomaticRefund(order: Order): RefundMutationResult {
     destination: "wallet",
     destinationDetail: "Wallet credit",
     walletId: order.walletDebit.walletId,
-    actor: { id: "system", name: "System", email: "system@atlas.com" },
+    actor: systemActor,
   };
 
   const needsRecovery = split.resellerShareAmount > 0 && reseller !== null;
@@ -449,6 +533,8 @@ export function runAutomaticRefund(order: Order): RefundMutationResult {
     },
     customer,
     reseller,
+    storefrontId:
+      audience === "storefront_user" ? order.storefrontId : undefined,
     amount,
     settlements: [settlement],
     atlasShareAmount: split.atlasShareAmount,
@@ -473,29 +559,46 @@ export function runAutomaticRefund(order: Order): RefundMutationResult {
         status: "success",
         timestamp: nowIso,
         label: "Automatic refund issued",
-        actor: { id: "system", name: "System", email: "system@atlas.com" },
+        actor: systemActor,
       },
       {
         type: "settled",
         status: "success",
         timestamp: nowIso,
         label: "Settled",
-        actor: { id: "system", name: "System", email: "system@atlas.com" },
+        actor: systemActor,
       },
     ],
   };
 
-  const treasuryEvent = buildTreasuryDebitEvent(refund, nowIso);
-  refund.atlasTreasuryDebitId = treasuryEvent.id;
+  // Wallet credit. Falls back to rail debit when storefrontId is
+  // unavailable (legacy seeds).
+  const creditResult = creditWalletForRefund(refund, systemActor);
+  if (!creditResult.ok) {
+    const event = emitLedgerEvent({
+      kind: "refund_rail_debit",
+      direction: "out",
+      amount,
+      poolType: poolForRefund(refund),
+      ownerId: customer.id,
+      counterparty: treasuryCounterpartyForRefund(refund),
+      reference: refundId,
+      description: "Automatic refund for " + order.id,
+      actor: systemActor,
+      relatedEventId: refundId,
+      settledAt: nowIso,
+    });
+    refund.atlasTreasuryDebitId = event.id;
+  }
 
   internalAppendRefund(refund);
-  internalAppendEvent(treasuryEvent);
 
-  writeAudit({
+  appendAuditEntry({
     action: "refund.automatic",
-    refundId,
-    actor: "system@atlas.com",
-    meta: { orderId: order.id, amount },
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: systemActor,
+    metadata: { orderId: order.id, amount },
   });
   writeActivity({
     refundId,
@@ -503,7 +606,6 @@ export function runAutomaticRefund(order: Order): RefundMutationResult {
     message: "Automatic refund issued for " + order.id,
   });
   notifyRefunds();
-  notifyTreasury();
 
   return { ok: true, refund };
 }

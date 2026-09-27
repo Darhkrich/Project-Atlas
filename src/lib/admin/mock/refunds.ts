@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type {
   CustomerRefundHistoryItem,
   Refund,
@@ -72,7 +73,7 @@ export function mockRefundsSeed(): Refund[] {
         orderId: "ATX-983795",
         serviceId: "svc-mtn-data",
         providerId: "prov-mtn-gh",
-        paymentMethodId: "mobile_money",
+        paymentMethodId: "momo",
         amount: 120,
         createdAt: ago(12 * DAY),
       },
@@ -228,7 +229,7 @@ export function mockRefundsSeed(): Refund[] {
         orderId: "ATX-983740",
         serviceId: "svc-waec",
         providerId: "prov-waec",
-        paymentMethodId: "mobile_money",
+        paymentMethodId: "momo",
         amount: 80,
         createdAt: ago(1 * DAY + 10 * HOUR),
       },
@@ -372,7 +373,7 @@ export function mockRefundsSeed(): Refund[] {
         orderId: "ATX-983660",
         serviceId: "svc-gotv",
         providerId: "prov-multichoice",
-        paymentMethodId: "bank_transfer",
+        paymentMethodId: "bank",
         amount: 500,
         createdAt: ago(6 * DAY),
       },

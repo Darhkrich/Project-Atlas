@@ -27,6 +27,8 @@ export type WalletOwnerTypeFilter = "" | QueueOwnerType;
 export const WALLET_OWNER_TYPE_FILTERS: QueueOwnerType[] = [
   "customer",
   "storefront_user",
+  "reseller",
+  "merchant",
 ];
 
 export type WalletQueueView =
@@ -74,9 +76,12 @@ export const WALLET_APPROVAL_THRESHOLD_BOUNDS = {
   max: 100_000,
 } as const;
 
+// Locked rate is 0.5. Cap the configurable range at 1 percent, not 10.
+// The earlier bound was twenty times the locked rate and permitted a
+// misconfiguration that would silently change Atlas revenue.
 export const WALLET_FEE_PERCENT_BOUNDS = {
   min: 0,
-  max: 10,
+  max: 1,
 } as const;
 
 export const WALLET_DAILY_CAP_BOUNDS = {

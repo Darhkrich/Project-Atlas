@@ -182,21 +182,21 @@ function pickPaymentMethod(
   const roll = rng();
   if (audience === "direct") {
     if (roll < 0.4) return "wallet";
-    if (roll < 0.65) return "mobile_money";
+    if (roll < 0.65) return "momo";
     if (roll < 0.85) return "card";
-    if (roll < 0.95) return "bank_transfer";
+    if (roll < 0.95) return "bank";
     return "atlas_points";
   }
   if (audience === "storefront_user") {
     if (roll < 0.55) return "wallet";
-    if (roll < 0.9) return "mobile_money";
+    if (roll < 0.9) return "momo";
     return "card";
   }
   // reseller
   if (roll < 0.5) return "wallet";
-  if (roll < 0.7) return "mobile_money";
+  if (roll < 0.7) return "momo";
   if (roll < 0.9) return "card";
-  return "bank_transfer";
+  return "bank";
 }
 function walletIdFor(owner: OrderWalletOwner, rng: () => number): string {
   if (owner === "customer") return "W-" + randInt(rng, 10000, 99999);

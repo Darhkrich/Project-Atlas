@@ -87,7 +87,7 @@ export const VELOCITY_TREND_VARIANT: Record<VelocityTrend, BadgeVariant> = {
   unknown: "neutral",
 };
 
-export const PLAN_PIE_COLORS: Record<PlanCode, string> = {
+export const PLAN_PIE_COLORS: Record<string, string> = {
   starter: "#94a3b8",
   growth: "#3b82f6",
   pro: "#166e59",

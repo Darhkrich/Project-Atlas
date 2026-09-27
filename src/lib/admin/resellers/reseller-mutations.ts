@@ -1,3 +1,5 @@
+// lib/admin/resellers/reseller-mutations.ts
+
 import type {
   Reseller,
   ResellerActivityEntry,
@@ -11,11 +13,14 @@ import { getTierById } from "@/lib/admin/mock/reseller-tier-store";
 import { formatCurrency } from "@/lib/admin/formatters";
 import {
   applyAdminWalletAdjustment,
+  freezeResellerWallet as freezeResellerWalletPublic,
+  unfreezeResellerWallet as unfreezeResellerWalletPublic,
   type ResellerAdjustmentMethod,
 } from "@/lib/reseller/wallet/wallet-mutations";
 import { internalEnsureResellerWallet } from "@/lib/reseller/mock/wallet-store";
 
 export interface ResellerActor {
+  id: string;
   name: string;
   email: string;
 }
@@ -132,14 +137,14 @@ export function rejectResellerVerification(
 
 export function adjustResellerWallet(
   id: string,
+  businessName: string,
   amount: number,
   reason: string,
-  _method: string,
   actor: ResellerActor
 ): MutationResult {
   const trimmed = reason.trim();
-  if (trimmed.length < 8) {
-    return { ok: false, error: "Reason must be at least 8 characters." };
+  if (trimmed.length < 10) {
+    return { ok: false, error: "Reason must be at least 10 characters." };
   }
   if (!Number.isFinite(amount) || amount === 0) {
     return { ok: false, error: "Amount must be non-zero." };
@@ -148,10 +153,11 @@ export function adjustResellerWallet(
   const method: ResellerAdjustmentMethod = "atlas_wallet";
   const adjustResult = applyAdminWalletAdjustment({
     resellerId: id,
+    resellerName: businessName,
     amount,
     reason: trimmed,
     method,
-    actor: { name: actor.name, email: actor.email },
+    actor: { id: actor.id, name: actor.name, email: actor.email },
   });
 
   if (!adjustResult.ok) {
@@ -174,6 +180,47 @@ export function adjustResellerWallet(
 
   return result
     ? { ok: true, reseller: result }
+    : { ok: false, error: "Reseller not found." };
+}
+
+export function freezeResellerWallet(
+  id: string,
+  reason: string,
+  actor: ResellerActor
+): MutationResult {
+  const result = freezeResellerWalletPublic(id, reason, {
+    id: actor.id,
+    name: actor.name,
+    email: actor.email,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "Could not freeze wallet." };
+  }
+  const patched = applyResellerPatch(id, (r) =>
+    withLogsAndPatch(r, "Wallet frozen. " + reason.trim(), actor, {})
+  );
+  return patched
+    ? { ok: true, reseller: patched }
+    : { ok: false, error: "Reseller not found." };
+}
+
+export function unfreezeResellerWallet(
+  id: string,
+  actor: ResellerActor
+): MutationResult {
+  const result = unfreezeResellerWalletPublic(id, {
+    id: actor.id,
+    name: actor.name,
+    email: actor.email,
+  });
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "Could not unfreeze wallet." };
+  }
+  const patched = applyResellerPatch(id, (r) =>
+    withLogsAndPatch(r, "Wallet unfrozen.", actor, {})
+  );
+  return patched
+    ? { ok: true, reseller: patched }
     : { ok: false, error: "Reseller not found." };
 }
 

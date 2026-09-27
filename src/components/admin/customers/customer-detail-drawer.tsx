@@ -1,4 +1,3 @@
-// components/admin/customers/customer-detail-drawer.tsx
 "use client";
 
 import Link from "next/link";
@@ -25,12 +24,13 @@ import {
   RISK_VARIANT,
   STATUS_VARIANT,
 } from "@/lib/admin/customers/constants";
+import { useCustomerWallet } from "@/lib/admin/hooks/use-customer-wallet";
 import {
   NotifyModal,
   SuspendModal,
   WalletAdjustModal,
+  WalletFreezeModal,
 } from "./customer-action-modals";
-import type { WalletAdjustMethod } from "@/lib/admin/customers/constants";
 
 type Tab = "overview" | "financial" | "activity" | "preferences" | "usage";
 
@@ -45,12 +45,9 @@ const TABS: { key: Tab; label: string }[] = [
 interface CustomerDetailDrawerProps {
   customer: Customer | null;
   onClose: () => void;
-  onAdjustWallet: (
-    id: string,
-    amount: number,
-    reason: string,
-    method: WalletAdjustMethod
-  ) => void;
+  onAdjustWallet: (id: string, amount: number, reason: string) => void;
+  onFreezeWallet: (id: string, reason: string) => void;
+  onUnfreezeWallet: (id: string) => void;
   onAddTag: (id: string, tag: string) => void;
   onRemoveTag: (id: string, tag: string) => void;
   onSuspend: (id: string, reason: string) => void;
@@ -68,6 +65,8 @@ export function CustomerDetailDrawer({
   customer,
   onClose,
   onAdjustWallet,
+  onFreezeWallet,
+  onUnfreezeWallet,
   onAddTag,
   onRemoveTag,
   onSuspend,
@@ -102,6 +101,8 @@ export function CustomerDetailDrawer({
         titleId={titleId}
         onClose={onClose}
         onAdjustWallet={onAdjustWallet}
+        onFreezeWallet={onFreezeWallet}
+        onUnfreezeWallet={onUnfreezeWallet}
         onAddTag={onAddTag}
         onRemoveTag={onRemoveTag}
         onSuspend={onSuspend}
@@ -118,12 +119,9 @@ interface BodyProps {
   customer: Customer;
   titleId: string;
   onClose: () => void;
-  onAdjustWallet: (
-    id: string,
-    amount: number,
-    reason: string,
-    method: WalletAdjustMethod
-  ) => void;
+  onAdjustWallet: (id: string, amount: number, reason: string) => void;
+  onFreezeWallet: (id: string, reason: string) => void;
+  onUnfreezeWallet: (id: string) => void;
   onAddTag: (id: string, tag: string) => void;
   onRemoveTag: (id: string, tag: string) => void;
   onSuspend: (id: string, reason: string) => void;
@@ -142,6 +140,8 @@ function CustomerDetailBody({
   titleId,
   onClose,
   onAdjustWallet,
+  onFreezeWallet,
+  onUnfreezeWallet,
   onAddTag,
   onRemoveTag,
   onSuspend,
@@ -151,14 +151,19 @@ function CustomerDetailBody({
   onResetPassword,
 }: BodyProps) {
   const now = useNow();
+  const { wallet } = useCustomerWallet(customer.id);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [showSensitive, setShowSensitive] = useState(false);
   const [showRevealConfirm, setShowRevealConfirm] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [freezeOpen, setFreezeOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [newTag, setNewTag] = useState("");
+
+  const isFrozen = wallet?.status === "frozen";
+  const displayBalance = wallet ? wallet.balance : customer.walletBalance;
 
   const handleAddTag = () => {
     const trimmed = newTag.trim();
@@ -204,6 +209,11 @@ function CustomerDetailBody({
         <Badge variant="info" size="sm">
           Source: {customer.source}
         </Badge>
+        {isFrozen && (
+          <Badge variant="warning" size="sm">
+            Wallet frozen
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
@@ -230,6 +240,12 @@ function CustomerDetailBody({
           className="text-brand-700 hover:underline dark:text-brand-300"
         >
           Security
+        </Link>
+        <Link
+          href={`${routes.wallets}?q=${encodeURIComponent(customer.id)}`}
+          className="text-brand-700 hover:underline dark:text-brand-300"
+        >
+          Wallet
         </Link>
       </div>
 
@@ -479,11 +495,18 @@ function CustomerDetailBody({
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Wallet
-                </p>
+                <div className="flex items-center justify-between gap-1">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Wallet
+                  </p>
+                  {isFrozen && (
+                    <Badge variant="warning" size="sm">
+                      Frozen
+                    </Badge>
+                  )}
+                </div>
                 <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                  {formatCurrency(customer.walletBalance)}
+                  {formatCurrency(displayBalance)}
                 </p>
               </div>
               <div className="rounded-md bg-neutral-50 p-3 dark:bg-neutral-900">
@@ -505,13 +528,32 @@ function CustomerDetailBody({
             </div>
 
             <Can permission={PERMISSIONS.CUSTOMERS_WALLET}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setWalletOpen(true)}
-              >
-                Adjust wallet
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWalletOpen(true)}
+                >
+                  Adjust wallet
+                </Button>
+                {isFrozen ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onUnfreezeWallet(customer.id)}
+                  >
+                    Unfreeze wallet
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFreezeOpen(true)}
+                  >
+                    Freeze wallet
+                  </Button>
+                )}
+              </div>
             </Can>
 
             {customer.last6MonthsSpend.length > 0 && (
@@ -812,11 +854,21 @@ function CustomerDetailBody({
       <WalletAdjustModal
         open={walletOpen}
         customerName={customer.name}
-        currentBalance={customer.walletBalance}
+        currentBalance={displayBalance}
         onClose={() => setWalletOpen(false)}
-        onConfirm={(amount, reason, method) =>
-          onAdjustWallet(customer.id, amount, reason, method)
+        onConfirm={(amount, reason) =>
+          onAdjustWallet(customer.id, amount, reason)
         }
+      />
+
+      <WalletFreezeModal
+        open={freezeOpen}
+        customerName={customer.name}
+        onClose={() => setFreezeOpen(false)}
+        onConfirm={(reason) => {
+          onFreezeWallet(customer.id, reason);
+          setFreezeOpen(false);
+        }}
       />
 
       <SuspendModal

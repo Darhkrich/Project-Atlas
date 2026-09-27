@@ -1,399 +1,357 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { PricingSummaryCards } from "@/components/admin/pricing/pricing-summary-cards";
-import { PricingDetailDrawer } from "@/components/admin/pricing/pricing-detail-drawer";
-import { ServicePricingCard } from "@/components/admin/pricing/service-pricing-card";
-import { PlanPricingCard } from "@/components/admin/pricing/plan-pricing-card";
-import { PlanPricingSummaryCards } from "@/components/admin/pricing/plan-pricing-summary-cards";
-import { PlanPricingDetailDrawer } from "@/components/admin/pricing/plan-pricing-detail-drawer";
-import { CommissionRulesManager } from "@/components/admin/pricing/commission-rules-manager";
-import { SubscriptionPlansManager } from "@/components/admin/pricing/subscription-plans-manager";
 import { Button } from "@/components/admin/ui/button";
-import { Badge } from "@/components/admin/ui/badge";
-import { Input } from "@/components/admin/ui/input";
+import { EmptyState } from "@/components/admin/ui/empty-state";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
-import { ConfirmDialog } from "@/components/admin/ui/confirm-dialog";
-import { mockServicePricing } from "@/lib/admin/mock/pricing";
-import { mockPlanPricing } from "@/lib/admin/mock/plan-pricing";
+import { Card, CardContent } from "@/components/admin/ui/card";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
+import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
+import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
+import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
+import { downloadCsv } from "@/lib/admin/support/csv-export";
 import {
-  ServicePricing,
-  SERVICE_CATEGORIES,
-  SERVICE_STATUS_LABELS,
-} from "@/lib/admin/types/pricing";
-import { PlanPricing, PLAN_PRICING_STATUS_LABELS } from "@/lib/admin/types/plan-pricing";
-import { cn } from "@/lib/utils";
+  pricingRowsToCsv,
+  projectNetworkNames,
+  type PlanPricingRow,
+  type CatalogActor,
+} from "@/lib/domains/catalog";
+import {
+  CatalogPricingTabs,
+  CatalogPricingTabPanel,
+  type CatalogPricingTabKey,
+} from "@/components/admin/pricing/catalog-pricing-tabs";
+import { CatalogPricingSummaryCards } from "@/components/admin/pricing/catalog-pricing-summary-cards";
+import {
+  CatalogPricingFilters,
+  DEFAULT_CATALOG_PRICING_FILTERS,
+  type CatalogPricingFilterValues,
+} from "@/components/admin/pricing/catalog-pricing-filters";
+import { CatalogPricingTable } from "@/components/admin/pricing/catalog-pricing-table";
+import { CatalogPriceEditorModal } from "@/components/admin/pricing/catalog-price-editor-modal";
+import { CatalogPriceHistoryDrawer } from "@/components/admin/pricing/catalog-price-history-drawer";
 
-type Tab = "overview" | "plan_pricing" | "commission_rules" | "subscription_plans";
 
 export default function PricingPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [services, setServices] = useState<ServicePricing[]>([]);
-  const [plans, setPlans] = useState<PlanPricing[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedService, setSelectedService] = useState<ServicePricing | null>(null);
-  const [selectedPlan, setSelectedPlan] = useState<PlanPricing | null>(null);
-  const [confirmSaveService, setConfirmSaveService] = useState(false);
+  return (
+    <Suspense fallback={<PricingSkeleton />}>
+      <PricingPageInner />
+    </Suspense>
+  );
+}
 
-  // Service filters
-  const [serviceSearch, setServiceSearch] = useState("");
-  const [serviceCategoryFilter, setServiceCategoryFilter] = useState("");
-  const [serviceStatusFilter, setServiceStatusFilter] = useState("");
-  const [onlyLowMargin, setOnlyLowMargin] = useState(false);
+function PricingSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-64 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+      <div className="h-96 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800" />
+    </div>
+  );
+}
 
-  // Plan filters
-  const [planSearch, setPlanSearch] = useState("");
-  const [planCategoryFilter, setPlanCategoryFilter] = useState("");
-  const [planNetworkFilter, setPlanNetworkFilter] = useState("");
-  const [planStatusFilter, setPlanStatusFilter] = useState("");
+function PricingPageInner() {
+  const admin = useCurrentAdmin();
+  const { categories, pricingRows, loading, error } = useCatalog();
 
-  // Column visibility for plans
-  const [visiblePlanColumns, setVisiblePlanColumns] = useState<string[]>([
-    "planName",
-    "serviceCategory",
-    "network",
-    "atlasPrice",
-    "margin",
-    "status",
-  ]);
+  const [tab, setTab] = useState<CatalogPricingTabKey>("pricing");
+  const [editingRow, setEditingRow] = useState<PlanPricingRow | null>(null);
+  const [historyRow, setHistoryRow] = useState<PlanPricingRow | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const { filters, setFilters, clearFilters, hasActive } =
+    useUrlFilters<CatalogPricingFilterValues>(
+      DEFAULT_CATALOG_PRICING_FILTERS
+    );
 
-  // Load mock data
-  useEffect(() => {
-    setTimeout(() => {
-      setServices(mockServicePricing);
-      setPlans(mockPlanPricing);
-      setLoading(false);
-    }, 500);
-  }, []);
+  const debouncedSearch = useDebouncedValue(filters.q, 300);
 
-  // Filters for services
-  const filteredServices = services.filter((s) => {
-    if (serviceSearch && !s.serviceName.toLowerCase().includes(serviceSearch.toLowerCase())) return false;
-    if (serviceCategoryFilter && s.category !== serviceCategoryFilter) return false;
-    if (serviceStatusFilter && s.status !== serviceStatusFilter) return false;
-    if (onlyLowMargin) {
-      const marginPercent = ((s.atlasPrice - s.providerCost) / s.atlasPrice) * 100;
-      if (marginPercent >= 10) return false;
-    }
-    return true;
-  });
-
-  // Filters for plans
-  const filteredPlans = plans.filter((p) => {
-    if (planSearch && !p.planName.toLowerCase().includes(planSearch.toLowerCase())) return false;
-    if (planCategoryFilter && p.serviceCategory !== planCategoryFilter) return false;
-    if (planNetworkFilter && p.network !== planNetworkFilter) return false;
-    if (planStatusFilter && p.status !== planStatusFilter) return false;
-    return true;
-  });
-
-  // Paginated plans
-  const totalPlanPages = Math.ceil(filteredPlans.length / pageSize);
-  const paginatedPlans = filteredPlans.slice((page - 1) * pageSize, page * pageSize);
-
-  // Unique networks
-  const networks = Array.from(
-    new Set(plans.map((p) => p.network).filter(Boolean) as string[])
+  const categoryIds = useMemo(
+    () => categories.map((c) => c.id),
+    [categories]
+  );
+  const networkNames = useMemo(
+    () => projectNetworkNames(categories),
+    [categories]
   );
 
-  const handleSaveService = (updated: ServicePricing) => {
-    setServices((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    setConfirmSaveService(false);
-    setSelectedService(null);
-  };
-
-  const handleSavePlan = (
-    plan: PlanPricing,
-    changes: {
-      providerCost: number;
-      atlasPrice: number;
-      resellerPrice: number;
-      commissionRate: number;
-      status: "active" | "inactive";
-      reason: string;
+  const filteredRows = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
+    let list = pricingRows;
+    if (q) {
+      list = list.filter(
+        (r) =>
+          r.planName.toLowerCase().includes(q) ||
+          r.categoryName.toLowerCase().includes(q) ||
+          (r.network?.toLowerCase().includes(q) ?? false)
+      );
     }
-  ) => {
-    setPlans((prev) =>
-      prev.map((p) =>
-        p.id === plan.id
-          ? {
-              ...p,
-              providerCost: changes.providerCost,
-              atlasPrice: changes.atlasPrice,
-              resellerPrice: changes.resellerPrice,
-              commissionRate: changes.commissionRate,
-              status: changes.status,
-              lastUpdated: new Date().toISOString(),
-              updatedBy: "current_admin@atlas.com",
-            }
-          : p
-      )
-    );
-    setSelectedPlan(null);
+    if (filters.category) {
+      list = list.filter((r) => r.categoryId === filters.category);
+    }
+    if (filters.network) {
+      list = list.filter((r) => r.network === filters.network);
+    }
+    if (filters.status === "active") {
+      list = list.filter((r) => r.active);
+    } else if (filters.status === "inactive") {
+      list = list.filter((r) => !r.active);
+    }
+    if (filters.lowMargin === "1") {
+      list = list.filter((r) => r.marginPercent < 10);
+    }
+
+    const sortKey = filters.sort;
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sortKey) {
+        case "planName":
+          return a.planName.localeCompare(b.planName);
+        case "categoryName":
+          return a.categoryName.localeCompare(b.categoryName);
+        case "network":
+          return (a.network ?? "").localeCompare(b.network ?? "");
+        case "providerCost":
+          return a.providerCost - b.providerCost;
+        case "atlasPrice":
+          return a.atlasPrice - b.atlasPrice;
+        case "marginPercent":
+          return a.marginPercent - b.marginPercent;
+        case "status":
+          return a.status.localeCompare(b.status);
+        default:
+          return a.categoryName.localeCompare(b.categoryName);
+      }
+    });
+    return sorted;
+  }, [pricingRows, debouncedSearch, filters]);
+
+  const sortedDescending = filters.sort === "marginPercent";
+  const sortDirection: "asc" | "desc" = sortedDescending ? "desc" : "asc";
+
+  const page = Math.max(1, Number(filters.page) || 1);
+  const pageSize = Math.max(6, Number(filters.pageSize) || 24);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginated = useMemo(
+    () =>
+      filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filteredRows, safePage, pageSize]
+  );
+
+  const actor: CatalogActor | null = admin
+    ? { id: admin.id, name: admin.name, email: admin.email }
+    : null;
+
+  const handleSort = (key: string) => {
+    setFilters({ sort: key, page: "1" });
   };
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
-    console.log(`Export pricing as ${format}`);
+    if (format !== "csv") return;
+    const csv = pricingRowsToCsv(filteredRows);
+    downloadCsv(
+      "atlas-pricing-" + new Date().toISOString().slice(0, 10) + ".csv",
+      csv
+    );
   };
+
+  const headerMeta = useMemo(() => {
+    const total = pricingRows.length;
+    const active = pricingRows.filter((r) => r.active).length;
+    const inferred = pricingRows.filter((r) => r.providerCostInferred).length;
+    return (
+      <>
+        <span>{total} plans</span>
+        <span aria-hidden="true">·</span>
+        <span>{active} active</span>
+        {inferred > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="text-warning-700 dark:text-warning-300">
+              {inferred} inferred
+            </span>
+          </>
+        )}
+      </>
+    );
+  }, [pricingRows]);
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Pricing"
-        description="Price & Margin Control Center"
-        actions={<ExportMenu onExport={handleExport} />}
+        description="Prices, provider costs, and margins across the service catalog."
+        meta={headerMeta}
+        actions={<ExportMenu onExport={handleExport} formats={["csv"]} />}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto border-b border-neutral-200 dark:border-neutral-800">
-        {[
-          { key: "overview" as Tab, label: "Pricing Overview" },
-          { key: "plan_pricing" as Tab, label: "Plan Pricing" },
-          { key: "commission_rules" as Tab, label: "Commission Rules" },
-          { key: "subscription_plans" as Tab, label: "Subscription Plans" },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => {
-              setActiveTab(tab.key);
-              setPage(1);
-            }}
-            className={cn(
-              "whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium",
-              activeTab === tab.key
-                ? "border-brand-600 text-brand-600"
-                : "border-transparent text-neutral-500 hover:text-neutral-700"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <CatalogPricingTabs active={tab} onChange={setTab} />
 
-      {/* Overview Tab */}
-      {activeTab === "overview" && (
-        <>
-          <PricingSummaryCards
-            onFilterAll={() => {
-              setServiceCategoryFilter("");
-              setServiceStatusFilter("");
-              setOnlyLowMargin(false);
-            }}
-            onFilterLowMargin={() => {
-              setOnlyLowMargin(true);
-              setServiceCategoryFilter("");
-              setServiceStatusFilter("");
-            }}
-            onFilterInactive={() => {
-              setServiceStatusFilter("inactive");
-              setServiceCategoryFilter("");
-              setOnlyLowMargin(false);
-            }}
+      <CatalogPricingTabPanel tabKey="pricing" active={tab}>
+        <div className="space-y-4">
+          {error && (
+            <p
+              role="alert"
+              className="rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200"
+            >
+              {error.message}
+            </p>
+          )}
+
+          <CatalogPricingSummaryCards rows={pricingRows} />
+
+          <CatalogPricingFilters
+            value={filters}
+            onChange={(patch) => setFilters(patch)}
+            onClear={clearFilters}
+            hasActive={hasActive}
+            categoryIds={categoryIds}
+            networkNames={networkNames}
+            searchInputRef={searchInputRef}
           />
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              placeholder="Search services..."
-              className="max-w-xs"
-              value={serviceSearch}
-              onChange={(e) => setServiceSearch(e.target.value)}
-            />
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={serviceCategoryFilter}
-              onChange={(e) => setServiceCategoryFilter(e.target.value)}
-            >
-              <option value="">All Categories</option>
-              {SERVICE_CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={serviceStatusFilter}
-              onChange={(e) => setServiceStatusFilter(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="maintenance">Maintenance</option>
-            </select>
-            {onlyLowMargin && (
-              <button
-                onClick={() => setOnlyLowMargin(false)}
-                className="flex items-center gap-1 rounded-full bg-warning-100 px-3 py-1 text-xs font-medium text-warning-700 dark:bg-warning-900/40 dark:text-warning-300"
-              >
-                Low margin only ✕
-              </button>
-            )}
-          </div>
+          <p
+            aria-live="polite"
+            className="text-xs text-neutral-500 dark:text-neutral-400"
+          >
+            Showing {paginated.length} of {filteredRows.length} plans
+            {hasActive ? " (filtered)" : ""}
+          </p>
 
-          {/* Service Cards */}
           {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-56 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
-                />
-              ))}
-            </div>
-          ) : filteredServices.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-              <p className="text-sm text-neutral-500">No services match your filters.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredServices.map((service) => (
-                <ServicePricingCard
-                  key={service.id}
-                  service={service}
-                  onEdit={setSelectedService}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Plan Pricing Tab */}
-      {activeTab === "plan_pricing" && (
-        <>
-          <PlanPricingSummaryCards />
-
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              placeholder="Search plans..."
-              className="max-w-xs"
-              value={planSearch}
-              onChange={(e) => setPlanSearch(e.target.value)}
+            <div
+              aria-busy="true"
+              aria-label="Loading pricing"
+              className="h-96 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
             />
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={planCategoryFilter}
-              onChange={(e) => setPlanCategoryFilter(e.target.value)}
-            >
-              <option value="">All Services</option>
-              {SERVICE_CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={planNetworkFilter}
-              onChange={(e) => setPlanNetworkFilter(e.target.value)}
-            >
-              <option value="">All Networks</option>
-              {networks.map((net) => (
-                <option key={net} value={net}>
-                  {net}
-                </option>
-              ))}
-            </select>
-            <select
-              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800"
-              value={planStatusFilter}
-              onChange={(e) => setPlanStatusFilter(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </div>
-
-          {/* Plans grid */}
-          {loading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-48 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          ) : filteredRows.length === 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              {hasActive ? (
+                <EmptyState
+                  variant="no_results"
+                  title="No plans match these filters"
+                  description="Try a different search or clear the filters."
+                  action={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  }
                 />
-              ))}
-            </div>
-          ) : filteredPlans.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center dark:border-neutral-700">
-              <p className="text-sm text-neutral-500">No plans match your filters.</p>
+              ) : (
+                <EmptyState
+                  variant="no_data"
+                  title="No plans in the catalog"
+                  description="Add plans on the Data Plans or Services pages first."
+                  action={
+                    <Link
+                      href="/admin/data-plans"
+                      className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+                    >
+                      Open Data Plans
+                    </Link>
+                  }
+                />
+              )}
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {paginatedPlans.map((plan) => (
-                  <PlanPricingCard
-                    key={plan.id}
-                    plan={plan}
-                    onEdit={setSelectedPlan}
-                  />
-                ))}
-              </div>
+              <CatalogPricingTable
+                rows={paginated}
+                sortKey={filters.sort}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                onEdit={setEditingRow}
+                onViewHistory={setHistoryRow}
+                canManage={admin !== null}
+              />
 
-              {/* Pagination */}
-              {totalPlanPages > 1 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-neutral-500">
-                    Page {page} of {totalPlanPages} · {filteredPlans.length} plans
+              {totalPages > 1 && (
+                <nav
+                  aria-label="Pricing pagination"
+                  className=" ?flex flex-wrap items-center justify-between gap- input.category3"
+                >
+                  <span className=" :text-xs text-neutral-500 c dark:text-neutral-400">
+                    Page {safePage} of {totalPages} · {filteredRows.length} plans
                   </span>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={page <= 1}
-                      onClick={() => setPage(page - 1)}
+                      disabled={safePage <= 1}
+                      onClick={() =>
+                        setFilters({ page: String(safePage - 1) })
+                      }
                     >
                       Previous
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={page >= totalPlanPages}
-                      onClick={() => setPage(page + 1)}
+                      disabled={safePage >= totalPages}
+                      onClick={() =>
+                        setFilters({ page: String(safePage + 1) })
+                      }
                     >
                       Next
                     </Button>
                   </div>
-                </div>
+                </nav>
               )}
             </>
           )}
-        </>
-      )}
+        </div>
+      </CatalogPricingTabPanel>
 
-      {/* Commission Rules Tab */}
-      {activeTab === "commission_rules" && <CommissionRulesManager />}
+      <CatalogPricingTabPanel tabKey="tier_reference" active={tab}>
+        <Card>
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold">
+              Reseller tier commission rates
+            </h2>
+            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+              Tier definitions and per-category commission rates live on the
+              Reseller Tiers page. This page prices the catalog; that page
+              defines what resellers earn.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/admin/resellers/tiers"
+                className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+              >
+                Open Reseller Tiers
+              </Link>
+            </div>
+          </CardContent>
+        </Card> 
+      </CatalogPricingTabPanel>
 
-      {/* Subscription Plans Tab */}
-      {activeTab === "subscription_plans" && <SubscriptionPlansManager />}
+      <Can permission={PERMISSIONS.PRICING_MANAGE}>
+        <CatalogPriceEditorModal
+          open={editingRow !== null}
+          row={editingRow}
+          actor={actor}
+          onClose={() => setEditingRow(null)}
+        />
+      </Can>
 
-      {/* Drawers */}
-      <PricingDetailDrawer
-        service={selectedService}
-        onClose={() => setSelectedService(null)}
-      />
-
-      <PlanPricingDetailDrawer
-        plan={selectedPlan}
-        onClose={() => setSelectedPlan(null)}
-        onSave={handleSavePlan}
-      />
-
-      <ConfirmDialog
-        open={confirmSaveService}
-        title="Save Changes"
-        description="Are you sure you want to save these price changes?"
-        confirmLabel="Save"
-        onConfirm={() => setConfirmSaveService(false)}
-        onCancel={() => setConfirmSaveService(false)}
+      <CatalogPriceHistoryDrawer
+        open={historyRow !== null}
+        row={historyRow}
+        onClose={() => setHistoryRow(null)}
       />
     </div>
   );

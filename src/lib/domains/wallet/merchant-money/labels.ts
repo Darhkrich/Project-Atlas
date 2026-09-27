@@ -14,6 +14,7 @@ import type {
 } from "./types";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const MERCHANT_WALLET_TYPE_LABEL: Record<MerchantWalletType, string> = {
   billing: "Billing wallet",
@@ -39,7 +40,7 @@ export const MERCHANT_FUNDING_STATUS_LABEL: Record<
 
 export const MERCHANT_FUNDING_STATUS_VARIANT: Record<
   WalletFundingStatus,
-  Variant
+  StatusVariant
 > = {
   successful: "success",
   pending: "warning",
@@ -59,7 +60,7 @@ export const MERCHANT_WITHDRAWAL_STATUS_LABEL: Record<
 
 export const MERCHANT_WITHDRAWAL_STATUS_VARIANT: Record<
   WalletWithdrawalStatus,
-  Variant
+  StatusVariant
 > = {
   pending_admin: "warning",
   pending_processing: "info",
@@ -128,7 +129,7 @@ export const MERCHANT_APPROVAL_REASON_LABEL: Record<
 
 export const MERCHANT_APPROVAL_REASON_VARIANT: Record<
   WalletApprovalReason,
-  Variant
+  StatusVariant
 > = {
   exceeds_threshold: "warning",
   insufficient_balance: "danger",

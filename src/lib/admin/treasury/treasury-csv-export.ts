@@ -1,11 +1,11 @@
-import type { TreasuryEvent } from "@/lib/admin/types/treasury";
+import type { TreasuryEvent } from "@/lib/domains/treasury/types";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
 import {
   TREASURY_KIND_LABELS,
   TREASURY_DIRECTION_LABELS,
   TREASURY_APPROVAL_LABELS,
   TREASURY_RECONCILIATION_LABELS,
-} from "./treasury-labels";
+} from "@/lib/domains/treasury/labels";
 
 const HEADERS = [
   "Event ID",

@@ -1,20 +1,17 @@
-// lib/admin/commissions/reseller-commission-bridge.ts
+// lib/admin/commissions/reseller-commision-bridge.ts
 //
 // Bridge between the admin commission store and the shared reseller
 // wallet ledger. Called from commission mutations when a commission
 // settles (credit) or reverses (accrue recovery).
 //
-// Under the auto-credit model:
-//   - Settlement writes a commission entry to the wallet for the gross
-//     amount. If the reseller has outstanding recovery, an offsetting
-//     adjustment entry is written in the same call so the net credit
-//     matches what the reseller actually receives.
-//   - Reversal never touches the wallet. It accrues an outstanding
-//     recovery that is consumed from future commission credits.
+// Layer 2: the wallet credit is internal reclassification. Money already
+// inside Atlas. Amount is netCredited (what actually hits the wallet
+// after recovery).
 //
-// Placed on the admin side because it is only invoked from admin
-// commission mutations. It writes to the shared reseller wallet store,
-// which both admin and public read.
+// Layer 3 A1: one audit entry per credit call, matching the emit.
+//
+// Filename note: misspelled ("commision" not "commission"). Rename
+// deferred to cleanup.
 
 import {
   getOutstandingRecovery,
@@ -31,6 +28,9 @@ import type {
   ResellerAdjustmentLedgerEntry,
   ResellerCommissionLedgerEntry,
 } from "@/lib/reseller/types/wallet";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import type { TreasuryActor } from "@/lib/domains/treasury/types";
+import { appendAuditEntry } from "@/lib/domains/audit";
 
 export interface CommissionBridgeInput {
   id: string;
@@ -53,7 +53,11 @@ export interface BridgeResult {
   netCredited?: number;
 }
 
-const SYSTEM_ACTOR = { name: "System", email: "system@atlas.com" };
+const SYSTEM_ACTOR: TreasuryActor = {
+  id: "system",
+  name: "System",
+  email: "system@atlas.com",
+};
 
 export function creditResellerCommission(
   input: CommissionBridgeInput
@@ -75,7 +79,6 @@ export function creditResellerCommission(
 
   const nowIso = new Date().toISOString();
 
-  // Consume outstanding recovery FIFO before the credit lands.
   const consume = internalConsumeRecovery(input.resellerId, grossAmount);
   const recoveryApplied = consume.applied;
   const netCredited = consume.remaining;
@@ -91,8 +94,7 @@ export function creditResellerCommission(
     service: input.service,
     commissionRate:
       input.atlasPrice > 0
-        ? Math.round((input.baseCommission / input.atlasPrice) * 10000) /
-          100
+        ? Math.round((input.baseCommission / input.atlasPrice) * 10000) / 100
         : 0,
     grossOrderValue: input.atlasPrice,
     createdAt: nowIso,
@@ -100,8 +102,6 @@ export function creditResellerCommission(
   };
   internalAppendLedgerEntry(commissionEntry);
 
-  // If recovery was applied, write the offsetting adjustment so the net
-  // wallet impact matches what the reseller actually receives.
   if (recoveryApplied > 0) {
     const adjustmentEntry: ResellerAdjustmentLedgerEntry = {
       id: "RL-ADJ-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
@@ -110,8 +110,7 @@ export function creditResellerCommission(
       amount: -recoveryApplied,
       method: "atlas_wallet",
       reason:
-        "Commission recovery applied against reversed commission " +
-        input.id,
+        "Commission recovery applied against reversed commission " + input.id,
       actor: SYSTEM_ACTOR,
       createdAt: nowIso,
     };
@@ -122,6 +121,39 @@ export function creditResellerCommission(
     updatedAt: nowIso,
     lastCommissionAt: nowIso,
   });
+
+  if (netCredited > 0) {
+    emitLedgerEvent({
+      kind: "internal_reclassification",
+      direction: "internal",
+      amount: netCredited,
+      poolType: "reseller",
+      ownerId: input.resellerId,
+      counterparty: {
+        type: "reseller",
+        id: input.resellerId,
+        name: wallet.resellerName,
+      },
+      reference: input.id,
+      description: "Reseller commission credit for order " + input.orderId,
+      actor: SYSTEM_ACTOR,
+      settledAt: nowIso,
+    });
+
+    appendAuditEntry({
+      action: "commission.reseller.credit",
+      resourceType: "commission",
+      resourceId: input.id,
+      actor: SYSTEM_ACTOR,
+      metadata: {
+        resellerId: input.resellerId,
+        orderId: input.orderId,
+        grossAmount,
+        netCredited,
+        recoveryApplied,
+      },
+    });
+  }
 
   return {
     ok: true,
@@ -145,13 +177,10 @@ export function reverseResellerCommission(
       error: "Reversal reason must be at least 8 characters.",
     };
   }
-  // A commission that was never paid has nothing to recover.
   if (!input.paidAt) {
     return { ok: true, recoveryApplied: 0, netCredited: 0 };
   }
 
-  // Idempotency guard. If this commission already produced a recovery
-  // entry, do not accrue a second time.
   const existing = getRecoveryFor(input.resellerId).find(
     (e) => e.sourceCommissionId === input.id
   );
@@ -168,8 +197,6 @@ export function reverseResellerCommission(
   return { ok: true, recoveryId: entry.id };
 }
 
-export function getResellerOutstandingRecovery(
-  resellerId: string
-): number {
+export function getResellerOutstandingRecovery(resellerId: string): number {
   return getOutstandingRecovery(resellerId);
 }

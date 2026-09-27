@@ -124,7 +124,7 @@ export function SavedViews({
             className="px-1 text-xs text-neutral-400 hover:text-danger-600 dark:hover:text-danger-400"
             onClick={() => setDeleteTarget(view)}
           >
-            ×
+             x
           </button>
         </div>
       ))}

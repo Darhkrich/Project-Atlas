@@ -13,6 +13,8 @@ export const mockMerchantSubscriptions: MerchantSubscription[] = [
     billingCycle: "monthly",
     amountPaid: 400,
     lastPaymentDate: new Date(Date.now() - 86400000 * 2).toISOString(),
+    currency: "",
+    nextBillingDate: ""
   },
   {
     id: "SUB-002",
@@ -26,12 +28,14 @@ export const mockMerchantSubscriptions: MerchantSubscription[] = [
     billingCycle: "annual",
     amountPaid: 1500,
     lastPaymentDate: new Date(Date.now() - 86400000 * 10).toISOString(),
+    currency: "",
+    nextBillingDate: ""
   },
   {
     id: "SUB-003",
     merchantId: "MER-003",
     merchantName: "HomeEssentials",
-    planCode: "premium",
+    planCode: "pro",
     planName: "Premium",
     status: "past_due",
     startDate: new Date(Date.now() - 86400000 * 60).toISOString(),
@@ -39,6 +43,8 @@ export const mockMerchantSubscriptions: MerchantSubscription[] = [
     billingCycle: "monthly",
     amountPaid: 300,
     lastPaymentDate: new Date(Date.now() - 86400000 * 40).toISOString(),
+    currency: "",
+    nextBillingDate: ""
   },
   {
     id: "SUB-004",
@@ -52,6 +58,8 @@ export const mockMerchantSubscriptions: MerchantSubscription[] = [
     billingCycle: "monthly",
     amountPaid: 50,
     lastPaymentDate: new Date(Date.now() - 86400000 * 60).toISOString(),
+    currency: "",
+    nextBillingDate: ""
   },
   {
     id: "SUB-005",
@@ -65,11 +73,37 @@ export const mockMerchantSubscriptions: MerchantSubscription[] = [
     billingCycle: "annual",
     amountPaid: 1500,
     lastPaymentDate: new Date(Date.now() - 86400000 * 370).toISOString(),
+    currency: "",
+    nextBillingDate: ""
   },
 ];
 
 export const mockInvoices: Invoice[] = [
-  { id: "INV-001", subscriptionId: "SUB-001", amount: 400, date: new Date(Date.now() - 86400000 * 2).toISOString(), status: "paid" },
-  { id: "INV-002", subscriptionId: "SUB-002", amount: 1500, date: new Date(Date.now() - 86400000 * 10).toISOString(), status: "paid" },
-  { id: "INV-003", subscriptionId: "SUB-003", amount: 300, date: new Date(Date.now() - 86400000 * 40).toISOString(), status: "unpaid" },
+  {
+    id: "INV-001", subscriptionId: "SUB-001", amount: 400, date: new Date(Date.now() - 86400000 * 2).toISOString(), status: "paid",
+    merchantId: "",
+    merchantName: "",
+    currency: "",
+    dueDate: "",
+    periodStart: "",
+    periodEnd: ""
+  },
+  {
+    id: "INV-002", subscriptionId: "SUB-002", amount: 1500, date: new Date(Date.now() - 86400000 * 10).toISOString(), status: "paid",
+    merchantId: "",
+    merchantName: "",
+    currency: "",
+    dueDate: "",
+    periodStart: "",
+    periodEnd: ""
+  },
+  {
+    id: "INV-003", subscriptionId: "SUB-003", amount: 300, date: new Date(Date.now() - 86400000 * 40).toISOString(), status: "unpaid",
+    merchantId: "",
+    merchantName: "",
+    currency: "",
+    dueDate: "",
+    periodStart: "",
+    periodEnd: ""
+  },
 ];

@@ -302,8 +302,6 @@ function MerchantSfuPageInner() {
     );
   };
 
-  /* ------------------------------ Single actions ------------------- */
-
   const handleAddTag = (id: string, tag: string) => {
     updateUser(id, (u) => {
       if (u.tags.includes(tag)) return u;
@@ -332,10 +330,7 @@ function MerchantSfuPageInner() {
       const next: StorefrontUser = { ...u, segment };
       const withActivity: StorefrontUser = {
         ...next,
-        activityLog: appendActivity(
-          next,
-          `Segment changed to ${segment}`
-        ),
+        activityLog: appendActivity(next, `Segment changed to ${segment}`),
       };
       return applyAudit(
         withActivity,
@@ -438,8 +433,6 @@ function MerchantSfuPageInner() {
     });
   };
 
-  /* ------------------------------ Bulk ----------------------------- */
-
   const handleBulkSuspend = () => {
     setBulkIntent({ kind: "suspend", ids: selectedIds });
   };
@@ -513,10 +506,7 @@ function MerchantSfuPageInner() {
           const next: StorefrontUser = { ...u, status: "suspended" };
           const withActivity: StorefrontUser = {
             ...next,
-            activityLog: appendActivity(
-              next,
-              "Suspended via bulk action"
-            ),
+            activityLog: appendActivity(next, "Suspended via bulk action"),
           };
           return applyAudit(withActivity, "Suspended via bulk action");
         })
@@ -530,8 +520,6 @@ function MerchantSfuPageInner() {
     setBulkIntent(null);
   };
 
-  /* ------------------------------ Export --------------------------- */
-
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
     const csv = storefrontUsersToCsv(filtered, storefrontById);
@@ -542,8 +530,6 @@ function MerchantSfuPageInner() {
       csv
     );
   };
-
-  /* ---------------------------- Saved views ------------------------ */
 
   const handleSaveView = (name: string) => {
     const snapshot: Record<string, string> = {};
@@ -563,8 +549,8 @@ function MerchantSfuPageInner() {
     setFilters({ ...DEFAULT_FILTERS, ...view.filters, page: "1" });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+  const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
 
   const headerMeta = (

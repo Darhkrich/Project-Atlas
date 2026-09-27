@@ -1,5 +1,5 @@
-import type { Plan } from "@/lib/services-page-data";
-import { slugify } from "@/lib/admin/services/helpers";
+import type { Plan } from "@/lib/domains/catalog";
+import { slugify } from "@/lib/domains/catalog";
 import {
   HISTORY_CAP,
   IMPORT_MAX_ROWS,
@@ -10,16 +10,15 @@ import {
 export { slugify };
 
 /**
- * Plan IDs are scoped to a network via slug prefix. Two categories inside
- * the same network can still produce the same ID if they contain plans with
- * the same name. Enforce uniqueness at the call site (see PlanEditModal
- * existingPlanIds) by passing the full network plan ID set, not the
- * category set.
+ * Plan IDs are namespaced as `data:<networkSlug>-<nameSlug>`. This matches
+ * the catalog seed format (data:mtn-1gb-7d) so parsePlanId and findPlanById
+ * in the catalog domain resolve both seeded and newly created plans.
+ * Uniqueness is enforced by the caller through existingPlanIds.
  */
 export function dataPlanIdFor(name: string, networkName: string): string {
   const base = slugify(name) || "plan";
   const prefix = slugify(networkName);
-  return `${prefix}-${base}`;
+  return "data:" + prefix + "-" + base;
 }
 
 export interface PlanMargin {
@@ -42,8 +41,6 @@ export function marginBandFor(plan: Plan): MarginBand | null {
   if (!m) return null;
   return marginBand(m.percent);
 }
-
-/* ------------------------------ Filtering ------------------------------ */
 
 export type PlanFilter = "all" | "low-margin" | "inactive";
 
@@ -72,8 +69,6 @@ export function filterPlans(
     (p) => planMatchesSearch(p, q) && planMatchesFilter(p, filter)
   );
 }
-
-/* ------------------------------ Import ------------------------------ */
 
 export interface ImportRow {
   lineNumber: number;

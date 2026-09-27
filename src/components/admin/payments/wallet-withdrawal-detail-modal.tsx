@@ -5,23 +5,14 @@ import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { formatCurrency } from "@/lib/shared/format";
 import { formatAbsolute, formatRelative } from "@/lib/shared/format";
-import {
-  isCustomerQueueRow,
-  isStorefrontQueueRow,
-  type WalletWithdrawalQueueRow,
-} from "@/lib/admin/types/customer-wallet";
-import type {
-  CustomerWithdrawalHistoryEntry,
-  CustomerWithdrawalRequest,
-} from "@/lib/customer/types/wallet";
-import type { StorefrontRefundRequest } from "@/lib/domains/wallet/storefront-user-types";
+import type { WalletWithdrawalQueueRow } from "@/lib/admin/types/customer-wallet";
 import {
   APPROVAL_REASON_LABEL,
   APPROVAL_REASON_VARIANT,
+  PAYOUT_DIRECTION_LABEL,
   QUEUE_OWNER_TYPE_LABEL,
   QUEUE_OWNER_TYPE_VARIANT,
   WITHDRAWAL_FAILURE_LABEL,
-  maskSourceLabel,
 } from "@/lib/admin/wallets/wallet-labels";
 
 interface Props {
@@ -47,48 +38,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function CustomerSourceBlock({
-  raw,
-}: {
-  raw: CustomerWithdrawalRequest | CustomerWithdrawalHistoryEntry;
-}) {
-  return (
-    <>
-      <Row
-        label="Source payment"
-        value={<span className="font-mono text-xs">{raw.sourcePaymentId}</span>}
-      />
-      <Row label="Original amount" value={formatCurrency(raw.sourceAmount)} />
-    </>
-  );
-}
-
-function StorefrontSourceBlock({
-  raw,
-  nowMs,
-}: {
-  raw: StorefrontRefundRequest;
-  nowMs: number | null;
-}) {
-  const fundedLabel = nowMs
-    ? formatRelative(raw.sourceCreatedAt, nowMs)
-    : formatAbsolute(raw.sourceCreatedAt);
-  return (
-    <>
-      <Row
-        label="Source payment"
-        value={<span className="font-mono text-xs">{raw.sourcePaymentId}</span>}
-      />
-      <Row label="Original amount" value={formatCurrency(raw.sourceAmount)} />
-      <Row label="Funded" value={fundedLabel} />
-      <Row
-        label="Transaction ref"
-        value={<span className="font-mono text-xs">{raw.transactionRef}</span>}
-      />
-    </>
-  );
-}
-
 function RejectionBlock({ reason }: { reason: string }) {
   return (
     <section aria-label="Rejection">
@@ -109,7 +58,9 @@ function FailureBlock({ reason }: { reason: string }) {
         Failure
       </h3>
       <p className="rounded-md border border-danger-200 bg-danger-50 p-3 text-sm text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/20 dark:text-danger-200">
-        {WITHDRAWAL_FAILURE_LABEL[reason] ?? reason}
+        {WITHDRAWAL_FAILURE_LABEL[
+          reason as keyof typeof WITHDRAWAL_FAILURE_LABEL
+        ] ?? reason}
       </p>
     </section>
   );
@@ -202,18 +153,18 @@ export function WalletWithdrawalDetailModal({
           </div>
         </section>
 
-        <section aria-label="Refund source">
+        <section aria-label="Payout">
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-            Refund source
+            Payout
           </h3>
           <Row
-            label="Rail"
-            value={maskSourceLabel(row.sourceProvider, row.sourceMaskedLabel)}
+            label={PAYOUT_DIRECTION_LABEL[row.payoutDirection]}
+            value={row.payoutSummary}
           />
-          {isStorefrontQueueRow(row) && (
-            <StorefrontSourceBlock raw={row.raw} nowMs={nowMs} />
-          )}
-          {isCustomerQueueRow(row) && <CustomerSourceBlock raw={row.raw} />}
+          <Row
+            label="Reference"
+            value={<span className="font-mono text-xs">{row.payoutRef}</span>}
+          />
         </section>
 
         {row.approvalRequiredReasons.length > 0 && (

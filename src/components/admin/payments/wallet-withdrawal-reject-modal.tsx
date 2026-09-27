@@ -7,7 +7,10 @@ import { Button } from "@/components/admin/ui/button";
 import { Badge } from "@/components/admin/ui/badge";
 import { formatCurrency } from "@/lib/shared/format";
 import type { WalletWithdrawalQueueRow } from "@/lib/admin/types/customer-wallet";
-import { QUEUE_OWNER_TYPE_LABEL } from "@/lib/admin/wallets/wallet-labels";
+import {
+  PAYOUT_DIRECTION_LABEL,
+  QUEUE_OWNER_TYPE_LABEL,
+} from "@/lib/admin/wallets/wallet-labels";
 import { MIN_WALLET_REJECT_REASON_LENGTH } from "@/lib/admin/wallets/wallet-constants";
 
 interface Props {
@@ -64,17 +67,15 @@ export function WalletWithdrawalRejectModal({
             <span className="text-neutral-500 dark:text-neutral-400">
               Owner type
             </span>
-            <Badge variant={row.ownerType === "storefront_user" ? "info" : "brand"} size="sm">
+            <Badge variant="info" size="sm">
               {QUEUE_OWNER_TYPE_LABEL[row.ownerType]}
             </Badge>
           </div>
           <div className="flex items-center justify-between py-1">
             <span className="text-neutral-500 dark:text-neutral-400">
-              Rail
+              {PAYOUT_DIRECTION_LABEL[row.payoutDirection]}
             </span>
-            <span>
-              {row.sourceProvider} {row.sourceMaskedLabel}
-            </span>
+            <span>{row.payoutSummary}</span>
           </div>
           <div className="flex items-center justify-between py-1">
             <span className="text-neutral-500 dark:text-neutral-400">

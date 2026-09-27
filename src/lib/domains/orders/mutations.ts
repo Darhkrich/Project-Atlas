@@ -1,3 +1,5 @@
+// lib/domains/orders/mutations.ts
+
 import type {
   Order,
   OrderAudience,
@@ -9,6 +11,7 @@ import {
   internalAppendOrder,
   notify,
 } from "@/lib/admin/mock/orders-store";
+import { emitOrderSettled } from "./emit-order-settled";
 
 interface AuditEntry {
   action: string;
@@ -50,6 +53,10 @@ export interface RecordResellerOrderInput {
   paymentMethodId: PaymentMethodId;
   amount: number;
   walletDebit?: OrderWalletDebit;
+  // Provider cost from the catalog for this plan. Drives the treasury
+  // accrual into provider_settlement_pending. Null or omitted skips the
+  // accrual and logs the reason.
+  providerCost?: number;
 }
 
 export interface RecordResellerOrderResult {
@@ -132,6 +139,14 @@ export function recordResellerOrder(
   internalAppendOrder(order);
   notify();
 
+  emitOrderSettled({
+    order,
+    providerCost:
+      input.providerCost !== undefined && Number.isFinite(input.providerCost)
+        ? input.providerCost
+        : null,
+  });
+
   writeActivity({
     orderId,
     audience: input.audience,
@@ -145,6 +160,7 @@ export function recordResellerOrder(
       resellerId: input.resellerId,
       amount: input.amount,
       audience: input.audience,
+      providerCost: input.providerCost,
     },
   });
 

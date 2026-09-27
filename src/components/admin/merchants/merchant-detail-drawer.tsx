@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import {
   Merchant,
-  SubscriptionPlan,
+  MerchantSubscriptionPlanId,
   MERCHANT_STATUS_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
   STORE_STATUS_LABELS,
@@ -52,6 +52,9 @@ import {
   MerchantStoreToggleModal,
   MerchantSuspendModal,
   MerchantVerifyModal,
+  MerchantWalletAdjustModal,
+  MerchantWalletFreezeModal,
+  type MerchantWalletTypeLabel,
 } from "./merchant-action-modals";
 
 type Tab = "overview" | "subscription" | "store" | "users" | "activity";
@@ -66,11 +69,21 @@ const TABS: { key: Tab; label: string }[] = [
 
 type NotifyChannel = "email" | "sms" | "push";
 
+interface WalletSlice {
+  balance: number;
+  frozen: boolean;
+}
+
+export interface MerchantWalletPair {
+  billing: WalletSlice;
+  main: WalletSlice;
+}
+
 interface MerchantDetailDrawerProps {
   merchant: Merchant | null;
-  walletBalance: number;
+  walletPair: MerchantWalletPair;
   onClose: () => void;
-  onChangePlan: (id: string, planId: SubscriptionPlan) => void;
+  onChangePlan: (id: string, planId: MerchantSubscriptionPlanId) => void;
   onSuspend: (id: string, reason: string) => void;
   onReactivate: (id: string) => void;
   onToggleStore: (id: string) => void;
@@ -83,16 +96,29 @@ interface MerchantDetailDrawerProps {
     message: string
   ) => void;
   onResetSecurity: (id: string) => void;
+  onAdjustWallet: (
+    id: string,
+    walletType: MerchantWalletTypeLabel,
+    amount: number,
+    reason: string
+  ) => void;
+  onFreezeWallet: (
+    id: string,
+    walletType: MerchantWalletTypeLabel,
+    reason: string
+  ) => void;
+  onUnfreezeWallet: (
+    id: string,
+    walletType: MerchantWalletTypeLabel
+  ) => void;
 }
 
 export function MerchantDetailDrawer({
   merchant,
-  walletBalance,
-  onClose,
   ...rest
 }: MerchantDetailDrawerProps) {
   const isOpen = merchant !== null;
-  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, rest.onClose);
   const titleId = useId();
 
   if (!merchant) return null;
@@ -107,15 +133,13 @@ export function MerchantDetailDrawer({
     >
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={rest.onClose}
         aria-hidden="true"
       />
       <MerchantDetailBody
         key={merchant.id}
         merchant={merchant}
-        walletBalance={walletBalance}
         titleId={titleId}
-        onClose={onClose}
         {...rest}
       />
     </div>
@@ -130,7 +154,7 @@ interface BodyProps
 
 function MerchantDetailBody({
   merchant,
-  walletBalance,
+  walletPair,
   titleId,
   onClose,
   onChangePlan,
@@ -142,6 +166,9 @@ function MerchantDetailBody({
   onRejectVerification,
   onSendNotification,
   onResetSecurity,
+  onAdjustWallet,
+  onFreezeWallet,
+  onUnfreezeWallet,
 }: BodyProps) {
   const now = useNow();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -156,6 +183,10 @@ function MerchantDetailBody({
   >(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [walletAdjustTarget, setWalletAdjustTarget] =
+    useState<MerchantWalletTypeLabel | null>(null);
+  const [walletFreezeTarget, setWalletFreezeTarget] =
+    useState<MerchantWalletTypeLabel | null>(null);
 
   const storefront = useMemo(
     () =>
@@ -197,7 +228,6 @@ function MerchantDetailBody({
 
   return (
     <div className="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-white shadow-xl dark:bg-neutral-900">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
@@ -227,7 +257,6 @@ function MerchantDetailBody({
         </div>
       </div>
 
-      {/* Status strip */}
       <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <div className="flex items-center gap-1.5">
           <StatusDot
@@ -256,9 +285,17 @@ function MerchantDetailBody({
           {STORE_STATUS_LABELS[merchant.storeStatus]}
         </Badge>
         <Badge variant="info">{planLabel}</Badge>
+        {(walletPair.billing.frozen || walletPair.main.frozen) && (
+          <Badge variant="warning">
+            {walletPair.billing.frozen && walletPair.main.frozen
+              ? "Wallets frozen"
+              : walletPair.billing.frozen
+              ? "Billing frozen"
+              : "Main frozen"}
+          </Badge>
+        )}
       </div>
 
-      {/* Cross-links */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
         {storefront && (
           <>
@@ -302,7 +339,6 @@ function MerchantDetailBody({
         </Link>
       </div>
 
-      {/* Tabs */}
       <div
         role="tablist"
         aria-label="Merchant sections"
@@ -334,7 +370,6 @@ function MerchantDetailBody({
         })}
       </div>
 
-      {/* Content */}
       <div
         role="tabpanel"
         id={`merchant-panel-${activeTab}`}
@@ -494,12 +529,98 @@ function MerchantDetailBody({
         {activeTab === "subscription" && (
           <div className="space-y-4">
             <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Wallet balance
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Billing wallet
+                </p>
+                {walletPair.billing.frozen && (
+                  <Badge variant="warning" size="sm">
+                    Frozen
+                  </Badge>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                {formatCurrency(walletBalance)}
+                {formatCurrency(walletPair.billing.balance)}
               </p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                Funds plan charges. Auto-pay draws from the saved card or this
+                wallet.
+              </p>
+              <Can permission={PERMISSIONS.MERCHANTS_EDIT}>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWalletAdjustTarget("billing")}
+                  >
+                    Adjust billing wallet
+                  </Button>
+                  {walletPair.billing.frozen ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onUnfreezeWallet(merchant.id, "billing")}
+                    >
+                      Unfreeze
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWalletFreezeTarget("billing")}
+                    >
+                      Freeze
+                    </Button>
+                  )}
+                </div>
+              </Can>
+            </section>
+
+            <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Main wallet
+                </p>
+                {walletPair.main.frozen && (
+                  <Badge variant="warning" size="sm">
+                    Frozen
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+                {formatCurrency(walletPair.main.balance)}
+              </p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                Receives customer payments. Source of refunds and cash-outs.
+              </p>
+              <Can permission={PERMISSIONS.MERCHANTS_EDIT}>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWalletAdjustTarget("main")}
+                  >
+                    Adjust main wallet
+                  </Button>
+                  {walletPair.main.frozen ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onUnfreezeWallet(merchant.id, "main")}
+                    >
+                      Unfreeze
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWalletFreezeTarget("main")}
+                    >
+                      Freeze
+                    </Button>
+                  )}
+                </div>
+              </Can>
             </section>
 
             <div className="grid grid-cols-2 gap-3">
@@ -874,7 +995,6 @@ function MerchantDetailBody({
         )}
       </div>
 
-      {/* Footer actions */}
       <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <Can permission={PERMISSIONS.MERCHANTS_NOTIFY}>
           <Button
@@ -920,7 +1040,6 @@ function MerchantDetailBody({
         </Can>
       </div>
 
-      {/* Modals */}
       <MerchantSuspendModal
         open={suspendOpen}
         merchantName={merchant.businessName}
@@ -979,6 +1098,34 @@ function MerchantDetailBody({
         onClose={() => setVerifyOpen(false)}
         onApprove={() => onApproveVerification(merchant.id)}
         onReject={(reason) => onRejectVerification(merchant.id, reason)}
+      />
+
+      <MerchantWalletFreezeModal
+        open={walletFreezeTarget !== null}
+        merchantName={merchant.businessName}
+        walletType={walletFreezeTarget ?? "main"}
+        onClose={() => setWalletFreezeTarget(null)}
+        onConfirm={(reason) => {
+          if (!walletFreezeTarget) return;
+          onFreezeWallet(merchant.id, walletFreezeTarget, reason);
+          setWalletFreezeTarget(null);
+        }}
+      />
+
+      <MerchantWalletAdjustModal
+        open={walletAdjustTarget !== null}
+        merchantName={merchant.businessName}
+        walletType={walletAdjustTarget ?? "main"}
+        currentBalance={
+          walletAdjustTarget === "billing"
+            ? walletPair.billing.balance
+            : walletPair.main.balance
+        }
+        onClose={() => setWalletAdjustTarget(null)}
+        onConfirm={(amount, reason) => {
+          if (!walletAdjustTarget) return;
+          onAdjustWallet(merchant.id, walletAdjustTarget, amount, reason);
+        }}
       />
 
       {reactivateConfirm && (

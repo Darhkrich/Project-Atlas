@@ -11,10 +11,6 @@ import { SettingsField } from "@/components/admin/ui/settings-field";
 import { Badge } from "@/components/admin/ui/badge";
 import { formatCurrency } from "@/lib/admin/formatters";
 import {
-  WALLET_ADJUST_METHODS,
-  type WalletAdjustMethod,
-} from "@/lib/admin/resellers/constants";
-import {
   commissionDeltaForTier,
   tierByName,
 } from "@/lib/admin/resellers/helpers";
@@ -27,11 +23,7 @@ interface WalletAdjustModalProps {
   resellerName: string;
   currentBalance: number;
   onClose: () => void;
-  onConfirm: (
-    amount: number,
-    reason: string,
-    method: WalletAdjustMethod
-  ) => void;
+  onConfirm: (amount: number, reason: string) => void;
 }
 
 export function ResellerWalletAdjustModal({
@@ -44,7 +36,6 @@ export function ResellerWalletAdjustModal({
   const [mode, setMode] = useState<"credit" | "debit">("credit");
   const [amountInput, setAmountInput] = useState("");
   const [reason, setReason] = useState("");
-  const [method, setMethod] = useState<WalletAdjustMethod>("atlas_wallet");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,14 +43,13 @@ export function ResellerWalletAdjustModal({
     setMode("credit");
     setAmountInput("");
     setReason("");
-    setMethod("atlas_wallet");
     setError(null);
   }, [open]);
 
   const amount = Number(amountInput);
   const amountValid =
     amountInput.length > 0 && !Number.isNaN(amount) && amount > 0;
-  const reasonValid = reason.trim().length >= 8;
+  const reasonValid = reason.trim().length >= 10;
   const signedAmount = mode === "credit" ? amount : -amount;
   const newBalance = currentBalance + signedAmount;
   const canSubmit = amountValid && reasonValid;
@@ -70,15 +60,12 @@ export function ResellerWalletAdjustModal({
       return;
     }
     if (!reasonValid) {
-      setError("Give a reason of at least 8 characters.");
+      setError("Give a reason of at least 10 characters.");
       return;
     }
-    onConfirm(signedAmount, reason.trim(), method);
+    onConfirm(signedAmount, reason.trim());
     onClose();
   };
-
-  const methodHint =
-    WALLET_ADJUST_METHODS.find((m) => m.value === method)?.hint ?? "";
 
   return (
     <ModalShell
@@ -166,25 +153,6 @@ export function ResellerWalletAdjustModal({
         </SettingsField>
 
         <SettingsField
-          label="Method"
-          htmlFor="reseller-wallet-method"
-          hint={methodHint}
-        >
-          <select
-            id="reseller-wallet-method"
-            className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-            value={method}
-            onChange={(e) => setMethod(e.target.value as WalletAdjustMethod)}
-          >
-            {WALLET_ADJUST_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </SettingsField>
-
-        <SettingsField
           label="Reason"
           htmlFor="reseller-wallet-reason"
           required
@@ -200,6 +168,103 @@ export function ResellerWalletAdjustModal({
               setError(null);
             }}
             placeholder="e.g. Commission correction for ATX-983821"
+          />
+        </SettingsField>
+
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          Adjustments write a treasury adjustment event and are reconciliation-eligible.
+          Rail refunds are a separate operation and are not adjustable from here.
+        </p>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-danger-200 bg-danger-50 p-2 text-xs text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/25 dark:text-danger-200"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------------------- Freeze ---------------------------------------- */
+
+interface WalletFreezeModalProps {
+  open: boolean;
+  resellerName: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}
+
+export function ResellerWalletFreezeModal({
+  open,
+  resellerName,
+  onClose,
+  onConfirm,
+}: WalletFreezeModalProps) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setError(null);
+    }
+  }, [open]);
+
+  const canSubmit = reason.trim().length >= 10;
+
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      setError("Give a reason of at least 10 characters.");
+      return;
+    }
+    onConfirm(reason.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={`Freeze wallet for ${resellerName}?`}
+      description="The reseller can still receive funds and earn commissions. They cannot withdraw or spend from the wallet. An admin can still adjust the balance."
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+          >
+            Freeze wallet
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <SettingsField
+          label="Reason"
+          htmlFor="reseller-wallet-freeze-reason"
+          required
+          hint="Recorded on the audit trail. Visible to other admins."
+        >
+          <textarea
+            id="reseller-wallet-freeze-reason"
+            className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            rows={4}
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+            placeholder="e.g. Wallet under review for suspicious commission activity"
           />
         </SettingsField>
 

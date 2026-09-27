@@ -59,13 +59,20 @@ export interface StorefrontRefundLedgerEntry extends LedgerBase {
   status: WalletWithdrawalStatus;
   sourceSummary: string;
 }
-
 export type StorefrontWalletLedgerEntry =
   | StorefrontFundingLedgerEntry
   | StorefrontPurchaseLedgerEntry
-  | StorefrontRefundLedgerEntry;
+  | StorefrontRefundLedgerEntry
+  | StorefrontAdjustmentLedgerEntry;
 
-export interface StorefrontRefundRequest {
+
+export interface StorefrontAdjustmentLedgerEntry extends LedgerBase {
+  kind: "adjustment";
+  method: "atlas_wallet";
+  reason: string;
+  actor: { name: string; email: string };
+}
+  export interface StorefrontRefundRequest {
   id: string;
   walletId: string;
   ownerId: string;
@@ -100,7 +107,6 @@ export interface StorefrontRefundHistoryEntry extends StorefrontRefundRequest {
   resolvedAt: string;
   resolvedBy?: string;
 }
-
 export interface StorefrontUserWalletState {
   wallets: Record<string, StorefrontUserWalletRecord>;
   fundingLedger: StorefrontWalletLedgerEntry[];

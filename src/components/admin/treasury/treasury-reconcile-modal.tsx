@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 import type {
   TreasuryEvent,
   TreasuryReconciliationStatus,
-} from "@/lib/admin/types/treasury";
-import { TREASURY_KIND_LABELS } from "@/lib/admin/treasury/treasury-labels";
+} from "@/lib/domains/treasury/types";
+import { TREASURY_KIND_LABELS } from "@/lib/domains/treasury/labels";
 
 interface TreasuryReconcileModalProps {
   event: TreasuryEvent | null;

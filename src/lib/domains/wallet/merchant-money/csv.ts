@@ -1,13 +1,9 @@
 // lib/domains/wallet/merchant-money/csv.ts
 //
-// CSV writers for merchant money views. Two writers: ledger and
-// withdrawal queue. Both are pure string builders. Callers handle the
-// download.
+// CSV writer for the merchant ledger view. Pure string builder. The
+// caller handles the download.
 
-import type {
-  MerchantLedgerRow,
-  MerchantPendingWithdrawalRow,
-} from "./types";
+import type { MerchantLedgerRow } from "./types";
 
 function escape(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -46,36 +42,6 @@ export function merchantLedgerToCsv(rows: MerchantLedgerRow[]): string {
     r.description,
     r.detail,
     r.createdAt,
-  ]);
-
-  return [header, ...body]
-    .map((row) => row.map(escape).join(","))
-    .join("\r\n");
-}
-
-export function merchantWithdrawalQueueToCsv(
-  rows: MerchantPendingWithdrawalRow[]
-): string {
-  const header = [
-    "id",
-    "amount",
-    "fee",
-    "total",
-    "destination",
-    "status",
-    "approvalReasons",
-    "requestedAt",
-  ];
-
-  const body = rows.map((r) => [
-    r.id,
-    r.amount,
-    r.fee,
-    r.total,
-    r.destination,
-    r.statusLabel,
-    r.approvalReasons.join("|"),
-    r.requestedAt,
   ]);
 
   return [header, ...body]

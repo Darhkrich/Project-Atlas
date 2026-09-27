@@ -458,7 +458,7 @@ function EcommerceSupportPageInner() {
                   />
                 </li>
               ))}
-            </ul>
+            </ ul>
 
             {pagination.totalPages > 1 ? (
               <div className="flex items-center justify-between">

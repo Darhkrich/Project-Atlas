@@ -3,7 +3,7 @@
 import { Card, CardContent } from "@/components/admin/ui/card";
 import { formatCurrency } from "@/lib/admin/formatters";
 import { cn } from "@/lib/utils";
-import type { TreasurySummary } from "@/lib/admin/types/treasury";
+import type { TreasurySummary } from "@/lib/domains/treasury/types";
 
 interface TreasurySummaryCardsProps {
   summary: TreasurySummary;

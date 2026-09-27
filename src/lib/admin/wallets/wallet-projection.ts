@@ -10,7 +10,6 @@ import type { WalletAutoApproveConfig } from "@/lib/domains/wallet/enums";
 import type {
   CustomerFundingTransaction,
   CustomerWalletRecord,
-  CustomerWalletStoreState,
   CustomerWithdrawalHistoryEntry,
   CustomerWithdrawalRequest,
 } from "@/lib/customer/types/wallet";
@@ -33,6 +32,8 @@ import {
 } from "@/lib/storefront-user/wallet/wallet-labels";
 
 const THIRTY_DAYS_MS = 30 * 86_400_000;
+
+type NarrowVariant = "success" | "warning" | "danger" | "info" | "neutral";
 
 function computeDelta(current: number, previous: number): MetricWithDelta {
   const diff = current - previous;
@@ -191,29 +192,29 @@ export function projectStorefrontWithdrawalQueue(
       : { reasons: r.approvalRequiredReasons, eligible: false };
 
     return {
-      id: r.id,
-      walletId: r.walletId,
-      ownerId: r.ownerId,
-      ownerName: r.ownerName,
-      ownerType: "storefront_user",
-      ownerEmail: r.ownerEmail,
-      ownerPhone: r.ownerPhone,
-      storefrontId: r.storefrontId,
-      storefrontName: r.storefrontName,
-      amount: r.amount,
-      fee: r.fee,
-      total: r.total,
-      sourceProvider: r.sourceProvider,
-      sourceMaskedLabel: r.sourceMaskedLabel,
-      sourceMethodId: r.sourceMethodId,
-      approvalRequiredReasons: derived.reasons,
-      status: r.status,
-      statusLabel: WALLET_WITHDRAWAL_STATUS_LABEL[r.status],
-      statusVariant: WALLET_WITHDRAWAL_STATUS_VARIANT[r.status],
-      autoApproved: r.autoApproved,
-      requestedAt: r.requestedAt,
-      raw: r,
-    };
+        id: r.id,
+        walletId: r.walletId,
+        ownerId: r.ownerId,
+        ownerName: r.ownerName,
+        ownerType: "storefront_user",
+        ownerEmail: r.ownerEmail,
+        ownerPhone: r.ownerPhone,
+        storefrontId: r.storefrontId,
+        storefrontName: r.storefrontName,
+        amount: r.amount,
+        fee: r.fee,
+        total: r.total,
+        sourceProvider: r.sourceProvider,
+        sourceMaskedLabel: r.sourceMaskedLabel,
+        sourceMethodId: r.sourceMethodId,
+        approvalRequiredReasons: derived.reasons,
+        status: r.status,
+        statusLabel: WALLET_WITHDRAWAL_STATUS_LABEL[r.status],
+        statusVariant: WALLET_WITHDRAWAL_STATUS_VARIANT[r.status] as NarrowVariant,
+        autoApproved: r.autoApproved,
+        requestedAt: r.requestedAt,
+        raw: r,
+    } as unknown as WalletWithdrawalQueueRow;
   });
 
   rows.sort((a, b) => {
@@ -247,7 +248,9 @@ export function projectWalletFundingLedger(
       storefrontId: wallet?.storefrontId ?? null,
       amount: f.amount,
       statusLabel: WALLET_FUNDING_STATUS_LABEL[f.status],
-      statusVariant: WALLET_FUNDING_STATUS_VARIANT[f.status],
+      statusVariant: WALLET_FUNDING_STATUS_VARIANT[
+        f.status
+      ] as NarrowVariant,
       methodLabel:
         STOREFRONT_FUNDING_METHOD_LABEL[f.method] ??
         WALLET_FUNDING_METHOD_LABEL[f.method],
@@ -271,7 +274,9 @@ export function projectWalletFundingLedger(
       fee: h.fee,
       total: h.total,
       statusLabel: WALLET_WITHDRAWAL_STATUS_LABEL[h.status],
-      statusVariant: WALLET_WITHDRAWAL_STATUS_VARIANT[h.status],
+      statusVariant: WALLET_WITHDRAWAL_STATUS_VARIANT[
+        h.status
+      ] as NarrowVariant,
       methodLabel: WALLET_FUNDING_METHOD_LABEL[h.sourceMethodId],
       sourceLabel: h.sourceProvider + " " + h.sourceMaskedLabel,
       reference: h.transactionRef,

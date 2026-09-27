@@ -18,6 +18,13 @@ import {
   internalRemoveStorefrontRefundRequest,
 } from "./storefront-user-state";
 import { getStorefrontWallet } from "./storefront-user-wallet-mutations";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import type {
+  TreasuryActor,
+  TreasuryCounterparty,
+} from "@/lib/domains/treasury/types";
+import { appendAuditEntry } from "@/lib/domains/audit";
+import { getWalletConfig } from "./config-store";
 
 export interface StorefrontRefundActor {
   id: string;
@@ -60,13 +67,30 @@ function requestsTodayCount(
   }).length;
 }
 
+function toTreasuryActorFromAdmin(admin: StorefrontAdminActor): TreasuryActor {
+  return { id: admin.id, name: admin.name, email: admin.email };
+}
+
+function counterpartyFor(
+  walletId: string,
+  ownerName: string
+): TreasuryCounterparty {
+  return {
+    type: "storefront_user",
+    id: walletId,
+    name: ownerName,
+  };
+}
+
 export function deriveRefundableSourcesForWallet(
   walletId: string
 ): StorefrontRefundableSource[] {
   const state = getStorefrontUserState();
   const funding = state.fundingLedger.filter(
     (e): e is Extract<typeof e, { kind: "funding" }> =>
-      e.walletId === walletId && e.kind === "funding" && e.status === "successful"
+      e.walletId === walletId &&
+      e.kind === "funding" &&
+      e.status === "successful"
   );
 
   const out: StorefrontRefundableSource[] = [];
@@ -136,9 +160,10 @@ export function createStorefrontRefund(
     };
   }
 
+  const walletConfig = getWalletConfig();
   const { fee, total } = computeWithdrawalTotal(
     input.amount,
-    state.config.feeRatePercent
+    walletConfig.feeRatePercent
   );
   if (total > wallet.balance) {
     return {
@@ -149,10 +174,10 @@ export function createStorefrontRefund(
 
   const requestsToday = requestsTodayCount(state.refundRequests, input.walletId);
   const approvalRequiredReasons: WalletApprovalReason[] = [];
-  if (total > state.config.thresholdGHS) {
+  if (total > walletConfig.thresholdGHS) {
     approvalRequiredReasons.push("exceeds_threshold");
   }
-  if (requestsToday >= state.config.dailyCap) {
+  if (requestsToday >= walletConfig.dailyCap) {
     approvalRequiredReasons.push("daily_cap_reached");
   }
 
@@ -220,7 +245,41 @@ export function createStorefrontRefund(
       resolvedBy: "System",
     };
     internalAddStorefrontRefundHistory(history);
+
+    emitLedgerEvent({
+      kind: "refund_rail_debit",
+      direction: "out",
+      amount: input.amount,
+      poolType: "storefront_user",
+      ownerId: input.walletId,
+      counterparty: {
+        type: "storefront_user",
+        id: input.walletId,
+        name: wallet.ownerName,
+      },
+      reference: transactionRef,
+      description: "Storefront refund to original rail",
+      actor: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+      relatedEventId: refundId,
+      settledAt: nowIso,
+    });
   }
+
+  appendAuditEntry({
+    action: "refund.storefront_user.create",
+    resourceType: "refund",
+    resourceId: refundId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      walletId: input.walletId,
+      amount: input.amount,
+      requiresApproval,
+    },
+  });
 
   return { ok: true, reference: transactionRef, requiresApproval };
 }
@@ -258,6 +317,14 @@ export function cancelStorefrontRefundRequest(
   };
   internalAddStorefrontRefundHistory(history);
 
+  appendAuditEntry({
+    action: "refund.storefront_user.cancel",
+    resourceType: "refund",
+    resourceId: requestId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { walletId: removed.walletId, amount: removed.amount },
+  });
+
   return { ok: true };
 }
 
@@ -286,6 +353,28 @@ export function approveStorefrontRefund(
     resolvedBy: admin.name,
   };
   internalAddStorefrontRefundHistory(history);
+
+  emitLedgerEvent({
+    kind: "refund_rail_debit",
+    direction: "out",
+    amount: removed.amount,
+    poolType: "storefront_user",
+    ownerId: removed.walletId,
+    counterparty: counterpartyFor(removed.walletId, removed.ownerName),
+    reference: removed.transactionRef,
+    description: "Storefront refund to original rail",
+    actor: toTreasuryActorFromAdmin(admin),
+    relatedEventId: removed.id,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "refund.storefront_user.approve",
+    resourceType: "refund",
+    resourceId: requestId,
+    actor: { id: admin.id, name: admin.name, email: admin.email },
+    metadata: { walletId: removed.walletId, amount: removed.amount },
+  });
 
   return { ok: true };
 }
@@ -317,16 +406,58 @@ export function rejectStorefrontRefund(
     updatedAt: nowIso,
   }));
 
+  // StorefrontRefundHistoryEntry uses resolvedBy/resolvedAt for both
+  // approve and reject. approvedBy/approvedAt are only written on the
+  // approve path.
   const history: StorefrontRefundHistoryEntry = {
     ...removed,
     status: "rejected",
     rejectionReason: trimmed,
-    approvedBy: admin.name,
-    approvedAt: nowIso,
     resolvedAt: nowIso,
     resolvedBy: admin.name,
   };
   internalAddStorefrontRefundHistory(history);
+
+  appendAuditEntry({
+    action: "refund.storefront_user.reject",
+    resourceType: "refund",
+    resourceId: requestId,
+    actor: { id: admin.id, name: admin.name, email: admin.email },
+    metadata: { walletId: removed.walletId, reason: trimmed },
+  });
+
+  return { ok: true };
+}
+
+/* --------------------------- Refund credit ---------------------------- */
+
+export function creditStorefrontUserWallet(
+  refundId: string,
+  walletId: string,
+  amount: number,
+  actor: TreasuryActor
+): StorefrontRefundResult {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, error: "Credit amount must be positive." };
+  }
+
+  const wallet = getStorefrontWallet(walletId);
+  if (!wallet) return { ok: false, error: "Wallet not found." };
+
+  const nowIso = new Date().toISOString();
+  internalPatchStorefrontUserWallet(walletId, (w) => ({
+    ...w,
+    balance: Math.round((w.balance + amount) * 100) / 100,
+    updatedAt: nowIso,
+  }));
+
+  appendAuditEntry({
+    action: "wallet.storefront_user.refund_credit",
+    resourceType: "wallet",
+    resourceId: walletId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { refundId, amount },
+  });
 
   return { ok: true };
 }

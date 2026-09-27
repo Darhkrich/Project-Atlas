@@ -3,11 +3,11 @@
 import { Badge } from "@/components/admin/ui/badge";
 import { formatNumber } from "@/lib/admin/formatters";
 import { cn } from "@/lib/utils";
-import type { TreasurySummary } from "@/lib/admin/types/treasury";
+import type { TreasurySummary } from "@/lib/domains/treasury/types";
 import {
   TREASURY_COVERAGE_LABELS,
   TREASURY_COVERAGE_VARIANTS,
-} from "@/lib/admin/treasury/treasury-labels";
+} from "@/lib/domains/treasury/labels";
 
 interface TreasuryCoverageBannerProps {
   summary: TreasurySummary;

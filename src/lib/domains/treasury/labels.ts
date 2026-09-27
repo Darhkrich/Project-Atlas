@@ -95,6 +95,7 @@ export const TREASURY_POOL_LABELS: Record<TreasuryLiabilityPoolType, string> = {
   reseller: "Reseller commission wallet",
   merchant_billing: "Merchant billing wallet",
   merchant_main: "Merchant main wallet",
+  provider_settlement_pending: "Provider settlement",
 };
 
 export const TREASURY_COVERAGE_LABELS: Record<TreasuryCoverageStatus, string> = {

@@ -12,7 +12,7 @@ function ensureLoaded(): Refund[] {
 }
 
 export function getRefunds(): Refund[] {
-  return ensureLoaded();
+  return [...ensureLoaded()];
 }
 
 export function getRefundById(id: string): Refund | undefined {
@@ -36,18 +36,21 @@ export function isRefundsStoreLoaded(): boolean {
 }
 
 export function resetRefundsForTest(): void {
-  refunds = null;
-  listeners.clear();
+  refunds = mockRefundsSeed();
+  notifyRefunds();
+}
+
+export function internalAppendRefund(next: Refund): void {
+  const list = ensureLoaded();
+  refunds = [next, ...list];
 }
 
 export function internalReplaceRefund(id: string, next: Refund): boolean {
   const list = ensureLoaded();
   const idx = list.findIndex((r) => r.id === id);
   if (idx === -1) return false;
-  list[idx] = next;
+  const nextList = [...list];
+  nextList[idx] = next;
+  refunds = nextList;
   return true;
-}
-
-export function internalAppendRefund(next: Refund): void {
-  ensureLoaded().push(next);
 }

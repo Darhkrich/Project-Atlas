@@ -4,15 +4,22 @@
 // is enforced by the UI layer (Can permission wrappers) at the point
 // these are called. The wrapper translates the admin actor shape into
 // the shared MerchantMoneyActor shape and dispatches.
+//
+// Withdrawal approval and rejection are not here. They live in the
+// Operations Wallets tab and dispatch through the four-pool router
+// in app/admin/payments/page.tsx.
 
 "use client";
 
 import {
-  approveMerchantWithdrawal,
-  rejectMerchantWithdrawal,
-  applyAdminMerchantAdjustment,
+  adjustMerchantWallet,
+  freezeMerchantWallet,
+  unfreezeMerchantWallet,
 } from "@/lib/domains/wallet/merchant-money/mutations";
-import type { MerchantMoneyActor } from "@/lib/domains/wallet/merchant-money/types";
+import type {
+  MerchantMoneyActor,
+  MerchantWalletType,
+} from "@/lib/domains/wallet/merchant-money/types";
 
 export interface AdminMoneyActor {
   id?: string;
@@ -36,43 +43,49 @@ function toActor(admin: AdminMoneyActor | null | undefined): MerchantMoneyActor 
   };
 }
 
-export function adminApproveWithdrawal(
-  withdrawalId: string,
-  admin: AdminMoneyActor | null | undefined,
-  note?: string
+export function adminAdjustMerchantWallet(
+  merchantId: string,
+  merchantName: string,
+  walletType: MerchantWalletType,
+  amount: number,
+  reason: string,
+  admin: AdminMoneyActor | null | undefined
 ): AdminMoneyMutationResult {
-  const result = approveMerchantWithdrawal(
-    withdrawalId,
-    toActor(admin),
-    note
-  );
+  const result = adjustMerchantWallet({
+    merchantId,
+    merchantName,
+    walletType,
+    amount,
+    reason,
+    actor: toActor(admin),
+  });
   return { ok: result.ok, error: result.error };
 }
 
-export function adminRejectWithdrawal(
-  withdrawalId: string,
-  admin: AdminMoneyActor | null | undefined,
-  reason: string
+export function adminFreezeMerchantWallet(
+  merchantId: string,
+  walletType: MerchantWalletType,
+  reason: string,
+  admin: AdminMoneyActor | null | undefined
 ): AdminMoneyMutationResult {
-  const result = rejectMerchantWithdrawal(
-    withdrawalId,
+  const result = freezeMerchantWallet(
+    merchantId,
+    walletType,
     reason,
     toActor(admin)
   );
   return { ok: result.ok, error: result.error };
 }
 
-export function adminAdjustMerchantWallet(
+export function adminUnfreezeMerchantWallet(
   merchantId: string,
-  amount: number,
-  reason: string,
+  walletType: MerchantWalletType,
   admin: AdminMoneyActor | null | undefined
 ): AdminMoneyMutationResult {
-  const result = applyAdminMerchantAdjustment({
+  const result = unfreezeMerchantWallet(
     merchantId,
-    amount,
-    reason,
-    actor: toActor(admin),
-  });
+    walletType,
+    toActor(admin)
+  );
   return { ok: result.ok, error: result.error };
 }

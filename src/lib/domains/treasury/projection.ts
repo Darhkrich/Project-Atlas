@@ -14,14 +14,18 @@ import {
 
 export function projectTreasurySummary(
   events: TreasuryEvent[],
-  liabilities: number
+  liabilities: number,
+  providerLiabilities: number = 0
 ): TreasurySummary {
   const cashAtBank = computeCashAtBank(events);
   const committedOutbound = computeCommittedOutbound(events);
   const available = Math.round((cashAtBank - committedOutbound) * 100) / 100;
   const userLiabilities = Math.round(liabilities * 100) / 100;
-  const freeCash = Math.round((available - userLiabilities) * 100) / 100;
-  const coverage = computeCoverage(freeCash, userLiabilities);
+  const provider = Math.round(providerLiabilities * 100) / 100;
+  const totalLiabilities =
+    Math.round((userLiabilities + provider) * 100) / 100;
+  const freeCash = Math.round((available - totalLiabilities) * 100) / 100;
+  const coverage = computeCoverage(freeCash, totalLiabilities);
 
   let unmatchedCount = 0;
   let pendingApprovalCount = 0;
@@ -35,6 +39,7 @@ export function projectTreasurySummary(
     committedOutbound,
     available,
     userLiabilities,
+    providerLiabilities: provider,
     freeCash,
     coverageStatus: coverage.status,
     coverageRatio: coverage.ratio,
@@ -66,7 +71,10 @@ function matchesSearch(row: TreasuryStatementRow, term: string): boolean {
   if (row.id.toLowerCase().includes(needle)) return true;
   if (row.reference.toLowerCase().includes(needle)) return true;
   if (row.description.toLowerCase().includes(needle)) return true;
-  if (row.counterpartyName && row.counterpartyName.toLowerCase().includes(needle))
+  if (
+    row.counterpartyName &&
+    row.counterpartyName.toLowerCase().includes(needle)
+  )
     return true;
   return false;
 }

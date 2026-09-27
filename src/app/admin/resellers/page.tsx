@@ -58,7 +58,6 @@ import {
   VERIFICATION_VARIANT,
   type ColumnKey,
   type SortKey,
-  type WalletAdjustMethod,
 } from "@/lib/admin/resellers/constants";
 import { resellersToCsv } from "@/lib/admin/resellers/csv-export";
 import { buildCommissionTotalsMap } from "@/lib/admin/resellers/helpers";
@@ -68,6 +67,8 @@ import {
   verifyReseller,
   rejectResellerVerification,
   adjustResellerWallet,
+  freezeResellerWallet,
+  unfreezeResellerWallet,
   assignResellerTier,
   sendResellerNotification,
   resetResellerSecurity,
@@ -163,8 +164,12 @@ function ResellersPageInner() {
   const actor: ResellerActor = useMemo(
     () =>
       admin
-        ? { name: admin.name, email: admin.email }
-        : { name: "System", email: "system@atlas.com" },
+        ? {
+            id: admin.id ?? admin.email,
+            name: admin.name,
+            email: admin.email,
+          }
+        : { id: "system", name: "System", email: "system@atlas.com" },
     [admin]
   );
 
@@ -172,6 +177,14 @@ function ResellersPageInner() {
     const map = new Map<string, number>();
     for (const w of walletRows) {
       map.set(w.resellerId, w.balance);
+    }
+    return map;
+  }, [walletRows]);
+
+  const walletFrozenById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const w of walletRows) {
+      map.set(w.resellerId, w.frozen);
     }
     return map;
   }, [walletRows]);
@@ -405,11 +418,17 @@ function ResellersPageInner() {
 
   const handleAdjustWallet = (
     id: string,
+    businessName: string,
     amount: number,
-    reason: string,
-    method: WalletAdjustMethod
+    reason: string
   ) => {
-    const result = adjustResellerWallet(id, amount, reason, method, actor);
+    const result = adjustResellerWallet(
+      id,
+      businessName,
+      amount,
+      reason,
+      actor
+    );
     if (result.ok) {
       showToast(
         "success",
@@ -419,6 +438,24 @@ function ResellersPageInner() {
       );
     } else {
       showToast("error", result.error ?? "Could not adjust wallet.");
+    }
+  };
+
+  const handleFreezeWallet = (id: string, reason: string) => {
+    const result = freezeResellerWallet(id, reason, actor);
+    if (result.ok) {
+      showToast("success", "Wallet frozen.");
+    } else {
+      showToast("error", result.error ?? "Could not freeze wallet.");
+    }
+  };
+
+  const handleUnfreezeWallet = (id: string) => {
+    const result = unfreezeResellerWallet(id, actor);
+    if (result.ok) {
+      showToast("success", "Wallet unfrozen.");
+    } else {
+      showToast("error", result.error ?? "Could not unfreeze wallet.");
     }
   };
 
@@ -797,7 +834,6 @@ function ResellersPageInner() {
         ),
       },
     ],
-     
     [selectedIds, walletBalanceById, commissionTotalsById]
   );
 
@@ -849,6 +885,9 @@ function ResellersPageInner() {
   const selectedWalletBalance = selected
     ? walletBalanceById.get(selected.id) ?? 0
     : 0;
+  const selectedWalletFrozen = selected
+    ? walletFrozenById.get(selected.id) ?? false
+    : false;
 
   return (
     <div className="space-y-6">
@@ -1095,8 +1134,11 @@ function ResellersPageInner() {
       <ResellerDetailDrawer
         reseller={selected}
         walletBalance={selectedWalletBalance}
+        walletFrozen={selectedWalletFrozen}
         onClose={() => setSelectedId(null)}
         onAdjustWallet={handleAdjustWallet}
+        onFreezeWallet={handleFreezeWallet}
+        onUnfreezeWallet={handleUnfreezeWallet}
         onSuspend={handleSuspend}
         onReactivate={handleReactivate}
         onApproveVerification={handleApproveVerification}

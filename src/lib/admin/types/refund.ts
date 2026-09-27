@@ -107,6 +107,10 @@ export interface Refund {
   customer: { id: string; name: string };
   reseller: { id: string; name: string } | null;
 
+  // Populated for storefront_user audience. Combined with customer.id
+  // it builds the compound storefront user wallet key via walletIdFor.
+  storefrontId?: string;
+
   amount: number;
   settlements: RefundSettlement[];
 

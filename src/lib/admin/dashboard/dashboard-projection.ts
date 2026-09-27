@@ -1,19 +1,52 @@
+// lib/admin/dashboard/dashboard-projection.ts
+
 import type { Customer } from "@/lib/admin/types/customer";
 import type { Merchant } from "@/lib/admin/types/merchant";
 import type { Reseller } from "@/lib/admin/types/reseller";
-import type { MerchantMoneyState } from "@/lib/admin/types/merchant-money";
+import type {
+  DisputeEvent,
+  DunningEvent,
+  MerchantWalletTransaction,
+} from "@/lib/admin/types/merchant-money";
+import type {
+  MerchantMoneyStoreState,
+  MerchantWalletLedgerEntry,
+} from "@/lib/domains/wallet/merchant-money/types";
 import type { ResellerWalletStoreState } from "@/lib/reseller/types/wallet";
+import type { Order } from "@/lib/admin/types/orders";
+import type { Refund } from "@/lib/admin/types/refund";
+import type { SupportConversation } from "@/lib/admin/types/support";
+import type { Provider } from "@/lib/admin/types/provider";
+import type { ServiceCategory } from "@/lib/domains/catalog";
 import {
-  DASHBOARD_ATTENTION_THRESHOLDS,
-  type DashboardAttentionSeverity,
-} from "./dashboard-constants";
+  computeAttentionItems,
+  type AttentionItem,
+  type AttentionInput,
+} from "./dashboard-attention";
+import { allPlansFor } from "@/lib/domains/catalog";
+
+export type { AttentionItem } from "./dashboard-attention";
+
+export interface MerchantMoneyOverlayInput {
+  walletTransactions: MerchantWalletTransaction[];
+  disputes: DisputeEvent[];
+  dunning: DunningEvent[];
+}
 
 export interface DashboardInput {
   customers: Customer[];
   resellers: Reseller[];
   merchants: Merchant[];
-  merchantMoney: MerchantMoneyState;
-  resellerWalletState?: ResellerWalletStoreState;
+  merchantMoneyStore: MerchantMoneyStoreState;
+  merchantOverlay: MerchantMoneyOverlayInput;
+  resellerWalletState: ResellerWalletStoreState;
+  orders: Order[];
+  refunds: Refund[];
+  supportTickets: SupportConversation[];
+  providers: Provider[];
+  catalog: ServiceCategory[];
+  treasuryFreeCash: number | null;
+  treasuryLiabilities: number | null;
   nowMs: number;
 }
 
@@ -30,17 +63,32 @@ export interface WalletLiabilityBreakdown {
   merchantBilling: number;
 }
 
+export interface AccountsByStatus {
+  customers: { active: number; inactive: number; suspended: number };
+  resellers: { active: number; pending: number; suspended: number };
+  merchants: { active: number; pending: number; suspended: number };
+}
+
 export interface DashboardMetrics {
   totalRevenue: number;
   todayRevenue: number;
+  ordersToday: number;
+  ordersRetrying: number;
+  orderSuccessRate: number;
+  refundRate: number;
   activeUsers: number;
   totalUsers: number;
-  transactionsPending: number;
-  transactionsFailed: number;
   pendingRefunds: number;
   supportTicketsOpen: number;
+  supportTicketsPastSla: number;
+  supportTicketsUnassigned: number;
   walletLiability: number;
   liveStores: number;
+  providersHealthy: number;
+  providersDegraded: number;
+  providersUnhealthy: number;
+  plansTotal: number;
+  plansLowMargin: number;
   accountBreakdown: AccountBreakdown;
   walletLiabilityBreakdown: WalletLiabilityBreakdown;
 }
@@ -50,54 +98,28 @@ export interface TopPerformer {
   name: string;
   kind: "reseller" | "merchant";
   revenue: number;
-  trend: number;
   href: string;
 }
 
-export type AttentionCategory =
-  | "merchant_billing"
-  | "merchant_status"
-  | "merchant_verification"
-  | "reseller_status"
-  | "reseller_verification"
-  | "reseller_overdrawn"
-  | "customer_risk"
-  | "withdrawal"
-  | "dispute"
-  | "refund"
-  | "plan_charge";
-
-export interface AttentionItem {
-  id: string;
-  severity: DashboardAttentionSeverity;
-  category: AttentionCategory;
-  title: string;
-  detail: string;
-  href: string;
-  occurredAt: string;
+export interface DashboardDeltaSet {
+  totalRevenue: number | null;
+  todayRevenue: number | null;
+  ordersToday: number | null;
+  activeUsers: number | null;
+  totalUsers: number | null;
+  pendingRefunds: number | null;
+  supportTicketsOpen: number | null;
+  walletLiability: number | null;
+  liveStores: number | null;
+  refundRate: number | null;
 }
 
 export interface DashboardSnapshot {
   metrics: DashboardMetrics;
-  deltas: {
-    totalRevenue: number | null;
-    todayRevenue: number | null;
-    activeUsers: number | null;
-    totalUsers: number | null;
-    transactionsPending: number | null;
-    transactionsFailed: number | null;
-    pendingRefunds: number | null;
-    supportTicketsOpen: number | null;
-    walletLiability: number | null;
-    liveStores: number | null;
-  };
+  deltas: DashboardDeltaSet;
   topPerformers: TopPerformer[];
   attention: AttentionItem[];
-  accountsByStatus: {
-    customers: { active: number; inactive: number; suspended: number };
-    resellers: { active: number; pending: number; suspended: number };
-    merchants: { active: number; pending: number; suspended: number };
-  };
+  accountsByStatus: AccountsByStatus;
 }
 
 function safeNumber(value: unknown): number {
@@ -108,9 +130,47 @@ function safeNumber(value: unknown): number {
 
 function startOfDayMs(nowMs: number): number {
   const d = new Date(nowMs);
-  d.setHours(0, 0, 0, 0);
+  d.setUTCHours(0, 0, 0, 0);
   return d.getTime();
 }
+
+function eachMerchantState(
+  store: MerchantMoneyStoreState
+): Array<{ merchantId: string; state: MerchantMoneyStoreState[string] }> {
+  const out: Array<{
+    merchantId: string;
+    state: MerchantMoneyStoreState[string];
+  }> = [];
+  for (const merchantId of Object.keys(store)) {
+    const state = store[merchantId];
+    if (!state) continue;
+    out.push({ merchantId, state });
+  }
+  return out;
+}
+
+function eachLedgerEntry(
+  store: MerchantMoneyStoreState,
+  match: (e: MerchantWalletLedgerEntry) => boolean
+): Array<{ merchantId: string; entry: MerchantWalletLedgerEntry }> {
+  const out: Array<{
+    merchantId: string;
+    entry: MerchantWalletLedgerEntry;
+  }> = [];
+  for (const { merchantId, state } of eachMerchantState(store)) {
+    for (const entry of state.ledger) {
+      if (match(entry)) out.push({ merchantId, entry });
+    }
+  }
+  return out;
+}
+
+function percentChange(current: number, prior: number): number | null {
+  if (prior <= 0) return null;
+  return ((current - prior) / prior) * 100;
+}
+
+/* --------------------------- Compute metrics --------------------- */
 
 export function computeAccountBreakdown(input: DashboardInput): AccountBreakdown {
   return {
@@ -136,7 +196,7 @@ export function computeWalletLiability(
   for (const c of input.customers) customer += safeNumber(c.walletBalance);
 
   let reseller = 0;
-  const resellerWallets = input.resellerWalletState?.wallets;
+  const resellerWallets = input.resellerWalletState.wallets;
   if (resellerWallets) {
     for (const id of Object.keys(resellerWallets)) {
       reseller += safeNumber(resellerWallets[id]?.balance);
@@ -145,12 +205,9 @@ export function computeWalletLiability(
 
   let merchantMain = 0;
   let merchantBilling = 0;
-  const wallets = input.merchantMoney.wallets;
-  for (const id of Object.keys(wallets)) {
-    const pair = wallets[id];
-    if (!pair) continue;
-    merchantMain += safeNumber(pair.main?.balance);
-    merchantBilling += safeNumber(pair.billing?.balance);
+  for (const { state } of eachMerchantState(input.merchantMoneyStore)) {
+    merchantMain += safeNumber(state.main.balance);
+    merchantBilling += safeNumber(state.billing.balance);
   }
   return { customer, reseller, merchantMain, merchantBilling };
 }
@@ -177,43 +234,125 @@ export function computeTotalRevenue(input: DashboardInput): number {
 export function computeTodayRevenue(input: DashboardInput): number {
   const start = startOfDayMs(input.nowMs);
   let total = 0;
-  for (const c of input.merchantMoney.checkouts) {
-    if (c.status !== "successful") continue;
-    const t = new Date(c.createdAt).getTime();
+  const payments = eachLedgerEntry(
+    input.merchantMoneyStore,
+    (e) => e.kind === "customer_payment" && Boolean(e.settledAt)
+  );
+  for (const { entry } of payments) {
+    const t = new Date(entry.createdAt).getTime();
     if (Number.isNaN(t)) continue;
-    if (t >= start && t <= input.nowMs) total += safeNumber(c.amount);
+    if (t >= start && t <= input.nowMs) total += safeNumber(entry.amount);
   }
   return total;
 }
 
-export function computeTransactionsPending(input: DashboardInput): number {
-  let count = 0;
-  for (const c of input.merchantMoney.checkouts) {
-    if (c.status === "pending") count += 1;
-  }
-  for (const p of input.merchantMoney.planCharges) {
-    if (p.status === "pending") count += 1;
-  }
-  return count;
+export function computeOrdersToday(input: DashboardInput): number {
+  const start = startOfDayMs(input.nowMs);
+  return input.orders.filter((o) => {
+    const t = new Date(o.createdAt).getTime();
+    if (Number.isNaN(t)) return false;
+    return t >= start && t <= input.nowMs;
+  }).length;
 }
 
-export function computeTransactionsFailed(input: DashboardInput): number {
-  let count = 0;
-  for (const c of input.merchantMoney.checkouts) {
-    if (c.status === "failed") count += 1;
-  }
-  for (const p of input.merchantMoney.planCharges) {
-    if (p.status === "failed") count += 1;
-  }
-  return count;
+export function computeOrdersRetrying(input: DashboardInput): number {
+  return input.orders.filter((o) => o.status === "retrying").length;
+}
+
+export function computeOrderSuccessRate(input: DashboardInput): number {
+  const start = startOfDayMs(input.nowMs);
+  const today = input.orders.filter((o) => {
+    const t = new Date(o.createdAt).getTime();
+    if (Number.isNaN(t)) return false;
+    return t >= start && t <= input.nowMs;
+  });
+  const finished = today.filter(
+    (o) =>
+      o.status === "successful" ||
+      o.status === "failed" ||
+      o.status === "cancelled"
+  );
+  if (finished.length === 0) return 0;
+  const successes = finished.filter(
+    (o) => o.status === "successful"
+  ).length;
+  return (successes / finished.length) * 100;
+}
+
+export function computeRefundRate(input: DashboardInput): number {
+  const start = startOfDayMs(input.nowMs);
+  const settledToday = input.refunds.filter((r) => {
+    if (r.status !== "completed" || !r.completedAt) return false;
+    const t = new Date(r.completedAt).getTime();
+    if (Number.isNaN(t)) return false;
+    return t >= start && t <= input.nowMs;
+  });
+  const refundTotal = settledToday.reduce((s, r) => s + r.amount, 0);
+  const revenueToday = computeTodayRevenue(input);
+  if (revenueToday <= 0) return 0;
+  return (refundTotal / revenueToday) * 100;
 }
 
 export function computePendingRefunds(input: DashboardInput): number {
-  let count = 0;
-  for (const r of input.merchantMoney.refunds) {
-    if (!r.settledAt) count += 1;
+  return input.refunds.filter((r) => r.status === "pending_admin").length;
+}
+
+export function computeSupportTicketsOpen(input: DashboardInput): number {
+  return input.supportTickets.filter(
+    (t) => t.status === "open" || t.status === "pending"
+  ).length;
+}
+
+export function computeSupportTicketsPastSla(input: DashboardInput): number {
+  const nowMs = input.nowMs;
+  return input.supportTickets.filter(
+    (t) =>
+      (t.status === "open" || t.status === "pending") &&
+      nowMs - new Date(t.lastMessageAt).getTime() > 24 * 86_400_000
+  ).length;
+}
+
+export function computeSupportTicketsUnassigned(input: DashboardInput): number {
+  return input.supportTickets.filter(
+    (t) =>
+      (t.status === "open" || t.status === "pending") &&
+      (!t.assigneeId || t.assigneeId === "")
+  ).length;
+}
+
+export function computeProvidersByHealth(input: DashboardInput): {
+  healthy: number;
+  degraded: number;
+  unhealthy: number;
+} {
+  let healthy = 0;
+  let degraded = 0;
+  let unhealthy = 0;
+  for (const p of input.providers) {
+    if (p.healthStatus === "critical") unhealthy += 1;
+    else if (p.healthStatus === "warning") degraded += 1;
+    else healthy += 1;
   }
-  return count;
+  return { healthy, degraded, unhealthy };
+}
+
+export function computePlansSummary(input: DashboardInput): {
+  total: number;
+  lowMargin: number;
+} {
+  let total = 0;
+  let lowMargin = 0;
+  for (const cat of input.catalog) {
+    for (const plan of allPlansFor(cat)) {
+      total += 1;
+      if (plan.providerCost === undefined) continue;
+      if (plan.price <= 0) continue;
+      const marginPercent =
+        ((plan.price - plan.providerCost) / plan.price) * 100;
+      if (marginPercent < 10) lowMargin += 1;
+    }
+  }
+  return { total, lowMargin };
 }
 
 export function computeMetrics(input: DashboardInput): DashboardMetrics {
@@ -224,20 +363,32 @@ export function computeMetrics(input: DashboardInput): DashboardMetrics {
     walletLiabilityBreakdown.reseller +
     walletLiabilityBreakdown.merchantMain +
     walletLiabilityBreakdown.merchantBilling;
+  const providers = computeProvidersByHealth(input);
+  const plans = computePlansSummary(input);
+
   return {
     totalRevenue: computeTotalRevenue(input),
     todayRevenue: computeTodayRevenue(input),
+    ordersToday: computeOrdersToday(input),
+    ordersRetrying: computeOrdersRetrying(input),
+    orderSuccessRate: computeOrderSuccessRate(input),
+    refundRate: computeRefundRate(input),
     activeUsers: computeActiveUsers(input),
     totalUsers:
       accountBreakdown.customers +
       accountBreakdown.resellers +
       accountBreakdown.merchants,
-    transactionsPending: computeTransactionsPending(input),
-    transactionsFailed: computeTransactionsFailed(input),
     pendingRefunds: computePendingRefunds(input),
-    supportTicketsOpen: 0,
+    supportTicketsOpen: computeSupportTicketsOpen(input),
+    supportTicketsPastSla: computeSupportTicketsPastSla(input),
+    supportTicketsUnassigned: computeSupportTicketsUnassigned(input),
     walletLiability,
     liveStores: computeLiveStores(input),
+    providersHealthy: providers.healthy,
+    providersDegraded: providers.degraded,
+    providersUnhealthy: providers.unhealthy,
+    plansTotal: plans.total,
+    plansLowMargin: plans.lowMargin,
     accountBreakdown,
     walletLiabilityBreakdown,
   };
@@ -245,7 +396,7 @@ export function computeMetrics(input: DashboardInput): DashboardMetrics {
 
 export function computeAccountsByStatus(
   input: DashboardInput
-): DashboardSnapshot["accountsByStatus"] {
+): AccountsByStatus {
   const customers = { active: 0, inactive: 0, suspended: 0 };
   for (const c of input.customers) {
     if (c.status === "active") customers.active += 1;
@@ -278,7 +429,6 @@ export function computeTopPerformers(
       name: r.businessName,
       kind: "reseller",
       revenue: safeNumber(r.totalRevenue),
-      trend: 0,
       href: "/admin/resellers/" + r.id,
     });
   }
@@ -288,7 +438,6 @@ export function computeTopPerformers(
       name: m.businessName,
       kind: "merchant",
       revenue: safeNumber(m.totalRevenue),
-      trend: 0,
       href: "/admin/ecommerce/merchants/" + m.id,
     });
   }
@@ -296,226 +445,83 @@ export function computeTopPerformers(
   return combined.slice(0, limit);
 }
 
-export function computeAttentionQueue(input: DashboardInput): AttentionItem[] {
-  const items: AttentionItem[] = [];
-  const thresholds = DASHBOARD_ATTENTION_THRESHOLDS;
+/* ------------------------ Snapshot entry points ------------------ */
 
-  for (const m of input.merchants) {
-    if (
-      m.subscription.status === "past_due" ||
-      m.subscription.status === "expired"
-    ) {
-      items.push({
-        id: "att-merchant-billing-" + m.id,
-        severity: "critical",
-        category: "merchant_billing",
-        title: m.businessName,
-        detail:
-          m.subscription.status === "past_due"
-            ? "Payment overdue - " + m.subscription.planId + " plan"
-            : "Subscription expired - " + m.subscription.planId + " plan",
-        href: "/admin/ecommerce/merchants/" + m.id,
-        occurredAt: m.subscription.endDate,
-      });
-    }
-  }
-
-  for (const m of input.merchants) {
-    if (m.merchantStatus === "active" && m.storeStatus === "disabled") {
-      items.push({
-        id: "att-merchant-store-" + m.id,
-        severity: "high",
-        category: "merchant_status",
-        title: m.businessName,
-        detail: "Storefront disabled while merchant is active",
-        href: "/admin/ecommerce/merchants/" + m.id,
-        occurredAt: m.lastActive,
-      });
-    }
-  }
-
-  for (const m of input.merchants) {
-    if (m.verificationStatus === "pending" && m.storeStatus === "live") {
-      items.push({
-        id: "att-merchant-verify-" + m.id,
-        severity: "medium",
-        category: "merchant_verification",
-        title: m.businessName,
-        detail: "Verification pending, storefront already live",
-        href: "/admin/ecommerce/merchants/" + m.id,
-        occurredAt: m.createdAt,
-      });
-    }
-  }
-
-  for (const r of input.resellers) {
-    if (r.status === "suspended") {
-      items.push({
-        id: "att-reseller-susp-" + r.id,
-        severity: "high",
-        category: "reseller_status",
-        title: r.businessName,
-        detail: "Account suspended",
-        href: "/admin/resellers/" + r.id,
-        occurredAt: r.lastActive,
-      });
-    }
-  }
-
-  for (const r of input.resellers) {
-    if (
-      r.verificationStatus === "pending" ||
-      r.verificationStatus === "rejected"
-    ) {
-      items.push({
-        id: "att-reseller-verify-" + r.id,
-        severity: r.verificationStatus === "rejected" ? "high" : "medium",
-        category: "reseller_verification",
-        title: r.businessName,
-        detail:
-          r.verificationStatus === "rejected"
-            ? "Verification rejected"
-            : "Verification pending",
-        href: "/admin/resellers/" + r.id,
-        occurredAt: r.joinedAt,
-      });
-    }
-  }
-
-  const resellerWallets = input.resellerWalletState?.wallets;
-  if (resellerWallets) {
-    for (const r of input.resellers) {
-      const wallet = resellerWallets[r.id];
-      if (!wallet) continue;
-      if (wallet.balance < 0) {
-        items.push({
-          id: "att-reseller-overdrawn-" + r.id,
-          severity: "critical",
-          category: "reseller_overdrawn",
-          title: r.businessName,
-          detail:
-            "Wallet is overdrawn by GH\u20B5 " +
-            Math.abs(wallet.balance).toLocaleString("en-GH"),
-          href: "/admin/resellers/" + r.id,
-          occurredAt: wallet.updatedAt,
-        });
-      }
-    }
-  }
-
-  for (const c of input.customers) {
-    if (c.riskLevel === "high") {
-      items.push({
-        id: "att-customer-risk-" + c.id,
-        severity: "high",
-        category: "customer_risk",
-        title: c.name,
-        detail: "Risk score " + c.riskScore + " - " + c.riskLevel,
-        href: "/admin/customers/" + c.id,
-        occurredAt: c.lastActive,
-      });
-    }
-  }
-
-  for (const w of input.merchantMoney.withdrawals) {
-    if (w.status !== "pending_admin") continue;
-    const merchant = input.merchants.find((m) => m.id === w.merchantId);
-    items.push({
-      id: "att-withdrawal-" + w.id,
-      severity: w.total > thresholds.refundValueGHS ? "critical" : "high",
-      category: "withdrawal",
-      title: merchant?.businessName ?? w.merchantId,
-      detail:
-        "Withdrawal GH\u20B5 " +
-        w.total.toLocaleString() +
-        " awaiting approval",
-      href: "/admin/ecommerce/payments",
-      occurredAt: w.createdAt,
-    });
-  }
-
-  for (const d of input.merchantMoney.disputes) {
-    if (d.status !== "open") continue;
-    const merchant = input.merchants.find((m) => m.id === d.merchantId);
-    items.push({
-      id: "att-dispute-" + d.id,
-      severity: "high",
-      category: "dispute",
-      title: merchant?.businessName ?? d.merchantId,
-      detail: "Open dispute - " + d.type.replace(/_/g, " "),
-      href: "/admin/ecommerce/payments",
-      occurredAt: d.openedAt,
-    });
-  }
-
-  for (const r of input.merchantMoney.refunds) {
-    if (r.settledAt) continue;
-    const merchant = input.merchants.find((m) => m.id === r.merchantId);
-    items.push({
-      id: "att-refund-" + r.id,
-      severity: "medium",
-      category: "refund",
-      title: merchant?.businessName ?? r.merchantId,
-      detail:
-        "Refund GH\u20B5 " + r.amount.toLocaleString() + " not yet settled",
-      href: "/admin/ecommerce/payments",
-      occurredAt: r.createdAt,
-    });
-  }
-
-  for (const p of input.merchantMoney.planCharges) {
-    if (p.status !== "failed") continue;
-    const merchant = input.merchants.find((m) => m.id === p.merchantId);
-    items.push({
-      id: "att-plancharge-" + p.id,
-      severity: "medium",
-      category: "plan_charge",
-      title: merchant?.businessName ?? p.merchantId,
-      detail:
-        "Plan charge failed - " +
-        (p.failureReason?.replace(/_/g, " ") ?? "unknown reason"),
-      href: "/admin/ecommerce/payments",
-      occurredAt: p.createdAt,
-    });
-  }
-
-  const severityRank: Record<DashboardAttentionSeverity, number> = {
-    critical: 0,
-    high: 1,
-    medium: 2,
-    low: 3,
+function attentionFor(input: DashboardInput): AttentionItem[] {
+  const providers = computeProvidersByHealth(input);
+  const attentionInput: AttentionInput = {
+    customers: input.customers,
+    resellers: input.resellers,
+    merchants: input.merchants,
+    merchantMoneyStore: input.merchantMoneyStore,
+    merchantOverlay: input.merchantOverlay,
+    resellerWalletState: input.resellerWalletState,
+    supportTicketSummary: {
+      unassigned: computeSupportTicketsUnassigned(input),
+      pastSla: computeSupportTicketsPastSla(input),
+      escalatedToMe: 0,
+    },
+    providerHealth: {
+      degraded: providers.degraded,
+      unhealthy: providers.unhealthy,
+    },
+    orderRetryBacklog: computeOrdersRetrying(input),
+    treasuryFreeCash: input.treasuryFreeCash,
+    treasuryLiabilities: input.treasuryLiabilities,
   };
+  return computeAttentionItems(attentionInput);
+}
 
-  items.sort((a, b) => {
-    const s = severityRank[a.severity] - severityRank[b.severity];
-    if (s !== 0) return s;
-    const c = a.category.localeCompare(b.category);
-    if (c !== 0) return c;
-    return a.id.localeCompare(b.id);
-  });
+export function computeCurrentMetrics(
+  input: DashboardInput
+): DashboardMetrics {
+  return computeMetrics(input);
+}
 
-  return items;
+export function computePriorMetrics(
+  input: DashboardInput,
+  priorNowMs: number
+): DashboardMetrics {
+  return computeMetrics({ ...input, nowMs: priorNowMs });
+}
+
+export function computeDeltaSet(
+  current: DashboardMetrics,
+  prior: DashboardMetrics
+): DashboardDeltaSet {
+  return {
+    totalRevenue: percentChange(current.totalRevenue, prior.totalRevenue),
+    todayRevenue: percentChange(current.todayRevenue, prior.todayRevenue),
+    ordersToday: percentChange(current.ordersToday, prior.ordersToday),
+    activeUsers: percentChange(current.activeUsers, prior.activeUsers),
+    totalUsers: percentChange(current.totalUsers, prior.totalUsers),
+    pendingRefunds: percentChange(
+      current.pendingRefunds,
+      prior.pendingRefunds
+    ),
+    supportTicketsOpen: percentChange(
+      current.supportTicketsOpen,
+      prior.supportTicketsOpen
+    ),
+    walletLiability: percentChange(
+      current.walletLiability,
+      prior.walletLiability
+    ),
+    liveStores: percentChange(current.liveStores, prior.liveStores),
+    refundRate: percentChange(current.refundRate, prior.refundRate),
+  };
 }
 
 export function computeDashboardSnapshot(
   input: DashboardInput
 ): DashboardSnapshot {
+  const current = computeMetrics(input);
+  const prior = computePriorMetrics(input, input.nowMs - 30 * 86_400_000);
   return {
-    metrics: computeMetrics(input),
-    deltas: {
-      totalRevenue: null,
-      todayRevenue: null,
-      activeUsers: null,
-      totalUsers: null,
-      transactionsPending: null,
-      transactionsFailed: null,
-      pendingRefunds: null,
-      supportTicketsOpen: null,
-      walletLiability: null,
-      liveStores: null,
-    },
+    metrics: current,
+    deltas: computeDeltaSet(current, prior),
     topPerformers: computeTopPerformers(input),
-    attention: computeAttentionQueue(input),
+    attention: attentionFor(input),
     accountsByStatus: computeAccountsByStatus(input),
   };
 }

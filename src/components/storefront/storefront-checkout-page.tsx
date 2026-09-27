@@ -9,7 +9,7 @@ import { PaymentFlowModal } from "@/components/payments/PaymentFlowModal";
 import { allPaymentMethods } from "@/lib/payment-methods";
 import { useCart } from "@/contexts/cart-context";
 import { useCustomerAuth } from "@/contexts/customer-auth-context";
-import { getPlanByCode, PlanCode } from "@/config/subscription-plans";
+import { tryGetPlanByCode } from "@/config/subscription-plans";
 import { useOrders } from "@/contexts/orders-context";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
 
@@ -36,11 +36,14 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
 
-  // Use the merchant's plan from store config
-  const plan = getPlanByCode((store.planId || "starter") as PlanCode);
-  const allowedMethods = allPaymentMethods.filter((m) =>
-    plan.paymentMethods.includes(m.id)
-  );
+  // Non-throwing lookup. A storefront whose plan code has been retired
+  // keeps all methods available rather than crashing the checkout page.
+  const plan = tryGetPlanByCode(store.planId || "starter");
+  const allowedMethods = plan
+    ? allPaymentMethods.filter((m) =>
+        (plan.paymentMethods as readonly string[]).includes(m.id)
+      )
+    : allPaymentMethods;
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -72,7 +75,10 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
     }
   };
 
-  const placeOrder = (paymentMethodName: string, paymentStatus: "Paid" | "Pending") => {
+  const placeOrder = (
+    paymentMethodName: string,
+    paymentStatus: "Paid" | "Pending"
+  ) => {
     const orderItems = items.map((item) => ({
       name: item.name,
       quantity: item.quantity,
@@ -94,7 +100,10 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
     setPaymentOpen(false);
   };
 
-  const handlePaymentSuccess = (result: { status: string; message: string }) => {
+  const handlePaymentSuccess = (result: {
+    status: string;
+    message: string;
+  }) => {
     placeOrder("Online Payment", "Paid");
   };
 
@@ -104,9 +113,12 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-100 text-success-600 dark:bg-success-900/30 dark:text-success-200">
           <AtlasIcon name="check" className="h-8 w-8" />
         </div>
-        <h1 className="mt-6 text-2xl font-bold text-neutral-950">Order Placed!</h1>
+        <h1 className="mt-6 text-2xl font-bold text-neutral-950">
+          Order Placed!
+        </h1>
         <p className="mt-2 text-neutral-600">
-          Thank you for your purchase. You will receive a confirmation email shortly.
+          Thank you for your purchase. You will receive a confirmation email
+          shortly.
         </p>
         <Link
           href={`/ecommerce-stores/${store.slug}/products`}
@@ -123,7 +135,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   if (items.length === 0) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
-        <h1 className="text-2xl font-bold text-neutral-950">No items to checkout</h1>
+        <h1 className="text-2xl font-bold text-neutral-950">
+          No items to checkout
+        </h1>
         <p className="mt-2 text-neutral-600">Your cart is empty.</p>
         <Link
           href={`/ecommerce-stores/${store.slug}/products`}
@@ -139,7 +153,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-3xl font-bold text-neutral-950">Checkout</h1>
-      <p className="mt-2 text-sm text-neutral-600">Complete your order below.</p>
+      <p className="mt-2 text-sm text-neutral-600">
+        Complete your order below.
+      </p>
 
       {!isAuthenticated && (
         <div className="mt-4 rounded-lg bg-neutral-100 p-4 text-sm text-neutral-600">
@@ -159,7 +175,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_400px]">
         {/* Customer details form */}
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
-          <h2 className="text-sm font-semibold text-neutral-950">Customer Details</h2>
+          <h2 className="text-sm font-semibold text-neutral-950">
+            Customer Details
+          </h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -173,7 +191,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="e.g., John Mensah"
               />
-              {errors.name && <p className="mt-1 text-xs text-danger-600">{errors.name}</p>}
+              {errors.name && (
+                <p className="mt-1 text-xs text-danger-600">{errors.name}</p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -187,7 +207,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="you@example.com"
               />
-              {errors.email && <p className="mt-1 text-xs text-danger-600">{errors.email}</p>}
+              {errors.email && (
+                <p className="mt-1 text-xs text-danger-600">{errors.email}</p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -201,7 +223,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="024 XXX XXXX"
               />
-              {errors.phone && <p className="mt-1 text-xs text-danger-600">{errors.phone}</p>}
+              {errors.phone && (
+                <p className="mt-1 text-xs text-danger-600">{errors.phone}</p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -215,7 +239,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="Accra"
               />
-              {errors.city && <p className="mt-1 text-xs text-danger-600">{errors.city}</p>}
+              {errors.city && (
+                <p className="mt-1 text-xs text-danger-600">{errors.city}</p>
+              )}
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -229,7 +255,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="Street, house number"
               />
-              {errors.address && <p className="mt-1 text-xs text-danger-600">{errors.address}</p>}
+              {errors.address && (
+                <p className="mt-1 text-xs text-danger-600">{errors.address}</p>
+              )}
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-700">
@@ -262,7 +290,9 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
 
         {/* Order summary and payment */}
         <div className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
-          <h2 className="text-sm font-semibold text-neutral-950">Order Summary</h2>
+          <h2 className="text-sm font-semibold text-neutral-950">
+            Order Summary
+          </h2>
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-neutral-600">Items ({totalItems})</span>
@@ -276,13 +306,17 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
             </div>
             <div className="border-t border-neutral-200 pt-2 flex justify-between text-base">
               <span className="font-semibold text-neutral-950">Total</span>
-              <span className="font-bold text-neutral-950">GH₵ {subtotal.toFixed(2)}</span>
+              <span className="font-bold text-neutral-950">
+                GH₵ {subtotal.toFixed(2)}
+              </span>
             </div>
           </div>
 
           {/* Payment method selection */}
           <div className="mt-6 space-y-3">
-            <p className="text-sm font-medium text-neutral-950">Payment Method</p>
+            <p className="text-sm font-medium text-neutral-950">
+              Payment Method
+            </p>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"

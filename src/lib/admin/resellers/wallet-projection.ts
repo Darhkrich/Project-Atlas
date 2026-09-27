@@ -100,13 +100,14 @@ export function projectWallet(
 
   const totals = commissionTotalsById.get(reseller.id) ?? ZERO_TOTALS;
 
-  return {
+ return {
     id: "CW-" + reseller.id,
     resellerId: reseller.id,
     resellerName: reseller.businessName,
     currency: "GHS",
     balance,
     isOverdrawn: balance < 0,
+    frozen: walletRecord?.status === "frozen",
     pendingBalance: totals.pending,
     totalEarned: totals.earned,
     totalWithdrawn: totals.paid,

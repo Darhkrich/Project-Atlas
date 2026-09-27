@@ -4,6 +4,7 @@ import type {
   TreasuryApprovalStatus,
   TreasuryDirection,
   TreasuryEventKind,
+  TreasuryLiabilityPoolType,
   TreasuryReconciliationStatus,
 } from "./types";
 
@@ -43,6 +44,15 @@ export const TREASURY_KIND_ORDER: TreasuryEventKind[] = [
   "internal_reclassification",
 ];
 
+export const TREASURY_POOL_ORDER: TreasuryLiabilityPoolType[] = [
+  "customer",
+  "storefront_user",
+  "reseller",
+  "merchant_billing",
+  "merchant_main",
+  "provider_settlement_pending",
+];
+
 export const TREASURY_APPROVAL_ORDER: TreasuryApprovalStatus[] = [
   "auto",
   "pending",
@@ -58,3 +68,7 @@ export const TREASURY_RECONCILIATION_ORDER: TreasuryReconciliationStatus[] = [
 
 export const MOCK_BANNER_TEXT =
   "Treasury movements are mock. No real money moves. Wire to the banking layer before any live use.";
+
+export const PERIOD_DEFAULT_MONTHS_VISIBLE = 12;
+
+export const PERIOD_CLOSE_PERMISSION_ACTION = "treasury:manage";

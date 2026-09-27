@@ -1,26 +1,16 @@
-import type {
-  PlanCategory,
-  ServiceCategory,
-} from "@/lib/services-page-data";
+import type { PlanCategory, ServiceCategory } from "@/lib/domains/catalog";
+import { slugify } from "@/lib/domains/catalog";
 import type { DataNetwork, DataPlanCategory } from "../types/data-plan";
-import { slugify } from "@/lib/admin/services/helpers";
 import { HISTORY_CAP } from "./constants";
 
 const DATA_SERVICE_ID = "data";
 
-/**
- * Network and category IDs are derived from name via slug. Renaming a
- * network changes its ID, and also changes the ID of every category under
- * it (because categoryIdFor includes the network slug). Any stored
- * reference (URL params, audit entries, selection state) that uses an old
- * ID is orphaned on rename. Accepted limitation for this batch.
- */
 function networkIdFor(networkName: string): string {
-  return `net-${slugify(networkName)}`;
+  return "net-" + slugify(networkName);
 }
 
 function categoryIdFor(networkName: string, categoryName: string): string {
-  return `cat-${slugify(networkName)}-${slugify(categoryName)}`;
+  return "cat-" + slugify(networkName) + "-" + slugify(categoryName);
 }
 
 function findDataService(
@@ -35,8 +25,6 @@ function getNetworkTree(
   const data = findDataService(categories);
   return data?.formConfig?.networkPlanCategories ?? {};
 }
-
-/* ------------------------------ Projection ----------------------------- */
 
 export function projectNetworksFromCatalog(
   categories: ServiceCategory[]
@@ -64,18 +52,6 @@ export function projectNetworksFromCatalog(
   return networks;
 }
 
-/* ------------------------------ Mutation ------------------------------- */
-
-/**
- * Applies a change to one network's plan category tree, returning a new
- * ServiceCategory array with only the Data service modified. All other
- * services pass through unchanged. If the network does not exist, an empty
- * tree entry is created; callers adding a new network should prefer
- * applyNetworkTreeMutation.
- *
- * statusHistory is capped at HISTORY_CAP on write so the source catalog
- * cannot grow unbounded across many toggles.
- */
 export function applyNetworkMutation(
   categories: ServiceCategory[],
   networkName: string,
@@ -107,9 +83,6 @@ export function applyNetworkMutation(
   });
 }
 
-/**
- * Replaces the entire network tree. Used when adding or removing a network.
- */
 export function applyNetworkTreeMutation(
   categories: ServiceCategory[],
   mutation: (
@@ -132,18 +105,10 @@ export function applyNetworkTreeMutation(
   });
 }
 
-/* ------------------------------ Validity ------------------------------- */
-
 const DAYS_REGEX = /(\d+)\s*(day|days)/i;
 const HOURS_REGEX = /(\d+)\s*(hour|hours|hr|hrs)/i;
 const MINUTES_REGEX = /(\d+)\s*(minute|minutes|min|mins)/i;
 
-/**
- * Best-effort validity extraction from a free-text description. Handles
- * "N days", "N hours", "N minutes", "No expiry", "Non-expiry", and
- * "Unlimited". Weeks and months are not handled; those descriptions fall
- * through to an empty string and the admin fills the field manually.
- */
 export function extractValidity(description: string): string {
   if (!description) return "";
 
@@ -175,8 +140,6 @@ export function extractValidity(description: string): string {
 
   return "";
 }
-
-/* ------------------------------ IDs ----------------------------------- */
 
 export function buildNetworkId(
   networkName: string,

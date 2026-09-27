@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from "react";
 import type { MerchantSubscription } from "@/lib/admin/types/ecommerce";
-import type { PlanCode } from "@/config/subscription-plans";
-import { subscriptionPlans, getPlanByCode } from "@/config/subscription-plans";
+import { subscriptionPlans, tryGetPlanByCode } from "@/config/subscription-plans";
+import { derivePlanDisplayPrices } from "@/lib/domains/subscriptions";
 import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
 import { ModalShell } from "@/components/admin/ui/model-shell";
@@ -23,7 +23,7 @@ interface ChangePlanModalProps {
   open: boolean;
   subscription: MerchantSubscription | null;
   onClose: () => void;
-  onConfirm: (planCode: PlanCode) => void;
+  onConfirm: (planCode: string) => void;
 }
 
 export function ChangePlanModal({
@@ -32,7 +32,7 @@ export function ChangePlanModal({
   onClose,
   onConfirm,
 }: ChangePlanModalProps) {
-  const [selectedPlan, setSelectedPlan] = useState<PlanCode>("starter");
+  const [selectedPlan, setSelectedPlan] = useState<string>("starter");
 
   useEffect(() => {
     if (!open || !subscription) return;
@@ -42,8 +42,19 @@ export function ChangePlanModal({
   if (!open || !subscription) return null;
 
   const changed = selectedPlan !== subscription.planCode;
-  const currentPlan = getPlanByCode(subscription.planCode);
-  const newPlan = getPlanByCode(selectedPlan);
+  const currentPlan = tryGetPlanByCode(subscription.planCode);
+  const newPlan = tryGetPlanByCode(selectedPlan);
+
+  const currentName = currentPlan?.name ?? subscription.planName;
+  const newName = newPlan?.name ?? selectedPlan;
+
+  const priceLabel = (() => {
+    if (!newPlan) return "\u2014";
+    const prices = derivePlanDisplayPrices(newPlan);
+    return subscription.billingCycle === "annual"
+      ? prices.annual
+      : prices.monthly;
+  })();
 
   return (
     <ModalShell
@@ -76,7 +87,7 @@ export function ChangePlanModal({
             id="sub-new-plan"
             className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             value={selectedPlan}
-            onChange={(e) => setSelectedPlan(e.target.value as PlanCode)}
+            onChange={(e) => setSelectedPlan(e.target.value)}
           >
             {subscriptionPlans.map((plan) => (
               <option key={plan.code} value={plan.code}>
@@ -96,17 +107,13 @@ export function ChangePlanModal({
                 <dt className="text-neutral-500 dark:text-neutral-400">
                   From
                 </dt>
-                <dd className="text-right font-medium">
-                  {currentPlan.name}
-                </dd>
+                <dd className="text-right font-medium">{currentName}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-neutral-500 dark:text-neutral-400">
                   To
                 </dt>
-                <dd className="text-right font-medium">
-                  {newPlan.name}
-                </dd>
+                <dd className="text-right font-medium">{newName}</dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-neutral-500 dark:text-neutral-400">
@@ -114,11 +121,7 @@ export function ChangePlanModal({
                     ? "Annual price"
                     : "Monthly price"}
                 </dt>
-                <dd className="text-right font-medium">
-                  {subscription.billingCycle === "annual"
-                    ? newPlan.annualPrice
-                    : newPlan.monthlyPrice}
-                </dd>
+                <dd className="text-right font-medium">{priceLabel}</dd>
               </div>
             </dl>
           </div>

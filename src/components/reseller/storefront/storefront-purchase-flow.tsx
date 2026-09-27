@@ -34,6 +34,8 @@ import { createStorefrontCustomer } from "@/lib/domains/storefront/customer-muta
 import { formatCurrency } from "@/lib/shared/format";
 import type { StorefrontCustomer } from "@/lib/storefront/customer-types";
 import type { OrderWalletDebit } from "@/lib/admin/types/orders";
+import type { PaymentMethodId } from "@/lib/admin/types/payment";
+
 
 interface StorefrontPurchaseFlowProps {
   serviceId: string;
@@ -290,6 +292,14 @@ function PurchaseFlowBody({
       "";
     const orderContext = resolveOrderContext(serviceId, selectedNetwork ?? undefined);
 
+    // Provider cost from the catalog. Only passed when the plan carries a
+    // real cost. Inferred costs skip the treasury accrual.
+    const plan = orderSummary.plan;
+    const providerCost =
+      plan && plan.providerCost !== undefined && !plan.providerCostInferred
+        ? plan.providerCost
+        : undefined;
+
     // Ensure the customer record exists in the shared storefront customer
     // store before we link the order to it.
     let storefrontUserId: string | undefined = input.storefrontUserId;
@@ -317,9 +327,10 @@ function PurchaseFlowBody({
       serviceId: orderContext.serviceId,
       providerId: orderContext.providerId,
       networkId: orderContext.networkId,
-      paymentMethodId: input.paymentMethodId as PaymentFlowSavedMethod["methodId"],
+      paymentMethodId: input.paymentMethodId as PaymentMethodId, 
       amount: orderSummary.total,
       walletDebit: input.walletDebit,
+      providerCost,
     });
 
     if (!result.ok || !result.order) return;

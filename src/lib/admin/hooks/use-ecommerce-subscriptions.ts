@@ -7,7 +7,10 @@ import {
   getInvoicesForSubscription,
   subscribeToInvoiceStore,
 } from "@/lib/admin/mock/invoice-store";
-import { subscriptionPlans } from "@/config/subscription-plans";
+import {
+  subscribeToPlanStore,
+  liveSubscriptionPlans,
+} from "@/lib/domains/subscriptions";
 import {
   projectSubscriptionSummary,
   projectSubscriptions,
@@ -31,16 +34,21 @@ export function useEcommerceSubscriptions(): UseEcommerceSubscriptionsResult {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const unsub = subscribeToInvoiceStore(() => setTick((x) => x + 1));
-    return () => unsub();
+    const unsubInvoice = subscribeToInvoiceStore(() => setTick((x) => x + 1));
+    const unsubPlans = subscribeToPlanStore(() => setTick((x) => x + 1));
+    return () => {
+      unsubInvoice();
+      unsubPlans();
+    };
   }, []);
 
   const value = useMemo(() => {
-    const projected = projectSubscriptions(merchants, subscriptionPlans);
+    const plans = liveSubscriptionPlans.slice();
+    const projected = projectSubscriptions(merchants, plans);
     const subscriptions = sortSubscriptions(projected);
     return {
       subscriptions,
-      summary: projectSubscriptionSummary(subscriptions, subscriptionPlans),
+      summary: projectSubscriptionSummary(subscriptions, plans),
       invoicesFor: (subscriptionId: string) =>
         getInvoicesForSubscription(subscriptionId),
     };

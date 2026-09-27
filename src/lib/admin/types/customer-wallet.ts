@@ -1,21 +1,40 @@
 import type {
   WalletApprovalReason,
+  WalletAutoApproveConfig,
   WalletFundingMethod,
   WalletWithdrawalStatus,
 } from "@/lib/domains/wallet/enums";
-import type { StorefrontRefundRequest } from "@/lib/domains/wallet/storefront-user-types";
+import type {
+  StorefrontRefundHistoryEntry,
+  StorefrontRefundRequest,
+} from "@/lib/domains/wallet/storefront-user-types";
 import type {
   CustomerWithdrawalHistoryEntry,
   CustomerWithdrawalRequest,
 } from "@/lib/customer/types/wallet";
+import type {
+  ResellerWithdrawalHistoryEntry,
+  ResellerWithdrawalRequest,
+} from "@/lib/reseller/types/wallet";
+import type {
+  MerchantWithdrawalHistoryEntry,
+  MerchantWithdrawalRequest,
+} from "@/lib/domains/wallet/merchant-money/types";
 
 export type {
   WalletApprovalReason,
+  WalletAutoApproveConfig,
   WalletFundingMethod,
   WalletWithdrawalStatus,
 };
 
-export type QueueOwnerType = "customer" | "storefront_user";
+export type QueueOwnerType =
+  | "customer"
+  | "storefront_user"
+  | "reseller"
+  | "merchant";
+
+export type PayoutDirection = "to_source" | "to_destination";
 
 export interface MetricWithDelta {
   current: number;
@@ -53,7 +72,12 @@ export interface WalletSummary {
 export type WithdrawalQueueRaw =
   | CustomerWithdrawalRequest
   | CustomerWithdrawalHistoryEntry
-  | StorefrontRefundRequest;
+  | StorefrontRefundRequest
+  | StorefrontRefundHistoryEntry
+  | ResellerWithdrawalRequest
+  | ResellerWithdrawalHistoryEntry
+  | MerchantWithdrawalRequest
+  | MerchantWithdrawalHistoryEntry;
 
 export interface WalletWithdrawalQueueRow {
   id: string;
@@ -65,12 +89,27 @@ export interface WalletWithdrawalQueueRow {
   ownerPhone?: string;
   storefrontId?: string;
   storefrontName?: string;
+
   amount: number;
   fee: number;
   total: number;
-  sourceProvider: string;
-  sourceMaskedLabel: string;
-  sourceMethodId: WalletFundingMethod;
+
+  /**
+   * Direction of the payout. to_source for refund-back-to-funding-rail,
+   * to_destination for cash-out to a registered account.
+   */
+  payoutDirection: PayoutDirection;
+
+  /**
+   * Human-readable destination. Source provider and mask for to_source,
+   * destination provider and mask for to_destination. Composed by the
+   * projection so consumers never branch on owner type to render.
+   */
+  payoutSummary: string;
+
+  /** Reference string for display. transactionRef from the source record. */
+  payoutRef: string;
+
   approvalRequiredReasons: WalletApprovalReason[];
   status: WalletWithdrawalStatus;
   statusLabel: string;
@@ -80,15 +119,6 @@ export interface WalletWithdrawalQueueRow {
   raw: WithdrawalQueueRaw;
 }
 
-export function isStorefrontQueueRow(
-  row: WalletWithdrawalQueueRow
-): row is WalletWithdrawalQueueRow & {
-  ownerType: "storefront_user";
-  raw: StorefrontRefundRequest;
-} {
-  return row.ownerType === "storefront_user";
-}
-
 export function isCustomerQueueRow(
   row: WalletWithdrawalQueueRow
 ): row is WalletWithdrawalQueueRow & {
@@ -96,6 +126,33 @@ export function isCustomerQueueRow(
   raw: CustomerWithdrawalRequest | CustomerWithdrawalHistoryEntry;
 } {
   return row.ownerType === "customer";
+}
+
+export function isStorefrontQueueRow(
+  row: WalletWithdrawalQueueRow
+): row is WalletWithdrawalQueueRow & {
+  ownerType: "storefront_user";
+  raw: StorefrontRefundRequest | StorefrontRefundHistoryEntry;
+} {
+  return row.ownerType === "storefront_user";
+}
+
+export function isResellerQueueRow(
+  row: WalletWithdrawalQueueRow
+): row is WalletWithdrawalQueueRow & {
+  ownerType: "reseller";
+  raw: ResellerWithdrawalRequest | ResellerWithdrawalHistoryEntry;
+} {
+  return row.ownerType === "reseller";
+}
+
+export function isMerchantQueueRow(
+  row: WalletWithdrawalQueueRow
+): row is WalletWithdrawalQueueRow & {
+  ownerType: "merchant";
+  raw: MerchantWithdrawalRequest | MerchantWithdrawalHistoryEntry;
+} {
+  return row.ownerType === "merchant";
 }
 
 export interface WalletFundingLedgerRow {

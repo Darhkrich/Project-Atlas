@@ -43,6 +43,9 @@ import {
   CancelSubscriptionModal,
   ReactivateSubscriptionModal,
 } from "@/components/admin/ecommerce/subscription-action-modals";
+import { PlanEditorView } from "@/components/admin/ecommerce/plan-editor-view";
+
+type View = "all" | "plans";
 
 interface UrlFilters extends SubscriptionFilters {
   view: string;
@@ -102,6 +105,8 @@ function EcommerceSubscriptionsPageInner() {
     useUrlFilters<UrlFilters>(DEFAULT_FILTERS);
   const debouncedSearch = useDebouncedValue(filters.q, 300);
 
+  const view: View = filters.view === "plans" ? "plans" : "all";
+
   const [drawerTarget, setDrawerTarget] =
     useState<MerchantSubscription | null>(null);
   const [changePlanTarget, setChangePlanTarget] =
@@ -143,32 +148,35 @@ function EcommerceSubscriptionsPageInner() {
     [subscriptions, debouncedSearch, filters]
   );
 
-  const headerMeta = (
-    <>
-      <span>
-        {summary.total} subscription{summary.total === 1 ? "" : "s"}
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>{summary.active} active</span>
-      {summary.pastDue + summary.expired > 0 && (
-        <>
-          <span aria-hidden="true">·</span>
-          <span className="text-danger-700 dark:text-danger-300">
-            {summary.pastDue + summary.expired} at risk
-          </span>
-        </>
-      )}
-      <span aria-hidden="true">·</span>
-      <span>
-        {new Intl.NumberFormat("en-GH", {
-          style: "currency",
-          currency: "GHS",
-          maximumFractionDigits: 0,
-        }).format(summary.mrr)}{" "}
-        MRR
-      </span>
-    </>
-  );
+  const headerMeta =
+    view === "plans" ? (
+      <span>Subscription plan catalog</span>
+    ) : (
+      <>
+        <span>
+          {summary.total} subscription{summary.total === 1 ? "" : "s"}
+        </span>
+        <span aria-hidden="true">·</span>
+        <span>{summary.active} active</span>
+        {summary.pastDue + summary.expired > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span className="text-danger-700 dark:text-danger-300">
+              {summary.pastDue + summary.expired} at risk
+            </span>
+          </>
+        )}
+        <span aria-hidden="true">·</span>
+        <span>
+          {new Intl.NumberFormat("en-GH", {
+            style: "currency",
+            currency: "GHS",
+            maximumFractionDigits: 0,
+          }).format(summary.mrr)}{" "}
+          MRR
+        </span>
+      </>
+    );
 
   const handleChangePlan = (planCode: PlanCode) => {
     if (!changePlanTarget) return;
@@ -213,11 +221,7 @@ function EcommerceSubscriptionsPageInner() {
 
   const handleCancel = (reason: string) => {
     if (!cancelTarget) return;
-    const result = cancelSubscription(
-      cancelTarget.merchantId,
-      reason,
-      actor
-    );
+    const result = cancelSubscription(cancelTarget.merchantId, reason, actor);
     if (result.ok) {
       showToast("success", "Subscription cancelled.");
       if (drawerTarget?.id === cancelTarget.id) {
@@ -231,10 +235,7 @@ function EcommerceSubscriptionsPageInner() {
 
   const handleReactivate = () => {
     if (!reactivateTarget) return;
-    const result = reactivateSubscription(
-      reactivateTarget.merchantId,
-      actor
-    );
+    const result = reactivateSubscription(reactivateTarget.merchantId, actor);
     if (result.ok) {
       showToast("success", "Subscription reactivated.");
       if (drawerTarget?.id === reactivateTarget.id) {
@@ -264,119 +265,168 @@ function EcommerceSubscriptionsPageInner() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Subscriptions"
-        description="Merchant subscription plans, billing status, and lifecycle."
+        description={
+          view === "plans"
+            ? "Create, edit, and retire subscription plans for merchants."
+            : "Merchant subscription plans, billing status, and lifecycle."
+        }
         meta={headerMeta}
-        actions={<ExportMenu onExport={handleExport} formats={["csv"]} />}
+        actions={
+          view === "all" ? (
+            <ExportMenu onExport={handleExport} formats={["csv"]} />
+          ) : undefined
+        }
       />
 
-      <SubscriptionsSummaryCards summary={summary} loading={loading} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <AtlasIcon
-            name="search"
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-          />
-          <Input
-            aria-label="Search subscriptions"
-            placeholder="Search by merchant name or ID"
-            className="pl-9"
-            value={filters.q}
-            onChange={(e) => setFilters({ q: e.target.value })}
-          />
-        </div>
-
-        <select
-          aria-label="Filter by status"
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          value={filters.status}
-          onChange={(e) => setFilters({ status: e.target.value })}
+      <div
+        role="tablist"
+        aria-label="Subscriptions views"
+        className="flex border-b border-neutral-200 dark:border-neutral-800"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "all"}
+          onClick={() => setFilters({ view: "all" })}
+          className={
+            "border-b-2 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " +
+            (view === "all"
+              ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+              : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200")
+          }
         >
-          <option value="">All statuses</option>
-          {ALL_SUBSCRIPTION_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {SUBSCRIPTION_STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Filter by plan"
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          value={filters.plan}
-          onChange={(e) => setFilters({ plan: e.target.value })}
+          All subscriptions
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "plans"}
+          onClick={() => setFilters({ view: "plans" })}
+          className={
+            "border-b-2 px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " +
+            (view === "plans"
+              ? "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300"
+              : "border-transparent text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200")
+          }
         >
-          <option value="">All plans</option>
-          {subscriptionPlans.map((p) => (
-            <option key={p.code} value={p.code}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Filter by billing cycle"
-          className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          value={filters.billingCycle}
-          onChange={(e) => setFilters({ billingCycle: e.target.value })}
-        >
-          <option value="">All cycles</option>
-          <option value="monthly">Monthly</option>
-          <option value="annual">Annual</option>
-        </select>
-
-        {hasActive && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            Clear filters
-          </Button>
-        )}
+          Plans
+        </button>
       </div>
 
-      <p
-        aria-live="polite"
-        className="text-xs text-neutral-500 dark:text-neutral-400"
-      >
-        Showing {filtered.length} of {subscriptions.length} subscription
-        {subscriptions.length === 1 ? "" : "s"}
-        {hasActive ? " (filtered)" : ""}
-      </p>
+      {view === "plans" ? (
+        <PlanEditorView />
+      ) : (
+        <>
+          <SubscriptionsSummaryCards summary={summary} loading={loading} />
 
-      {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-14 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"
-            />
-          ))}
-        </div>
-      ) : subscriptions.length === 0 ? (
-        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-          <EmptyState
-            variant="no_data"
-            title="No subscriptions yet"
-            description="Subscriptions appear here once merchants are onboarded."
-          />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-          <EmptyState
-            variant="no_results"
-            title="No subscriptions match these filters"
-            description="Try a different search or clear the filters."
-            action={
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[220px] flex-1">
+              <AtlasIcon
+                name="search"
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+              />
+              <Input
+                aria-label="Search subscriptions"
+                placeholder="Search by merchant name or ID"
+                className="pl-9"
+                value={filters.q}
+                onChange={(e) => setFilters({ q: e.target.value })}
+              />
+            </div>
+
+            <select
+              aria-label="Filter by status"
+              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              value={filters.status}
+              onChange={(e) => setFilters({ status: e.target.value })}
+            >
+              <option value="">All statuses</option>
+              {ALL_SUBSCRIPTION_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {SUBSCRIPTION_STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filter by plan"
+              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              value={filters.plan}
+              onChange={(e) => setFilters({ plan: e.target.value })}
+            >
+              <option value="">All plans</option>
+              {subscriptionPlans.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filter by billing cycle"
+              className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              value={filters.billingCycle}
+              onChange={(e) => setFilters({ billingCycle: e.target.value })}
+            >
+              <option value="">All cycles</option>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+
+            {hasActive && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Clear filters
               </Button>
-            }
-          />
-        </div>
-      ) : (
-        <SubscriptionsTable
-          subscriptions={filtered}
-          onView={(sub) => setDrawerTarget(sub)}
-        />
+            )}
+          </div>
+
+          <p
+            aria-live="polite"
+            className="text-xs text-neutral-500 dark:text-neutral-400"
+          >
+            Showing {filtered.length} of {subscriptions.length} subscription
+            {subscriptions.length === 1 ? "" : "s"}
+            {hasActive ? " (filtered)" : ""}
+          </p>
+
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-14 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800"
+                />
+              ))}
+            </div>
+          ) : subscriptions.length === 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              <EmptyState
+                variant="no_data"
+                title="No subscriptions yet"
+                description="Subscriptions appear here once merchants are onboarded."
+              />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+              <EmptyState
+                variant="no_results"
+                title="No subscriptions match these filters"
+                description="Try a different search or clear the filters."
+                action={
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <SubscriptionsTable
+              subscriptions={filtered}
+              onView={(sub) => setDrawerTarget(sub)}
+            />
+          )}
+        </>
       )}
 
       <SubscriptionDetailDrawer

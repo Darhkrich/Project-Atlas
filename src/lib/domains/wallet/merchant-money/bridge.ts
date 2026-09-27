@@ -2,13 +2,11 @@
 //
 // Admin-native events (storefront checkouts, plan charges, refunds) live
 // in admin-owned stores. When those events touch merchant wallet money,
-// they call into this bridge. The bridge writes a ledger entry in the
-// shared merchant money store so balance derivation sees the movement.
+// they call into this bridge.
 //
-// Every debit is gated on the running balance. A bridge call that would
-// drive a wallet negative is rejected. No ledger entry is written for a
-// rejected debit. The caller decides what to show the merchant or the
-// admin.
+// Layer 3 A1: every bridge call writes one audit entry. The bridge is
+// always invoked by a system process (order settlement pipeline, plan
+// billing scheduler, refund flow), so the audit actor is SYSTEM.
 
 import { getMerchantWalletState, internalAppendLedgerEntry } from "./store";
 import type {
@@ -16,6 +14,25 @@ import type {
   MerchantPlanChargeLedgerEntry,
   MerchantRefundLedgerEntry,
 } from "./types";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import type {
+  TreasuryActor,
+  TreasuryCounterparty,
+} from "@/lib/domains/treasury/types";
+import { appendAuditEntry } from "@/lib/domains/audit";
+
+const SYSTEM_ACTOR: TreasuryActor = {
+  id: "system",
+  name: "System",
+  email: "system@atlas.com",
+};
+
+function merchantCounterparty(
+  merchantId: string,
+  merchantName: string
+): TreasuryCounterparty {
+  return { type: "merchant", id: merchantId, name: merchantName };
+}
 
 export interface BridgeResult {
   ok: boolean;
@@ -62,6 +79,40 @@ export function bridgeCheckoutToLedger(
     transactionRef: input.transactionRef,
   };
   internalAppendLedgerEntry(entry);
+
+  emitLedgerEvent({
+    kind: "storefront_order_credit",
+    direction: "in",
+    amount: input.amount,
+    poolType: "merchant_main",
+    ownerId: input.merchantId,
+    counterparty: merchantCounterparty(
+      input.merchantId,
+      state.main.merchantName
+    ),
+    reference: input.transactionRef ?? input.orderId,
+    description:
+      "Storefront order credit: " +
+      input.orderNumber +
+      " via " +
+      input.paymentMethod,
+    actor: SYSTEM_ACTOR,
+    relatedEventId: entry.id,
+    settledAt: input.settledAt ?? input.createdAt,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.checkout_credit",
+    resourceType: "wallet",
+    resourceId: input.merchantId,
+    actor: SYSTEM_ACTOR,
+    metadata: {
+      orderId: input.orderId,
+      amount: input.amount,
+      method: input.paymentMethod,
+    },
+  });
+
   return { ok: true };
 }
 
@@ -89,9 +140,6 @@ export function bridgePlanChargeToLedger(
   const state = getMerchantWalletState(input.merchantId);
   if (!state) return { ok: false, error: "Merchant wallet not found." };
 
-  // A successful plan charge debits the billing wallet. If the billing
-  // wallet cannot cover it, write a failed entry instead. The attempt is
-  // recorded so the merchant and admin both see it, but no money moves.
   if (input.status === "successful") {
     const billing = state.billing;
     if (billing.balance < input.amount) {
@@ -110,6 +158,19 @@ export function bridgePlanChargeToLedger(
         transactionRef: input.transactionRef,
       };
       internalAppendLedgerEntry(failedEntry);
+
+      appendAuditEntry({
+        action: "wallet.merchant.plan_charge",
+        resourceType: "wallet",
+        resourceId: input.merchantId,
+        actor: SYSTEM_ACTOR,
+        metadata: {
+          planCode: input.planCode,
+          amount: input.amount,
+          outcome: "failed_insufficient_billing_balance",
+        },
+      });
+
       return {
         ok: false,
         error:
@@ -134,6 +195,39 @@ export function bridgePlanChargeToLedger(
     transactionRef: input.transactionRef,
   };
   internalAppendLedgerEntry(entry);
+
+  if (input.status === "successful") {
+    emitLedgerEvent({
+      kind: "internal_reclassification",
+      direction: "internal",
+      amount: input.amount,
+      poolType: "merchant_billing",
+      ownerId: input.merchantId,
+      counterparty: merchantCounterparty(
+        input.merchantId,
+        state.billing.merchantName
+      ),
+      reference: input.transactionRef ?? input.id,
+      description:
+        "Plan charge: " + input.planCode + " (" + input.billingCycle + ")",
+      actor: SYSTEM_ACTOR,
+      relatedEventId: entry.id,
+      settledAt: input.completedAt ?? input.createdAt,
+    });
+  }
+
+  appendAuditEntry({
+    action: "wallet.merchant.plan_charge",
+    resourceType: "wallet",
+    resourceId: input.merchantId,
+    actor: SYSTEM_ACTOR,
+    metadata: {
+      planCode: input.planCode,
+      amount: input.amount,
+      outcome: input.status,
+    },
+  });
+
   return { ok: true };
 }
 
@@ -160,8 +254,6 @@ export function bridgeRefundToLedger(
   const state = getMerchantWalletState(input.merchantId);
   if (!state) return { ok: false, error: "Merchant wallet not found." };
 
-  // Only settled refunds debit. A processing refund has no balance
-  // impact yet. When it later settles, that call passes settledAt.
   const settlesNow = Boolean(input.settledAt);
   if (settlesNow && state.main.balance < input.amount) {
     return {
@@ -185,5 +277,42 @@ export function bridgeRefundToLedger(
     transactionRef: input.transactionRef,
   };
   internalAppendLedgerEntry(entry);
+
+  if (settlesNow) {
+    emitLedgerEvent({
+      kind: "refund_rail_debit",
+      direction: "out",
+      amount: input.amount,
+      poolType: "merchant_main",
+      ownerId: input.merchantId,
+      counterparty: merchantCounterparty(
+        input.merchantId,
+        state.main.merchantName
+      ),
+      reference: input.transactionRef ?? input.id,
+      description:
+        "Merchant refund to customer: " +
+        input.orderNumber +
+        " (" +
+        input.reason +
+        ")",
+      actor: SYSTEM_ACTOR,
+      relatedEventId: entry.id,
+      settledAt: input.settledAt!,
+    });
+
+    appendAuditEntry({
+      action: "wallet.merchant.refund_settled",
+      resourceType: "wallet",
+      resourceId: input.merchantId,
+      actor: SYSTEM_ACTOR,
+      metadata: {
+        orderId: input.orderId,
+        amount: input.amount,
+        reason: input.reason,
+      },
+    });
+  }
+
   return { ok: true };
 }

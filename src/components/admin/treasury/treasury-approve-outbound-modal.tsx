@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ModalShell } from "@/components/admin/ui/model-shell";
 import { Button } from "@/components/admin/ui/button";
 import { formatCurrency } from "@/lib/admin/formatters";
-import type { TreasuryEvent } from "@/lib/admin/types/treasury";
-import { TREASURY_KIND_LABELS } from "@/lib/admin/treasury/treasury-labels";
+import type { TreasuryEvent } from "@/lib/domains/treasury/types";
+import { TREASURY_KIND_LABELS } from "@/lib/domains/treasury/labels";
 
 interface TreasuryApproveOutboundModalProps {
   event: TreasuryEvent | null;

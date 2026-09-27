@@ -7,6 +7,7 @@ import type {
 } from "@/lib/domains/wallet/enums";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const FUNDING_STATUS_LABEL: Record<WalletFundingStatus, string> = {
   successful: "Successful",
@@ -14,7 +15,10 @@ export const FUNDING_STATUS_LABEL: Record<WalletFundingStatus, string> = {
   failed: "Failed",
 };
 
-export const FUNDING_STATUS_VARIANT: Record<WalletFundingStatus, Variant> = {
+export const FUNDING_STATUS_VARIANT: Record<
+  WalletFundingStatus,
+  StatusVariant
+> = {
   successful: "success",
   pending: "warning",
   failed: "danger",
@@ -33,7 +37,7 @@ export const WITHDRAWAL_STATUS_LABEL: Record<
 
 export const WITHDRAWAL_STATUS_VARIANT: Record<
   WalletWithdrawalStatus,
-  Variant
+  StatusVariant
 > = {
   pending_admin: "warning",
   pending_processing: "info",

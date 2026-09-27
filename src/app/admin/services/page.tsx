@@ -1,8 +1,16 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-// src/app/admin/services/page.tsx
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { ServiceCategory, ServiceSection } from "@/lib/domains/catalog";
+import {
+  CATALOG_ACTIONS,
+  CATALOG_RESOURCE_TYPES,
+  applyCatalogMutation,
+  reorder,
+  slugify,
+  type CatalogActor,
+} from "@/lib/domains/catalog";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { EmptyState } from "@/components/admin/ui/empty-state";
@@ -23,20 +31,17 @@ import { ServiceBulkToggleModal } from "@/components/admin/services/service-acti
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
+import { useAuditEntries } from "@/lib/admin/hooks/use-audit-entries";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
-import {
-  getFreshServiceCategories,
-} from "@/lib/admin/mock/services-admin";
 import {
   isAvailable,
   isComingSoon,
   isInactive,
   nextDisplayOrder,
-  reorder,
   sectionsFor,
   serviceStatus,
-  slugify,
 } from "@/lib/admin/services/helpers";
 import { servicesToCsv } from "@/lib/admin/services/csv-export";
 import {
@@ -44,12 +49,7 @@ import {
   type FilterGroup,
   type SortKey,
 } from "@/lib/admin/services/constants";
-import {
-  buildServiceAuditEntry,
-  mockServicesAudit,
-  type ServiceAuditEntry,
-} from "@/lib/admin/services/audit";
-import type { ServiceCategory } from "@/lib/services-page-data";
+import { auditEntriesToServiceEntries } from "@/lib/admin/services/audit-adapters";
 
 const VIEWS_KEY = "atlas-services-views-v2";
 
@@ -60,14 +60,6 @@ const DEFAULT_FILTERS: ServiceFilterValues = {
   sort: "displayOrder",
   page: "1",
   pageSize: String(PAGE_SIZE),
-};
-
-const SYSTEM_ADMIN = {
-  id: "system",
-  name: "System",
-  email: "system@atlas.com",
-  role: "super_admin" as const,
-  extraPermissions: [],
 };
 
 interface Toast {
@@ -113,9 +105,9 @@ function ServicesSkeleton() {
 
 function ServicesPageInner() {
   const admin = useCurrentAdmin();
+  const { categories, loading } = useCatalog();
+  const auditEntries = useAuditEntries();
 
-  const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [loading, setLoading] = useState(true);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
@@ -127,7 +119,6 @@ function ServicesPageInner() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [savedViews, setSavedViews] = useState<SavedView[]>([]);
   const [viewsLoaded, setViewsLoaded] = useState(false);
-  const [audit, setAudit] = useState<ServiceAuditEntry[]>([]);
   const [bulkIntent, setBulkIntent] = useState<BulkIntent | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
@@ -137,14 +128,9 @@ function ServicesPageInner() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebouncedValue(filters.q, 300);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setCategories(getFreshServiceCategories());
-      setAudit(mockServicesAudit);
-      setLoading(false);
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, []);
+  const actor: CatalogActor | null = admin
+    ? { id: admin.id, name: admin.name, email: admin.email }
+    : null;
 
   useEffect(() => {
     try {
@@ -165,7 +151,7 @@ function ServicesPageInner() {
     try {
       window.localStorage.setItem(VIEWS_KEY, JSON.stringify(savedViews));
     } catch {
-      /* ignore */
+      // storage may be full or disabled.
     }
   }, [savedViews, viewsLoaded]);
 
@@ -209,14 +195,11 @@ function ServicesPageInner() {
         }
         case "displayOrder":
         default:
-          return (
-            (a.displayOrder ?? categories.indexOf(a)) -
-            (b.displayOrder ?? categories.indexOf(b))
-          );
+          return a.displayOrder - b.displayOrder;
       }
     });
     return sorted;
-  }, [categories, debouncedSearch, filters, ]);
+  }, [categories, debouncedSearch, filters]);
 
   const pageSize = Math.max(6, Number(filters.pageSize) || PAGE_SIZE);
   const page = Math.max(1, Number(filters.page) || 1);
@@ -260,51 +243,58 @@ function ServicesPageInner() {
 
   const drawerCategory = draftCategory ?? selectedCategory;
 
-  const pushAudit = (entry: ServiceAuditEntry) => {
-    setAudit((prev) => [entry, ...prev]);
-  };
+  const serviceAudit = useMemo(
+    () => auditEntriesToServiceEntries(auditEntries),
+    [auditEntries]
+  );
 
-  const buildAuditFor = (
+  const serviceAuditMeta = (
     serviceId: string,
     serviceName: string,
-    action: string,
     summary: string
-  ): ServiceAuditEntry =>
-    buildServiceAuditEntry({
-      admin: admin ?? SYSTEM_ADMIN,
-      serviceId,
-      serviceName,
-      action,
-      summary,
-    });
+  ) => ({ serviceId, serviceName, summary });
 
   /* ------------------------------ Save ------------------------------ */
 
   const handleSave = (updated: ServiceCategory) => {
+    if (!actor) return;
     if (isNew) {
-      setCategories((prev) => [...prev, updated]);
-      pushAudit(
-        buildAuditFor(
-          updated.id,
-          updated.name,
-          "Created",
-          `Service "${updated.name}" created in group "${updated.filterGroup}"`
-        )
-      );
+      applyCatalogMutation({
+        transform: (cats) => [...cats, updated],
+        audit: {
+          action: CATALOG_ACTIONS.CATEGORY_CREATE,
+          resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+          resourceId: updated.id,
+          metadata: serviceAuditMeta(
+            updated.id,
+            updated.name,
+            `Service "${updated.name}" created in group "${updated.filterGroup}"`
+          ),
+        },
+        actor,
+      });
       setToast({ kind: "success", text: `${updated.name} created.` });
     } else {
       const previous = categories.find((c) => c.id === updated.id);
-      setCategories((prev) =>
-        prev.map((c) => (c.id === updated.id ? updated : c))
-      );
-      pushAudit(
-        buildAuditFor(
-          updated.id,
-          updated.name,
-          "Updated",
-          `Service updated${previous && previous.name !== updated.name ? ` (renamed from "${previous.name}")` : ""}`
-        )
-      );
+      applyCatalogMutation({
+        transform: (cats) =>
+          cats.map((c) => (c.id === updated.id ? updated : c)),
+        audit: {
+          action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+          resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+          resourceId: updated.id,
+          metadata: serviceAuditMeta(
+            updated.id,
+            updated.name,
+            `Service updated${
+              previous && previous.name !== updated.name
+                ? ` (renamed from "${previous.name}")`
+                : ""
+            }`
+          ),
+        },
+        actor,
+      });
       setToast({ kind: "success", text: `${updated.name} updated.` });
     }
     setDraftCategory(null);
@@ -313,12 +303,21 @@ function ServicesPageInner() {
   };
 
   const handleDelete = (id: string) => {
+    if (!actor) return;
     const target = categories.find((c) => c.id === id);
-    setCategories((prev) => prev.filter((c) => c.id !== id));
+    applyCatalogMutation({
+      transform: (cats) => cats.filter((c) => c.id !== id),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_DELETE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: id,
+        metadata: target
+          ? serviceAuditMeta(id, target.name, `Service removed`)
+          : undefined,
+      },
+      actor,
+    });
     if (target) {
-      pushAudit(
-        buildAuditFor(target.id, target.name, "Deleted", `Service removed`)
-      );
       setToast({ kind: "success", text: `${target.name} deleted.` });
     }
     setSelectedCategoryId(null);
@@ -329,6 +328,7 @@ function ServicesPageInner() {
     source: ServiceCategory,
     result: { newName: string; newId: string }
   ) => {
+    if (!actor) return;
     const nextOrder = nextDisplayOrder(categories);
     const duplicate: ServiceCategory = {
       ...source,
@@ -344,60 +344,88 @@ function ServicesPageInner() {
             ...source.formConfig,
             plans: source.formConfig.plans?.map((p) => ({
               ...p,
-              id: `${result.newId}-${p.id}`,
+              id: `${result.newId}:${slugify(p.id)}`,
             })),
           }
         : undefined,
     };
-    setCategories((prev) => [...prev, duplicate]);
-    pushAudit(
-      buildAuditFor(
-        duplicate.id,
-        duplicate.name,
-        "Duplicated",
-        `Copied from "${source.name}"`
-      )
-    );
+    applyCatalogMutation({
+      transform: (cats) => [...cats, duplicate],
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_CREATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: duplicate.id,
+        metadata: serviceAuditMeta(
+          duplicate.id,
+          duplicate.name,
+          `Copied from "${source.name}"`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${duplicate.name} created.` });
   };
 
   const handleToggleAvailable = (id: string) => {
+    if (!actor) return;
     const target = categories.find((c) => c.id === id);
     if (!target) return;
     const nextAvailable = !target.available;
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              available: nextAvailable,
-              comingSoon: nextAvailable ? false : c.comingSoon,
-              comingSoonReason: nextAvailable
-                ? undefined
-                : c.comingSoonReason,
-              disabledReason: nextAvailable ? undefined : c.disabledReason,
-            }
-          : c
-      )
-    );
-    pushAudit(
-      buildAuditFor(
-        id,
-        target.name,
-        "Status change",
-        nextAvailable ? "Enabled" : "Disabled"
-      )
-    );
+    applyCatalogMutation({
+      transform: (cats) =>
+        cats.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                available: nextAvailable,
+                comingSoon: nextAvailable ? false : c.comingSoon,
+                comingSoonReason: nextAvailable
+                  ? undefined
+                  : c.comingSoonReason,
+                disabledReason: nextAvailable ? undefined : c.disabledReason,
+              }
+            : c
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: id,
+        metadata: serviceAuditMeta(
+          id,
+          target.name,
+          nextAvailable ? "Enabled" : "Disabled"
+        ),
+      },
+      actor,
+    });
   };
 
-  /* ------------------------------ Reorder --------------------------- */
-
   const handleMoveUp = (id: string) => {
-    setCategories((prev) => reorder(prev, id, "up"));
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) => reorder(cats, id, "up"),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_REORDER,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: id,
+        metadata: { serviceId: id, serviceName: id, summary: "Moved up" },
+      },
+      actor,
+    });
   };
 
   const handleMoveDown = (id: string) => {
-    setCategories((prev) => reorder(prev, id, "down"));
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) => reorder(cats, id, "down"),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_REORDER,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: id,
+        metadata: { serviceId: id, serviceName: id, summary: "Moved down" },
+      },
+      actor,
+    });
   };
 
   const handleToggleSelect = (id: string) => {
@@ -419,6 +447,7 @@ function ServicesPageInner() {
   };
 
   const handleBulkDuplicate = () => {
+    if (!actor) return;
     const sources = categories.filter((c) => selectedIds.includes(c.id));
     const startingOrder = nextDisplayOrder(categories);
     const duplicates: ServiceCategory[] = sources.map((source, index) => ({
@@ -431,58 +460,71 @@ function ServicesPageInner() {
       disabledReason: undefined,
       displayOrder: startingOrder + index,
     }));
-    setCategories((prev) => [...prev, ...duplicates]);
-    duplicates.forEach((d) =>
-      pushAudit(
-        buildAuditFor(d.id, d.name, "Duplicated", "Bulk duplicated")
-      )
-    );
+    applyCatalogMutation({
+      transform: (cats) => [...cats, ...duplicates],
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_CREATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "bulk",
+        metadata: {
+          serviceId: "bulk",
+          serviceName: "Bulk duplicate",
+          summary: `${duplicates.length} service${
+            duplicates.length === 1 ? "" : "s"
+          } duplicated`,
+        },
+      },
+      actor,
+    });
     setSelectedIds([]);
     setToast({
       kind: "success",
-      text: `${duplicates.length} service${duplicates.length === 1 ? "" : "s"} duplicated.`,
+      text: `${duplicates.length} service${
+        duplicates.length === 1 ? "" : "s"
+      } duplicated.`,
     });
   };
 
   const confirmBulkToggle = () => {
-    if (!bulkIntent) return;
+    if (!bulkIntent || !actor) return;
     const enable = bulkIntent.kind === "enable";
     const idSet = new Set(bulkIntent.ids);
-    setCategories((prev) =>
-      prev.map((c) =>
-        idSet.has(c.id)
-          ? {
-              ...c,
-              available: enable,
-              comingSoon: enable ? false : c.comingSoon,
-              comingSoonReason: enable ? undefined : c.comingSoonReason,
-              disabledReason: enable ? undefined : c.disabledReason,
-            }
-          : c
-      )
-    );
-    bulkIntent.ids.forEach((id) => {
-      const target = categories.find((c) => c.id === id);
-      if (target) {
-        pushAudit(
-          buildAuditFor(
-            id,
-            target.name,
-            "Status change",
-            enable ? "Bulk enabled" : "Bulk disabled"
-          )
-        );
-      }
+    applyCatalogMutation({
+      transform: (cats) =>
+        cats.map((c) =>
+          idSet.has(c.id)
+            ? {
+                ...c,
+                available: enable,
+                comingSoon: enable ? false : c.comingSoon,
+                comingSoonReason: enable ? undefined : c.comingSoonReason,
+                disabledReason: enable ? undefined : c.disabledReason,
+              }
+            : c
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "bulk",
+        metadata: {
+          serviceId: "bulk",
+          serviceName: "Bulk status change",
+          summary: `${enable ? "Enabled" : "Disabled"} ${
+            bulkIntent.ids.length
+          } service${bulkIntent.ids.length === 1 ? "" : "s"}`,
+        },
+      },
+      actor,
     });
     setSelectedIds([]);
     setBulkIntent(null);
     setToast({
       kind: "success",
-      text: `${bulkIntent.ids.length} service${bulkIntent.ids.length === 1 ? "" : "s"} ${enable ? "enabled" : "disabled"}.`,
+      text: `${bulkIntent.ids.length} service${
+        bulkIntent.ids.length === 1 ? "" : "s"
+      } ${enable ? "enabled" : "disabled"}.`,
     });
   };
-
-  /* ------------------------------ Export ---------------------------- */
 
   const handleExport = (format: "csv" | "excel" | "pdf") => {
     if (format !== "csv") return;
@@ -492,8 +534,6 @@ function ServicesPageInner() {
       csv
     );
   };
-
-  /* ---------------------------- Saved views ------------------------- */
 
   const handleSaveView = (name: string) => {
     const snapshot: Record<string, string> = {};
@@ -510,8 +550,8 @@ function ServicesPageInner() {
     setFilters({ ...DEFAULT_FILTERS, ...view.filters, page: "1" });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+ const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
 
   const handleAddNew = () => {
@@ -763,7 +803,7 @@ function ServicesPageInner() {
         isNew={isNew}
         existingIds={categories.map((c) => c.id)}
         allCategories={categories}
-        auditEntries={audit}
+        auditEntries={serviceAudit}
         onClose={() => {
           setSelectedCategoryId(null);
           setDraftCategory(null);

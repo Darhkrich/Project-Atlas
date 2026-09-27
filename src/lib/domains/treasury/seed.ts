@@ -8,7 +8,7 @@ import type {
   TreasuryEventKind,
 } from "./types";
 
-const ANCHOR_MS = new Date("2025-01-15T10:00:00.000Z").getTime();
+const ANCHOR_MS = Date.now();
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -41,11 +41,37 @@ const SUPER: TreasuryActor = {
   email: "root@atlas.com",
 };
 
-const MTN: TreasuryCounterparty = { type: "provider", id: "prov-mtn-gh", name: "MTN Ghana" };
-const TELECEL: TreasuryCounterparty = { type: "provider", id: "prov-telecel-gh", name: "Telecel Ghana" };
-const ECG: TreasuryCounterparty = { type: "provider", id: "prov-ecg-gh", name: "ECG Ghana" };
-const MULTICHOICE: TreasuryCounterparty = { type: "provider", id: "prov-multichoice", name: "MultiChoice" };
-const WAEC: TreasuryCounterparty = { type: "provider", id: "prov-waec", name: "WAEC" };
+const MTN: TreasuryCounterparty = {
+  type: "provider",
+  id: "prov-mtn-gh",
+  name: "MTN Ghana",
+};
+const TELECEL: TreasuryCounterparty = {
+  type: "provider",
+  id: "prov-telecel-gh",
+  name: "Telecel Ghana",
+};
+const ECG: TreasuryCounterparty = {
+  type: "provider",
+  id: "prov-ecg-gh",
+  name: "ECG Ghana",
+};
+const MULTICHOICE: TreasuryCounterparty = {
+  type: "provider",
+  id: "prov-multichoice",
+  name: "MultiChoice",
+};
+const WAEC: TreasuryCounterparty = {
+  type: "provider",
+  id: "prov-waec",
+  name: "WAEC",
+};
+
+const ORDER_ACCRUAL: TreasuryCounterparty = {
+  type: "system",
+  id: "order-accrual",
+  name: "Order settlement accrual",
+};
 
 interface SeedSpec {
   kind: TreasuryEventKind;
@@ -60,6 +86,7 @@ interface SeedSpec {
   reconciliationStatus?: TreasuryEvent["reconciliationStatus"];
   settledOffsetMs?: number;
   poolType?: TreasuryEvent["poolType"];
+  counterpartyPoolType?: TreasuryEvent["counterpartyPoolType"];
   ownerId?: string;
 }
 
@@ -88,6 +115,7 @@ function build(spec: SeedSpec, seq: number): TreasuryEvent {
     currency: "GHS",
     counterparty: spec.counterparty,
     poolType: spec.poolType,
+    counterpartyPoolType: spec.counterpartyPoolType,
     ownerId: spec.ownerId,
     reference: spec.reference,
     description: spec.description,
@@ -104,8 +132,6 @@ function build(spec: SeedSpec, seq: number): TreasuryEvent {
 function buildSeed(): TreasuryEvent[] {
   const specs: SeedSpec[] = [];
 
-  // Order settlements in, over the last 30 days. Attributed to the customer
-  // pool because the batch aggregates D2C orders.
   const orderCredits: Array<{
     amount: number;
     msAgo: number;
@@ -130,21 +156,55 @@ function buildSeed(): TreasuryEvent[] {
     specs.push({
       kind: "order_settlement_credit",
       amount: c.amount,
-      counterparty: { type: "system", id: "order-batch", name: "Order settlements" },
+      counterparty: {
+        type: "system",
+        id: "order-batch",
+        name: "Order settlements",
+      },
       reference: c.ref,
       description: "Order settlement batch",
       msAgo: c.msAgo,
       actor: c.actor,
       reconciliationStatus: c.recon,
       settledOffsetMs: 60 * MINUTE,
-      poolType: "customer",
-      ownerId: "order-batch",
     });
   }
 
-  // Storefront sale credits. Attributed to the reseller pool because the
-  // storefront channel is reseller-operated.
-  const storefrontCredits: Array<{ amount: number; msAgo: number; ref: string }> = [
+  const accruals: Array<{
+    amount: number;
+    msAgo: number;
+    ref: string;
+    sourcePool: TreasuryEvent["poolType"];
+  }> = [
+    { amount: 34000, msAgo: 29 * DAY, ref: "ACCR-29D", sourcePool: "customer" },
+    { amount: 29000, msAgo: 22 * DAY, ref: "ACCR-22D", sourcePool: "customer" },
+    { amount: 35500, msAgo: 14 * DAY, ref: "ACCR-14D", sourcePool: "customer" },
+    { amount: 37000, msAgo: 7 * DAY, ref: "ACCR-7D", sourcePool: "customer" },
+    { amount: 38500, msAgo: 2 * DAY, ref: "ACCR-2D", sourcePool: "customer" },
+    { amount: 9200, msAgo: 6 * HOUR, ref: "ACCR-6H", sourcePool: "customer" },
+    { amount: 7200, msAgo: 2 * HOUR, ref: "ACCR-2H", sourcePool: "customer" },
+  ];
+  for (const a of accruals) {
+    specs.push({
+      kind: "internal_reclassification",
+      amount: a.amount,
+      counterparty: ORDER_ACCRUAL,
+      reference: a.ref,
+      description: "Provider settlement accrual from order batch",
+      msAgo: a.msAgo,
+      actor: SYSTEM,
+      settledOffsetMs: 60 * MINUTE,
+      poolType: "provider_settlement_pending",
+      counterpartyPoolType: a.sourcePool,
+      ownerId: "order-accrual",
+    });
+  }
+
+  const storefrontCredits: Array<{
+    amount: number;
+    msAgo: number;
+    ref: string;
+  }> = [
     { amount: 6200, msAgo: 25 * DAY, ref: "SFS-25D" },
     { amount: 5400, msAgo: 20 * DAY, ref: "SFS-20D" },
     { amount: 7100, msAgo: 15 * DAY, ref: "SFS-15D" },
@@ -158,7 +218,11 @@ function buildSeed(): TreasuryEvent[] {
     specs.push({
       kind: "storefront_order_credit",
       amount: c.amount,
-      counterparty: { type: "system", id: "storefront-batch", name: "Storefront sales" },
+      counterparty: {
+        type: "system",
+        id: "storefront-batch",
+        name: "Storefront sales",
+      },
       reference: c.ref,
       description: "Storefront order settlement",
       msAgo: c.msAgo,
@@ -169,7 +233,6 @@ function buildSeed(): TreasuryEvent[] {
     });
   }
 
-  // Wallet funding credits. Rotated across the four pools.
   const fundingCredits: Array<{
     amount: number;
     msAgo: number;
@@ -190,7 +253,11 @@ function buildSeed(): TreasuryEvent[] {
     specs.push({
       kind: "wallet_funding_credit",
       amount: c.amount,
-      counterparty: { type: "system", id: "wallet-funding", name: "Wallet funding" },
+      counterparty: {
+        type: "system",
+        id: "wallet-funding",
+        name: "Wallet funding",
+      },
       reference: c.ref,
       description: "Wallet funding via momo and card",
       msAgo: c.msAgo,
@@ -201,11 +268,14 @@ function buildSeed(): TreasuryEvent[] {
     });
   }
 
-  // Admin funding credit, no pool.
   specs.push({
     kind: "admin_funding_credit",
     amount: 50000,
-    counterparty: { type: "bank", id: "gcb-main", name: "GCB Main Account" },
+    counterparty: {
+      type: "bank",
+      id: "gcb-main",
+      name: "GCB Main Account",
+    },
     reference: "BANK-TOPUP-001",
     description: "Initial capitalization from Atlas bank",
     msAgo: 30 * DAY,
@@ -215,7 +285,6 @@ function buildSeed(): TreasuryEvent[] {
     settledOffsetMs: 2 * HOUR,
   });
 
-  // Provider payouts, no pool.
   const payouts: Array<{
     amount: number;
     msAgo: number;
@@ -244,10 +313,10 @@ function buildSeed(): TreasuryEvent[] {
       approvedBy: SUPER,
       approvalStatus: "approved",
       settledOffsetMs: 3 * HOUR,
+      poolType: "provider_settlement_pending",
     });
   }
 
-  // One provider payout pending approval.
   specs.push({
     kind: "provider_payout_debit",
     amount: 12500,
@@ -259,13 +328,17 @@ function buildSeed(): TreasuryEvent[] {
     approvalStatus: "pending",
     settledOffsetMs: undefined,
     reconciliationStatus: "unmatched",
+    poolType: "provider_settlement_pending",
   });
 
-  // Withdrawals. Pool and owner derived from the counterparty.
   specs.push({
     kind: "withdrawal_debit",
     amount: 500,
-    counterparty: { type: "reseller", id: "RS-001", name: "Kwame Store" },
+    counterparty: {
+      type: "reseller",
+      id: "RS-001",
+      name: "Kwame Store",
+    },
     reference: "WD-RS-001-001",
     description: "Reseller commission withdrawal",
     msAgo: 3 * DAY,
@@ -277,7 +350,11 @@ function buildSeed(): TreasuryEvent[] {
   specs.push({
     kind: "withdrawal_debit",
     amount: 2500,
-    counterparty: { type: "merchant", id: "MER-008", name: "TechHub Store" },
+    counterparty: {
+      type: "merchant",
+      id: "MER-008",
+      name: "TechHub Store",
+    },
     reference: "WD-MER-008-001",
     description: "Merchant main wallet withdrawal",
     msAgo: 2 * DAY,
@@ -287,11 +364,14 @@ function buildSeed(): TreasuryEvent[] {
     ownerId: "MER-008",
   });
 
-  // Refund rail debits.
   specs.push({
     kind: "refund_rail_debit",
     amount: 120,
-    counterparty: { type: "customer", id: "CUS-1002", name: "Ama Serwaa" },
+    counterparty: {
+      type: "customer",
+      id: "CUS-1002",
+      name: "Ama Serwaa",
+    },
     reference: "REF-2001",
     description: "Order refund to original rail",
     msAgo: 12 * DAY,
@@ -305,7 +385,11 @@ function buildSeed(): TreasuryEvent[] {
   specs.push({
     kind: "refund_rail_debit",
     amount: 250,
-    counterparty: { type: "storefront_user", id: "SFU-3721", name: "Guest Kwame" },
+    counterparty: {
+      type: "storefront_user",
+      id: "SFU-3721",
+      name: "Guest Kwame",
+    },
     reference: "REF-2002",
     description: "Storefront refund to wallet",
     msAgo: 8 * DAY,
@@ -315,11 +399,14 @@ function buildSeed(): TreasuryEvent[] {
     ownerId: "SFU-3721",
   });
 
-  // Bank transfer.
   specs.push({
     kind: "bank_transfer_debit",
     amount: 20000,
-    counterparty: { type: "bank", id: "gcb-main", name: "GCB Main Account" },
+    counterparty: {
+      type: "bank",
+      id: "gcb-main",
+      name: "GCB Main Account",
+    },
     reference: "SWEEP-001",
     description: "Monthly profit sweep to Atlas bank",
     msAgo: 15 * DAY,
@@ -329,7 +416,6 @@ function buildSeed(): TreasuryEvent[] {
     settledOffsetMs: 4 * HOUR,
   });
 
-  // Adjustments, no pool.
   specs.push({
     kind: "adjustment_credit",
     amount: 250,
@@ -353,11 +439,14 @@ function buildSeed(): TreasuryEvent[] {
     reconciliationStatus: "disputed",
   });
 
-  // Internal reclassification.
   specs.push({
     kind: "internal_reclassification",
     amount: 1500,
-    counterparty: { type: "reseller", id: "RS-002", name: "Adjoa Ventures" },
+    counterparty: {
+      type: "reseller",
+      id: "RS-002",
+      name: "Adjoa Ventures",
+    },
     poolType: "reseller",
     ownerId: "RS-002",
     reference: "RECLASS-001",

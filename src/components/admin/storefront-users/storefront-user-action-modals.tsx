@@ -7,6 +7,7 @@ import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
 import { ModalShell } from "@/components/admin/ui/model-shell";
 import { SettingsField } from "@/components/admin/ui/settings-field";
+import { formatCurrency } from "@/lib/admin/formatters";
 import {
   SEGMENT_LABEL,
   TAG_PRESETS,
@@ -227,6 +228,7 @@ interface AddTagModalProps {
   open: boolean;
   userName: string;
   existingTags: string[];
+  presets?: string[];
   onClose: () => void;
   onConfirm: (tag: string) => void;
 }
@@ -235,6 +237,7 @@ export function StorefrontUserAddTagModal({
   open,
   userName,
   existingTags,
+  presets,
   onClose,
   onConfirm,
 }: AddTagModalProps) {
@@ -262,7 +265,8 @@ export function StorefrontUserAddTagModal({
     onClose();
   };
 
-  const availablePresets = TAG_PRESETS.filter(
+  const sourcePresets = presets ?? TAG_PRESETS;
+  const availablePresets = sourcePresets.filter(
     (p) => !existingTags.includes(p)
   );
 
@@ -324,6 +328,276 @@ export function StorefrontUserAddTagModal({
             </div>
           </div>
         )}
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-danger-200 bg-danger-50 p-2 text-xs text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/25 dark:text-danger-200"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ------------------------ Wallet freeze ----------------------------- */
+
+interface WalletFreezeModalProps {
+  open: boolean;
+  userName: string;
+  storefrontName: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}
+
+export function StorefrontUserWalletFreezeModal({
+  open,
+  userName,
+  storefrontName,
+  onClose,
+  onConfirm,
+}: WalletFreezeModalProps) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setError(null);
+    }
+  }, [open]);
+
+  const canSubmit = reason.trim().length >= 10;
+
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      setError("Give a reason of at least 10 characters.");
+      return;
+    }
+    onConfirm(reason.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={`Freeze wallet for ${userName}?`}
+      description={`${userName} can still receive funds. They cannot spend from the wallet or request refunds on ${storefrontName}. An admin can still adjust the balance.`}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+          >
+            Freeze wallet
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <SettingsField
+          label="Reason"
+          htmlFor="sfu-wallet-freeze-reason"
+          required
+          hint="Recorded on the audit trail. Visible to other admins."
+        >
+          <textarea
+            id="sfu-wallet-freeze-reason"
+            className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            rows={4}
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+            placeholder="e.g. Wallet under review for suspicious funding activity"
+          />
+        </SettingsField>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-danger-200 bg-danger-50 p-2 text-xs text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/25 dark:text-danger-200"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ------------------------ Wallet adjust ----------------------------- */
+
+interface WalletAdjustModalProps {
+  open: boolean;
+  userName: string;
+  storefrontName: string;
+  currentBalance: number;
+  onClose: () => void;
+  onConfirm: (amount: number, reason: string) => void;
+}
+
+export function StorefrontUserWalletAdjustModal({
+  open,
+  userName,
+  storefrontName,
+  currentBalance,
+  onClose,
+  onConfirm,
+}: WalletAdjustModalProps) {
+  const [mode, setMode] = useState<"credit" | "debit">("credit");
+  const [amountInput, setAmountInput] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setMode("credit");
+    setAmountInput("");
+    setReason("");
+    setError(null);
+  }, [open]);
+
+  const amount = Number(amountInput);
+  const amountValid =
+    amountInput.length > 0 && !Number.isNaN(amount) && amount > 0;
+  const reasonValid = reason.trim().length >= 10;
+  const signedAmount = mode === "credit" ? amount : -amount;
+  const newBalance = currentBalance + signedAmount;
+  const canSubmit = amountValid && reasonValid;
+
+  const handleSubmit = () => {
+    if (!amountValid) {
+      setError("Enter a positive amount.");
+      return;
+    }
+    if (!reasonValid) {
+      setError("Give a reason of at least 10 characters.");
+      return;
+    }
+    onConfirm(signedAmount, reason.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Adjust storefront user wallet"
+      description={`Adjusts the wallet balance for ${userName} on ${storefrontName}. This action writes a treasury event and is visible to the reseller.`}
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleSubmit} disabled={!canSubmit}>
+            {mode === "credit" ? "Credit" : "Debit"}{" "}
+            {amountValid ? formatCurrency(amount) : "wallet"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-md bg-neutral-50 p-3 text-xs dark:bg-neutral-900/60">
+          <p className="text-neutral-500 dark:text-neutral-400">
+            Current balance
+          </p>
+          <p className="mt-0.5 text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+            {formatCurrency(currentBalance)}
+          </p>
+          {amountValid && (
+            <p className="mt-1 text-neutral-500 dark:text-neutral-400">
+              After adjustment:{" "}
+              <span
+                className={
+                  newBalance >= 0
+                    ? "font-medium text-neutral-900 dark:text-neutral-100"
+                    : "font-medium text-danger-700 dark:text-danger-300"
+                }
+              >
+                {formatCurrency(newBalance)}
+              </span>
+            </p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+            Direction
+          </p>
+          <div className="mt-2 inline-flex rounded-md border border-neutral-300 p-0.5 dark:border-neutral-700">
+            {(["credit", "debit"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={mode === m}
+                onClick={() => setMode(m)}
+                className={
+                  mode === m
+                    ? "rounded px-3 py-1 text-xs font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+                    : "rounded px-3 py-1 text-xs text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+                }
+              >
+                {m === "credit" ? "Credit" : "Debit"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <SettingsField
+          label="Amount (GHS)"
+          htmlFor="sfu-wallet-amount"
+          required
+        >
+          <Input
+            id="sfu-wallet-amount"
+            type="number"
+            min={0}
+            step={0.01}
+            value={amountInput}
+            onChange={(e) => {
+              setAmountInput(e.target.value);
+              setError(null);
+            }}
+            placeholder="0.00"
+          />
+        </SettingsField>
+
+        <SettingsField
+          label="Reason"
+          htmlFor="sfu-wallet-reason"
+          required
+          hint="Recorded on the audit trail and on the treasury statement."
+        >
+          <textarea
+            id="sfu-wallet-reason"
+            className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            rows={3}
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+            placeholder="e.g. Correcting double credit from a failed funding"
+          />
+        </SettingsField>
+
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          Adjustments write a treasury adjustment event and are
+          reconciliation-eligible. Rail refunds are a separate operation and
+          are not adjustable from here.
+        </p>
 
         {error && (
           <p

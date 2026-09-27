@@ -11,9 +11,11 @@ export interface CurrentReseller {
 }
 
 const FALLBACK_RESELLER: CurrentReseller = {
-  id: "RS-001",
-  name: "Kwame Store",
-  email: "kwame@kwamestore.com",
+    id: "RS-001",
+    name: "Kwame Store",
+    email: "kwame@kwamestore.com",
+    status: "",
+    verificationStatus: ""
 };
 
 /**

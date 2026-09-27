@@ -1,7 +1,7 @@
 import type {
   RegisteredDestination,
   ResellerAdjustmentLedgerEntry,
-   ResellerAdjustmentMethod,
+  ResellerAdjustmentMethod,
   ResellerFundingLedgerEntry,
   ResellerWithdrawalHistoryEntry,
   ResellerWithdrawalLedgerEntry,
@@ -9,6 +9,7 @@ import type {
 } from "@/lib/reseller/types/wallet";
 import type {
   ResellerDestinationMethod,
+  WalletApprovalReason,
   WalletFundingMethod,
   WithdrawalKind,
 } from "@/lib/domains/wallet/enums";
@@ -29,12 +30,24 @@ import {
   internalPatchDestination,
   internalSetDestination,
 } from "@/lib/reseller/mock/wallet-destination-store";
-import { deriveRefundableSources } from "./wallet-projection";
+import {
+  approximateDailyCount,
+  deriveRefundableSources,
+} from "./wallet-projection";
 import {
   MAX_DESTINATION_REASON_LENGTH,
   MIN_DESTINATION_REASON_LENGTH,
   MIN_RESELLER_WITHDRAWAL_AMOUNT,
 } from "./wallet-constants";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import { isDualApprovalRequired } from "@/lib/domains/treasury/helpers";
+import type {
+  TreasuryActor,
+  TreasuryCounterparty,
+} from "@/lib/domains/treasury/types";
+import { appendAuditEntry } from "@/lib/domains/audit";
+
+export type { ResellerAdjustmentMethod };
 
 export interface ResellerActor {
   id: string;
@@ -47,6 +60,14 @@ export interface ResellerMutationResult {
   error?: string;
   reference?: string;
   requiresApproval?: boolean;
+}
+
+function toTreasuryActor(actor: ResellerActor): TreasuryActor {
+  return { id: actor.id, name: actor.name, email: actor.email };
+}
+
+function resellerCounterparty(actor: ResellerActor): TreasuryCounterparty {
+  return { type: "reseller", id: actor.id, name: actor.name };
 }
 
 export interface FundInput {
@@ -90,6 +111,29 @@ export function fundResellerWallet(
   internalPatchResellerWalletMeta(actor.id, {
     updatedAt: nowIso,
     lastFundingAt: nowIso,
+  });
+
+  emitLedgerEvent({
+    kind: "wallet_funding_credit",
+    direction: "in",
+    amount: input.amount,
+    poolType: "reseller",
+    ownerId: actor.id,
+    counterparty: resellerCounterparty(actor),
+    reference,
+    description:
+      "Reseller wallet funding via " + input.provider + " " + input.maskedLabel,
+    actor: toTreasuryActor(actor),
+    relatedEventId: entry.id,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.reseller.fund",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { amount: input.amount, provider: input.provider, reference },
   });
 
   return { ok: true, reference };
@@ -192,7 +236,6 @@ export function requestResellerWithdrawal(
     config.feeRatePercent
   );
 
-  // Balance is already net of pending withdrawals. Do not subtract them again.
   if (total > wallet.balance) {
     return {
       ok: false,
@@ -200,7 +243,16 @@ export function requestResellerWithdrawal(
     };
   }
 
-  const requiresApproval = total > config.thresholdGHS;
+  const approvalReasons: WalletApprovalReason[] = [];
+  if (total > config.thresholdGHS) {
+    approvalReasons.push("exceeds_threshold");
+  }
+  const todayCount = approximateDailyCount(store, actor.id, Date.now());
+  if (todayCount >= config.dailyCap) {
+    approvalReasons.push("daily_cap_reached");
+  }
+  const requiresApproval = approvalReasons.length > 0;
+
   const nowIso = new Date().toISOString();
   const requestId = "RWD-" + crypto.randomUUID().slice(0, 8).toUpperCase();
   const transactionRef = "TXN-" + crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -226,7 +278,7 @@ export function requestResellerWithdrawal(
     destinationNameOnAccount,
     status: requiresApproval ? "pending_admin" : "completed",
     autoApproved: !requiresApproval,
-    approvalRequiredReasons: requiresApproval ? ["exceeds_threshold"] : [],
+    approvalRequiredReasons: approvalReasons,
     transactionRef,
     requestedAt: nowIso,
     completedAt: requiresApproval ? undefined : nowIso,
@@ -260,7 +312,40 @@ export function requestResellerWithdrawal(
       updatedAt: nowIso,
       lastWithdrawalAt: nowIso,
     });
+
+    const isRefundToSource = input.kind === "refund_to_source";
+    emitLedgerEvent({
+      kind: isRefundToSource ? "refund_rail_debit" : "withdrawal_debit",
+      direction: "out",
+      amount: input.amount,
+      poolType: "reseller",
+      ownerId: actor.id,
+      counterparty: resellerCounterparty(actor),
+      reference: transactionRef,
+      description:
+        input.kind === "refund_to_source"
+          ? "Reseller refund to original funding source"
+          : "Reseller withdrawal to registered destination",
+      actor: toTreasuryActor(actor),
+      relatedEventId: requestId,
+      settledAt: nowIso,
+    });
   }
+
+  appendAuditEntry({
+    action: "wallet.reseller.withdraw_request",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      amount: input.amount,
+      total,
+      kind: input.kind,
+      requiresApproval,
+      approvalReasons,
+      reference: transactionRef,
+    },
+  });
 
   return { ok: true, reference: transactionRef, requiresApproval };
 }
@@ -329,6 +414,35 @@ export function approveResellerWithdrawal(
     lastWithdrawalAt: nowIso,
   });
 
+  const isRefundToSource = request.kind === "refund_to_source";
+  emitLedgerEvent({
+    kind: isRefundToSource ? "refund_rail_debit" : "withdrawal_debit",
+    direction: "out",
+    amount: request.amount,
+    poolType: "reseller",
+    ownerId: resellerId,
+    counterparty: {
+      type: "reseller",
+      id: resellerId,
+      name: request.resellerName,
+    },
+    reference: request.transactionRef,
+    description: isRefundToSource
+      ? "Reseller refund to original funding source"
+      : "Reseller withdrawal to registered destination",
+    actor: toTreasuryActor(actor),
+    relatedEventId: requestId,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.reseller.withdraw_approve",
+    resourceType: "wallet",
+    resourceId: resellerId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId, amount: request.amount },
+  });
+
   return { ok: true };
 }
 
@@ -373,6 +487,14 @@ export function rejectResellerWithdrawal(
   internalAddWithdrawalHistory(history);
   internalPatchResellerWalletMeta(resellerId, { updatedAt: nowIso });
 
+  appendAuditEntry({
+    action: "wallet.reseller.withdraw_reject",
+    resourceType: "wallet",
+    resourceId: resellerId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId, reason: trimmed },
+  });
+
   return { ok: true };
 }
 
@@ -414,29 +536,104 @@ export function cancelResellerWithdrawal(
   internalAddWithdrawalHistory(history);
   internalPatchResellerWalletMeta(actor.id, { updatedAt: nowIso });
 
+  appendAuditEntry({
+    action: "wallet.reseller.withdraw_cancel",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId, amount: request.amount },
+  });
+
   return { ok: true };
 }
 
+/* ------------------------------ Freeze -------------------------------- */
+
+export function freezeResellerWallet(
+  resellerId: string,
+  reason: string,
+  actor: ResellerActor
+): ResellerMutationResult {
+  const trimmed = reason.trim();
+  if (trimmed.length < 10) {
+    return { ok: false, error: "Reason must be at least 10 characters." };
+  }
+
+  const store = getResellerWalletStore();
+  const wallet = store.wallets[resellerId];
+  if (!wallet) return { ok: false, error: "Wallet not found." };
+  if (wallet.status === "frozen") {
+    return { ok: false, error: "This wallet is already frozen." };
+  }
+
+  const nowIso = new Date().toISOString();
+  internalPatchResellerWalletMeta(resellerId, {
+    status: "frozen",
+    updatedAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.reseller.freeze",
+    resourceType: "wallet",
+    resourceId: resellerId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { reason: trimmed },
+  });
+
+  return { ok: true };
+}
+
+export function unfreezeResellerWallet(
+  resellerId: string,
+  actor: ResellerActor
+): ResellerMutationResult {
+  const store = getResellerWalletStore();
+  const wallet = store.wallets[resellerId];
+  if (!wallet) return { ok: false, error: "Wallet not found." };
+  if (wallet.status !== "frozen") {
+    return { ok: false, error: "This wallet is not frozen." };
+  }
+
+  const nowIso = new Date().toISOString();
+  internalPatchResellerWalletMeta(resellerId, {
+    status: "active",
+    updatedAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.reseller.unfreeze",
+    resourceType: "wallet",
+    resourceId: resellerId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {},
+  });
+
+  return { ok: true };
+}
+
+/* ------------------------------ Admin adjust -------------------------- */
+
 export interface AdminAdjustInput {
   resellerId: string;
+  resellerName: string;
   amount: number;
   reason: string;
   method: ResellerAdjustmentMethod;
-  actor: { name: string; email: string };
+  actor: { id: string; name: string; email: string };
 }
 
 export function applyAdminWalletAdjustment(
   input: AdminAdjustInput
 ): ResellerMutationResult {
   const trimmed = input.reason.trim();
-  if (trimmed.length < 8) {
-    return { ok: false, error: "Reason must be at least 8 characters." };
+  if (trimmed.length < 10) {
+    return { ok: false, error: "Reason must be at least 10 characters." };
   }
   if (!Number.isFinite(input.amount) || input.amount === 0) {
     return { ok: false, error: "Amount must be non-zero." };
   }
 
-  internalEnsureResellerWallet(input.resellerId, input.resellerId);
+  internalEnsureResellerWallet(input.resellerId, input.resellerName);
 
   const nowIso = new Date().toISOString();
   const entry: ResellerAdjustmentLedgerEntry = {
@@ -446,15 +643,104 @@ export function applyAdminWalletAdjustment(
     amount: input.amount,
     method: input.method,
     reason: trimmed,
-    actor: input.actor,
+    actor: { name: input.actor.name, email: input.actor.email },
     createdAt: nowIso,
   };
 
   internalAppendLedgerEntry(entry);
   internalPatchResellerWalletMeta(input.resellerId, { updatedAt: nowIso });
 
+  const direction = input.amount > 0 ? "in" : "out";
+  const kind = input.amount > 0 ? "adjustment_credit" : "adjustment_debit";
+  const magnitude = Math.abs(input.amount);
+  const requiresDual = isDualApprovalRequired(kind, magnitude);
+
+  emitLedgerEvent({
+    kind,
+    direction,
+    amount: magnitude,
+    poolType: "reseller",
+    ownerId: input.resellerId,
+    counterparty: {
+      type: "reseller",
+      id: input.resellerId,
+      name: input.resellerName,
+    },
+    reference: entry.id,
+    description: "Admin adjustment: " + trimmed,
+    actor: {
+      id: input.actor.id,
+      name: input.actor.name,
+      email: input.actor.email,
+    },
+    approvalStatus: requiresDual ? "pending" : "auto",
+    settledAt: requiresDual ? undefined : nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.reseller.adjust",
+    resourceType: "wallet",
+    resourceId: input.resellerId,
+    actor: {
+      id: input.actor.id,
+      name: input.actor.name,
+      email: input.actor.email,
+    },
+    metadata: {
+      amount: input.amount,
+      direction: input.amount > 0 ? "credit" : "debit",
+      reason: trimmed,
+      reference: entry.id,
+      requiresDual,
+    },
+  });
+
   return { ok: true };
 }
+
+/* --------------------------- Refund credit ---------------------------- */
+
+export function creditResellerWallet(
+  refundId: string,
+  resellerId: string,
+  amount: number,
+  actor: TreasuryActor
+): ResellerMutationResult {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, error: "Credit amount must be positive." };
+  }
+
+  const store = getResellerWalletStore();
+  const wallet = store.wallets[resellerId];
+  if (!wallet) return { ok: false, error: "Wallet not found." };
+
+  const nowIso = new Date().toISOString();
+  const entry: ResellerAdjustmentLedgerEntry = {
+    id: "RL-RF-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
+    resellerId,
+    kind: "adjustment",
+    amount: Math.round(amount * 100) / 100,
+    method: "atlas_wallet",
+    reason: "Refund credit \u00B7 " + refundId,
+    actor: { name: actor.name, email: actor.email },
+    createdAt: nowIso,
+  };
+
+  internalAppendLedgerEntry(entry);
+  internalPatchResellerWalletMeta(resellerId, { updatedAt: nowIso });
+
+  appendAuditEntry({
+    action: "wallet.reseller.refund_credit",
+    resourceType: "wallet",
+    resourceId: resellerId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { refundId, amount: entry.amount, reference: entry.id },
+  });
+
+  return { ok: true, reference: entry.id };
+}
+
+/* ------------------------------ Destination --------------------------- */
 
 export interface DestinationChangeInput {
   method: ResellerDestinationMethod;

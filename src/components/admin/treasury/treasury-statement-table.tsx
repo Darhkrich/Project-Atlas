@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/admin/formatters";
 import { formatRelative, formatAbsolute } from "@/lib/shared/format";
 import { useNow } from "@/lib/shared/hooks/use-now";
 import { cn } from "@/lib/utils";
-import type { TreasuryStatementRow } from "@/lib/admin/types/treasury";
+import type { TreasuryStatementRow } from "@/lib/domains/treasury/types";
 import {
   TREASURY_KIND_LABELS,
   TREASURY_KIND_VARIANTS,
@@ -17,7 +17,7 @@ import {
   TREASURY_APPROVAL_VARIANTS,
   TREASURY_RECONCILIATION_LABELS,
   TREASURY_RECONCILIATION_VARIANTS,
-} from "@/lib/admin/treasury/treasury-labels";
+} from "@/lib/domains/treasury/labels";
 
 interface TreasuryStatementTableProps {
   rows: TreasuryStatementRow[];

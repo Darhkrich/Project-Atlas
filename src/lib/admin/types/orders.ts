@@ -106,6 +106,12 @@ export interface Order {
   amount: number;
   commission: number;
 
+  // Provider cost from the catalog for this order's plan. Drives the
+  // treasury accrual into provider_settlement_pending on success. Null
+  // or undefined skips the accrual. Populated at placement from the
+  // catalog; never fabricated.
+  providerCost?: number;
+
   failure?: OrderFailure;
 
   retryAttempts: number;

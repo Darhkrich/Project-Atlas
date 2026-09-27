@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react/no-unescaped-entities */
 // components/admin/storefront-users/storefront-user-detail-drawer.tsx
 "use client";
 
@@ -32,6 +34,8 @@ import {
   StorefrontUserAddTagModal,
   StorefrontUserNotifyModal,
   StorefrontUserSuspendModal,
+  StorefrontUserWalletAdjustModal,
+  StorefrontUserWalletFreezeModal,
 } from "./storefront-user-action-modals";
 
 type Tab = "overview" | "financial" | "activity" | "preferences";
@@ -46,6 +50,8 @@ const TABS: { key: Tab; label: string }[] = [
 interface StorefrontUserDetailDrawerProps {
   user: StorefrontUser | null;
   storefront?: UnifiedStorefront;
+  walletBalance: number;
+  walletFrozen: boolean;
   onClose: () => void;
   onAddTag: (id: string, tag: string) => void;
   onRemoveTag: (id: string, tag: string) => void;
@@ -58,16 +64,23 @@ interface StorefrontUserDetailDrawerProps {
   ) => void;
   onRevealPII: (id: string) => void;
   onResetPassword: (id: string) => void;
+  onAdjustWallet: (
+    userId: string,
+    storefrontId: string,
+    amount: number,
+    reason: string
+  ) => void;
+  onFreezeWallet: (userId: string, storefrontId: string, reason: string) => void;
+  onUnfreezeWallet: (userId: string, storefrontId: string) => void;
 }
 
 export function StorefrontUserDetailDrawer({
   user,
   storefront,
-  onClose,
   ...rest
 }: StorefrontUserDetailDrawerProps) {
   const isOpen = user !== null;
-  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
+  const trapRef = useFocusTrap<HTMLDivElement>(isOpen, rest.onClose);
   const titleId = useId();
 
   if (!user) return null;
@@ -82,7 +95,7 @@ export function StorefrontUserDetailDrawer({
     >
       <div
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={rest.onClose}
         aria-hidden="true"
       />
       <StorefrontUserDetailBody
@@ -90,7 +103,6 @@ export function StorefrontUserDetailDrawer({
         user={user}
         storefront={storefront}
         titleId={titleId}
-        onClose={onClose}
         {...rest}
       />
     </div>
@@ -107,6 +119,8 @@ interface BodyProps
 function StorefrontUserDetailBody({
   user,
   storefront,
+  walletBalance,
+  walletFrozen,
   titleId,
   onClose,
   onAddTag,
@@ -116,6 +130,9 @@ function StorefrontUserDetailBody({
   onSendNotification,
   onRevealPII,
   onResetPassword,
+  onAdjustWallet,
+  onFreezeWallet,
+  onUnfreezeWallet,
 }: BodyProps) {
   const now = useNow();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -126,6 +143,8 @@ function StorefrontUserDetailBody({
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
+  const [walletAdjustOpen, setWalletAdjustOpen] = useState(false);
+  const [walletFreezeOpen, setWalletFreezeOpen] = useState(false);
 
   const timeline = useMemo(() => {
     const activity = user.activityLog.map((a) => ({
@@ -200,10 +219,14 @@ function StorefrontUserDetailBody({
           {user.riskLevel} risk
         </Badge>
         <Badge variant={storefrontStatusVariant}>
-          <StorefrontGlyph />
           {storefront?.storeName ?? user.storeName}
           {storefrontStatusLabel ? ` (${storefrontStatusLabel})` : ""}
         </Badge>
+        {walletFrozen && (
+          <Badge variant="warning" size="sm">
+            Wallet frozen
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-neutral-200 px-4 py-2 text-xs dark:border-neutral-800">
@@ -489,7 +512,7 @@ function StorefrontUserDetailBody({
                   Wallet
                 </p>
                 <p className="mt-1 text-lg font-bold text-neutral-900 dark:text-neutral-100">
-                  {formatCurrency(user.walletBalance)}
+                  {formatCurrency(walletBalance)}
                 </p>
               </div>
             </div>
@@ -499,16 +522,54 @@ function StorefrontUserDetailBody({
         {activeTab === "financial" && (
           <div className="space-y-4">
             <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Wallet balance
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Wallet balance
+                </p>
+                {walletFrozen && (
+                  <Badge variant="warning" size="sm">
+                    Frozen
+                  </Badge>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
-                {formatCurrency(user.walletBalance)}
+                {formatCurrency(walletBalance)}
               </p>
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                Wallet adjustments for storefront users are handled from the
-                storefront admin, not from Atlas.
+                Wallet adjustments write a treasury event and are visible to
+                the reseller. Freeze blocks the user's own spends and refund
+                requests. Admin adjustments are unaffected by freeze.
               </p>
+              <Can permission={PERMISSIONS.STOREFRONT_USERS_SUSPEND}>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWalletAdjustOpen(true)}
+                  >
+                    Adjust wallet
+                  </Button>
+                  {walletFrozen ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        onUnfreezeWallet(user.id, user.storefrontId)
+                      }
+                    >
+                      Unfreeze wallet
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWalletFreezeOpen(true)}
+                    >
+                      Freeze wallet
+                    </Button>
+                  )}
+                </div>
+              </Can>
             </section>
 
             <div className="grid grid-cols-2 gap-3">
@@ -750,6 +811,28 @@ function StorefrontUserDetailBody({
         onConfirm={(tag) => onAddTag(user.id, tag)}
       />
 
+      <StorefrontUserWalletFreezeModal
+        open={walletFreezeOpen}
+        userName={user.name}
+        storefrontName={storefront?.storeName ?? user.storeName}
+        onClose={() => setWalletFreezeOpen(false)}
+        onConfirm={(reason) => {
+          onFreezeWallet(user.id, user.storefrontId, reason);
+          setWalletFreezeOpen(false);
+        }}
+      />
+
+      <StorefrontUserWalletAdjustModal
+        open={walletAdjustOpen}
+        userName={user.name}
+        storefrontName={storefront?.storeName ?? user.storeName}
+        currentBalance={walletBalance}
+        onClose={() => setWalletAdjustOpen(false)}
+        onConfirm={(amount, reason) => {
+          onAdjustWallet(user.id, user.storefrontId, amount, reason);
+        }}
+      />
+
       <ConfirmDialog
         open={showRevealConfirm}
         title="Reveal sensitive data?"
@@ -788,8 +871,4 @@ function StorefrontUserDetailBody({
       />
     </div>
   );
-}
-
-function StorefrontGlyph() {
-  return <span aria-hidden="true">·</span>;
 }

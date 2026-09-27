@@ -16,6 +16,7 @@ import type {
 } from "@/lib/domains/wallet/enums";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const FLOW_LABELS: Record<MerchantMoneyEvent["kind"], string> = {
   plan_charge: "Plan billing",
@@ -24,7 +25,10 @@ export const FLOW_LABELS: Record<MerchantMoneyEvent["kind"], string> = {
   refund: "Refund",
 };
 
-export const FLOW_VARIANT: Record<MerchantMoneyEvent["kind"], Variant> = {
+export const FLOW_VARIANT: Record<
+  MerchantMoneyEvent["kind"],
+  StatusVariant
+> = {
   plan_charge: "info",
   checkout: "success",
   withdrawal: "warning",
@@ -37,7 +41,10 @@ export const PLAN_CHARGE_STATUS_LABELS: Record<PlanChargeStatus, string> = {
   pending: "Pending",
 };
 
-export const PLAN_CHARGE_STATUS_VARIANT: Record<PlanChargeStatus, Variant> = {
+export const PLAN_CHARGE_STATUS_VARIANT: Record<
+  PlanChargeStatus,
+  StatusVariant
+> = {
   successful: "success",
   failed: "danger",
   pending: "warning",
@@ -54,7 +61,10 @@ export const CHECKOUT_STATUS_LABELS: Record<CheckoutStatus, string> = {
   pending: "Pending",
 };
 
-export const CHECKOUT_STATUS_VARIANT: Record<CheckoutStatus, Variant> = {
+export const CHECKOUT_STATUS_VARIANT: Record<
+  CheckoutStatus,
+  StatusVariant
+> = {
   successful: "success",
   failed: "danger",
   pending: "warning",
@@ -81,7 +91,7 @@ export const WITHDRAWAL_STATUS_LABELS: Record<
 
 export const WITHDRAWAL_STATUS_VARIANT: Record<
   WalletWithdrawalStatus,
-  Variant
+  StatusVariant
 > = {
   pending_admin: "warning",
   pending_processing: "info",
@@ -118,7 +128,7 @@ export const REFUND_STATUS_LABELS: Record<"processing" | "settled", string> = {
 
 export const REFUND_STATUS_VARIANT: Record<
   "processing" | "settled",
-  Variant
+  StatusVariant
 > = {
   processing: "warning",
   settled: "success",
@@ -142,7 +152,10 @@ export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   dismissed: "Dismissed",
 };
 
-export const DISPUTE_STATUS_VARIANT: Record<DisputeStatus, Variant> = {
+export const DISPUTE_STATUS_VARIANT: Record<
+  DisputeStatus,
+  StatusVariant
+> = {
   open: "warning",
   resolved: "success",
   dismissed: "neutral",

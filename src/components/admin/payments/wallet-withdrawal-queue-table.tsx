@@ -13,6 +13,7 @@ import type { WalletWithdrawalQueueRow } from "@/lib/admin/types/customer-wallet
 import {
   APPROVAL_REASON_LABEL,
   APPROVAL_REASON_VARIANT,
+  PAYOUT_DIRECTION_LABEL,
   QUEUE_OWNER_TYPE_LABEL,
   QUEUE_OWNER_TYPE_VARIANT,
 } from "@/lib/admin/wallets/wallet-labels";
@@ -90,12 +91,17 @@ export function WalletWithdrawalQueueTable({
         ),
       },
       {
-        key: "source",
-        header: "Source",
+        key: "payout",
+        header: "Payout",
         cell: (r) => (
-          <span className="text-xs">
-            {r.sourceProvider} {r.sourceMaskedLabel}
-          </span>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-neutral-900 dark:text-neutral-100">
+              {r.payoutSummary}
+            </span>
+            <span className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              {PAYOUT_DIRECTION_LABEL[r.payoutDirection]}
+            </span>
+          </div>
         ),
       },
       {

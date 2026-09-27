@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/purity */
+/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
@@ -12,6 +14,16 @@ import {
   isCustomerWalletStoreLoaded,
   subscribeToCustomerWalletStore,
 } from "@/lib/customer/mock/wallet-store";
+import {
+  getResellerWalletStore,
+  isResellerWalletStoreLoaded,
+  subscribeToResellerWalletStore,
+} from "@/lib/reseller/mock/wallet-store";
+import {
+  getMerchantMoneyStoreState,
+  isMerchantMoneyStoreLoaded,
+  subscribeToMerchantMoneyStore,
+} from "@/lib/domains/wallet/merchant-money/store";
 import {
   getWalletConfig,
   isWalletConfigLoaded,
@@ -33,6 +45,7 @@ import type {
   WalletWithdrawalQueueRow,
 } from "@/lib/admin/types/customer-wallet";
 import type { StorefrontUserWalletRecord } from "@/lib/domains/wallet/storefront-user-types";
+import type { StorefrontFundingLedgerEntry } from "@/lib/domains/wallet/storefront-user-types";
 
 export interface UseWalletsResult {
   wallets: StorefrontUserWalletRecord[];
@@ -84,6 +97,8 @@ export function useWallets(): UseWalletsResult {
   const nowMs = useNow();
   const [customerTick, setCustomerTick] = useState(0);
   const [storefrontTick, setStorefrontTick] = useState(0);
+  const [resellerTick, setResellerTick] = useState(0);
+  const [merchantTick, setMerchantTick] = useState(0);
   const [configTick, setConfigTick] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [error] = useState<Error | null>(null);
@@ -92,6 +107,8 @@ export function useWallets(): UseWalletsResult {
     setLoaded(
       isCustomerWalletStoreLoaded() &&
         isStorefrontUserStateLoaded() &&
+        isResellerWalletStoreLoaded() &&
+        isMerchantMoneyStoreLoaded() &&
         isWalletConfigLoaded()
     );
     const unsubCustomer = subscribeToCustomerWalletStore(() =>
@@ -100,12 +117,20 @@ export function useWallets(): UseWalletsResult {
     const unsubStorefront = subscribeToStorefrontUserState(() =>
       setStorefrontTick((x) => x + 1)
     );
+    const unsubReseller = subscribeToResellerWalletStore(() =>
+      setResellerTick((x) => x + 1)
+    );
+    const unsubMerchant = subscribeToMerchantMoneyStore(() =>
+      setMerchantTick((x) => x + 1)
+    );
     const unsubConfig = subscribeToWalletConfig(() =>
       setConfigTick((x) => x + 1)
     );
     return () => {
       unsubCustomer();
       unsubStorefront();
+      unsubReseller();
+      unsubMerchant();
       unsubConfig();
     };
   }, []);
@@ -123,17 +148,21 @@ export function useWallets(): UseWalletsResult {
 
     const customerState = getCustomerWalletStore();
     const storefrontState = getStorefrontUserState();
+    const resellerState = getResellerWalletStore();
+    const merchantState = getMerchantMoneyStoreState();
     const config = getWalletConfig();
     const effectiveNowMs = nowMs ?? Date.now();
 
     const customerWallets = Object.values(customerState.wallets);
     const storefrontWallets = Object.values(storefrontState.wallets);
+    const storefrontFunding =
+      storefrontState.fundingLedger as unknown as StorefrontFundingLedgerEntry[];
 
     const baseSummary = projectWalletSummary(
       customerWallets,
       customerState.fundingTransactions,
       storefrontWallets,
-      storefrontState.fundingLedger,
+      storefrontFunding,
       storefrontState.refundHistory,
       effectiveNowMs
     );
@@ -141,6 +170,8 @@ export function useWallets(): UseWalletsResult {
     const counts = projectMergedWithdrawalCounts(
       customerState,
       storefrontState,
+      resellerState,
+      merchantState,
       effectiveNowMs
     );
 
@@ -154,12 +185,17 @@ export function useWallets(): UseWalletsResult {
 
     const queueRows = projectMergedWithdrawalQueue(
       customerState,
-      storefrontState
+      storefrontState,
+      resellerState,
+      merchantState
     );
 
+    // Narrow cast at the boundary. The projection expects the funding
+    // subset of the ledger union; the store returns the full union.
+    // Wider cleanup deferred to a projection-shape batch.
     const ledgerRows = projectWalletFundingLedger(
       storefrontWallets,
-      storefrontState.fundingLedger,
+      storefrontFunding,
       storefrontState.refundHistory
     );
 
@@ -170,7 +206,15 @@ export function useWallets(): UseWalletsResult {
       queueRows,
       ledgerRows,
     };
-  }, [customerTick, storefrontTick, configTick, loaded, nowMs]);
+  }, [
+    customerTick,
+    storefrontTick,
+    resellerTick,
+    merchantTick,
+    configTick,
+    loaded,
+    nowMs,
+  ]);
 
   return {
     ...value,

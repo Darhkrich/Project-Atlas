@@ -11,19 +11,19 @@ import type {
   TreasuryEventFilters,
   TreasuryEventKind,
   TreasuryReconciliationStatus,
-} from "@/lib/admin/types/treasury";
+} from "@/lib/domains/treasury/types";
 import {
   TREASURY_KIND_LABELS,
   TREASURY_DIRECTION_LABELS,
   TREASURY_APPROVAL_LABELS,
   TREASURY_RECONCILIATION_LABELS,
-} from "@/lib/admin/treasury/treasury-labels";
+} from "@/lib/domains/treasury/labels";
 import {
   TREASURY_KIND_ORDER,
   TREASURY_DIRECTION_ORDER,
   TREASURY_APPROVAL_ORDER,
   TREASURY_RECONCILIATION_ORDER,
-} from "@/lib/admin/treasury/treasury-constants";
+} from "@/lib/domains/treasury/constants";
 
 interface TreasuryFiltersProps {
   filters: TreasuryEventFilters;

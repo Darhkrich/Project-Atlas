@@ -38,9 +38,13 @@ export default function ResellerVerificationQueuePage() {
   const [rejectTarget, setRejectTarget] = useState<Reseller | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
-  const actor: ResellerActor = admin
-    ? { name: admin.name, email: admin.email }
-    : { name: "System", email: "system@atlas.com" };
+const actor: ResellerActor = useMemo(
+  () =>
+    admin
+      ? { id: admin.id ?? admin.email, name: admin.name, email: admin.email }
+      : { id: "system", name: "System", email: "system@atlas.com" },
+  [admin]
+);
 
   const showToast = (kind: Toast["kind"], text: string) => {
     setToast({ kind, text });

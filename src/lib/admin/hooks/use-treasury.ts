@@ -6,17 +6,18 @@ import type {
   TreasuryEventFilters,
   TreasuryStatementRow,
   TreasurySummary,
-} from "@/lib/admin/types/treasury";
+} from "@/lib/domains/treasury/types";
 import {
   getTreasuryEvents,
   isTreasuryStoreLoaded,
   subscribeToTreasuryStore,
-} from "@/lib/admin/mock/treasury-store";
+} from "@/lib/domains/treasury/store";
 import {
   projectTreasurySummary,
   projectTreasuryStatement,
   filterTreasuryEvents,
-} from "@/lib/admin/treasury/treasury-projection";
+} from "@/lib/domains/treasury/projection";
+import { computeTotalLiabilities } from "@/lib/domains/treasury/liabilities";
 import { useNow } from "@/lib/shared/hooks/use-now";
 
 export interface UseTreasuryResult {
@@ -43,6 +44,7 @@ const EMPTY_SUMMARY: TreasurySummary = {
 export function useTreasury(filters?: TreasuryEventFilters): UseTreasuryResult {
   const nowMs = useNow();
   const [events, setEvents] = useState<TreasuryEvent[]>([]);
+  const [liabilities, setLiabilities] = useState<number>(0);
   const [loaded, setLoaded] = useState(false);
   const [error] = useState<Error | null>(null);
 
@@ -50,6 +52,11 @@ export function useTreasury(filters?: TreasuryEventFilters): UseTreasuryResult {
     const sync = () => {
       setEvents(getTreasuryEvents());
       setLoaded(isTreasuryStoreLoaded());
+      try {
+        setLiabilities(computeTotalLiabilities());
+      } catch {
+        setLiabilities(0);
+      }
     };
     const unsub = subscribeToTreasuryStore(sync);
     sync();
@@ -59,8 +66,8 @@ export function useTreasury(filters?: TreasuryEventFilters): UseTreasuryResult {
   }, []);
 
   const summary = useMemo(
-    () => projectTreasurySummary(events),
-    [events]
+    () => projectTreasurySummary(events, liabilities),
+    [events, liabilities]
   );
 
   const allRows = useMemo(

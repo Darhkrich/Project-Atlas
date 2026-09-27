@@ -29,7 +29,6 @@ import {
   VERIFICATION_VARIANT,
   STOREFRONT_STATUS_LABEL,
   STOREFRONT_STATUS_VARIANT,
-  type WalletAdjustMethod,
 } from "@/lib/admin/resellers/constants";
 import {
   computeCommissionTotals,
@@ -39,6 +38,7 @@ import { resellerCommissionsToCsv } from "@/lib/admin/resellers/csv-export";
 import { StorefrontUsersList } from "@/components/admin/shared/storefront-users-list";
 import {
   ResellerWalletAdjustModal,
+  ResellerWalletFreezeModal,
   ResellerSuspendModal,
   ResellerNotifyModal,
   ResellerTierChangeModal,
@@ -60,13 +60,16 @@ const TABS: { key: Tab; label: string }[] = [
 interface ResellerDetailDrawerProps {
   reseller: Reseller | null;
   walletBalance: number;
+  walletFrozen: boolean;
   onClose: () => void;
   onAdjustWallet: (
     id: string,
+    businessName: string,
     amount: number,
-    reason: string,
-    method: WalletAdjustMethod
+    reason: string
   ) => void;
+  onFreezeWallet: (id: string, reason: string) => void;
+  onUnfreezeWallet: (id: string) => void;
   onSuspend: (id: string, reason: string) => void;
   onReactivate: (id: string) => void;
   onApproveVerification: (id: string) => void;
@@ -123,9 +126,12 @@ interface BodyProps
 function ResellerDetailBody({
   reseller,
   walletBalance,
+  walletFrozen,
   titleId,
   onClose,
   onAdjustWallet,
+  onFreezeWallet,
+  onUnfreezeWallet,
   onSuspend,
   onReactivate,
   onApproveVerification,
@@ -140,6 +146,7 @@ function ResellerDetailBody({
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
   const [walletOpen, setWalletOpen] = useState(false);
+  const [freezeOpen, setFreezeOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reactivateConfirm, setReactivateConfirm] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
@@ -275,6 +282,9 @@ function ResellerDetailBody({
         </Badge>
         {reseller.tierName && (
           <Badge variant="info">{reseller.tierName} tier</Badge>
+        )}
+        {walletFrozen && (
+          <Badge variant="warning">Wallet frozen</Badge>
         )}
       </div>
 
@@ -490,9 +500,16 @@ function ResellerDetailBody({
         {activeTab === "financial" && (
           <div className="space-y-4">
             <section className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-700">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Wallet balance
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                  Wallet balance
+                </p>
+                {walletFrozen && (
+                  <Badge variant="warning" size="sm">
+                    Frozen
+                  </Badge>
+                )}
+              </div>
               <p className="mt-1 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
                 {formatCurrency(walletBalance)}
               </p>
@@ -500,14 +517,32 @@ function ResellerDetailBody({
                 Derived from the reseller's wallet ledger.
               </p>
               <Can permission={PERMISSIONS.RESELLERS_WALLET}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => setWalletOpen(true)}
-                >
-                  Adjust wallet
-                </Button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWalletOpen(true)}
+                  >
+                    Adjust wallet
+                  </Button>
+                  {walletFrozen ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onUnfreezeWallet(reseller.id)}
+                    >
+                      Unfreeze wallet
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFreezeOpen(true)}
+                    >
+                      Freeze wallet
+                    </Button>
+                  )}
+                </div>
               </Can>
             </section>
 
@@ -881,8 +916,18 @@ function ResellerDetailBody({
         resellerName={reseller.businessName}
         currentBalance={walletBalance}
         onClose={() => setWalletOpen(false)}
-        onConfirm={(amount, reason, method) => {
-          onAdjustWallet(reseller.id, amount, reason, method);
+        onConfirm={(amount, reason) => {
+          onAdjustWallet(reseller.id, reseller.businessName, amount, reason);
+        }}
+      />
+
+      <ResellerWalletFreezeModal
+        open={freezeOpen}
+        resellerName={reseller.businessName}
+        onClose={() => setFreezeOpen(false)}
+        onConfirm={(reason) => {
+          onFreezeWallet(reseller.id, reason);
+          setFreezeOpen(false);
         }}
       />
 

@@ -31,7 +31,8 @@ export type TreasuryLiabilityPoolType =
   | "storefront_user"
   | "reseller"
   | "merchant_billing"
-  | "merchant_main";
+  | "merchant_main"
+  | "provider_settlement_pending";
 
 export type TreasuryCounterpartyType =
   | "customer"
@@ -65,8 +66,14 @@ export interface TreasuryEvent {
   currency: "GHS";
   counterparty: TreasuryCounterparty | null;
   poolType?: TreasuryLiabilityPoolType;
+  // Names the other pool in a cross-pool move. Set only on
+  // internal_reclassification events that shift value between pools.
+  counterpartyPoolType?: TreasuryLiabilityPoolType;
   ownerId?: string;
   reference: string;
+  // Optional in the mock. Derived from createdAt at read time. The backend
+  // spec requires this as a required immutable field assigned at write.
+  periodId?: string;
   description: string;
   approvalStatus: TreasuryApprovalStatus;
   reconciliationStatus: TreasuryReconciliationStatus;
@@ -75,6 +82,8 @@ export interface TreasuryEvent {
   createdBy: TreasuryActor;
   approvedBy?: TreasuryActor;
   approvedAt?: string;
+  rejectedBy?: TreasuryActor;
+  rejectedAt?: string;
   settledAt?: string;
   rejectionReason?: string;
 }
@@ -84,6 +93,11 @@ export interface TreasurySummary {
   committedOutbound: number;
   available: number;
   userLiabilities: number;
+  /**
+   * Obligation Atlas owes providers between order success and payout
+   * settle. Distinct from userLiabilities. Optional in this build.
+   */
+  providerLiabilities?: number;
   freeCash: number;
   coverageStatus: TreasuryCoverageStatus;
   coverageRatio: number;

@@ -1,7 +1,9 @@
+// lib/admin/merchants/merchant-mutations.ts
+
 import type { Merchant } from "@/lib/admin/types/merchant";
-import type { MerchantSubscriptionStatus } from "@/lib/admin/types/merchant";
-import type { PlanCode, SubscriptionPlan } from "@/config/subscription-plans";
-import { getPlanByCode } from "@/config/subscription-plans";
+import type { SubscriptionStatus } from "@/lib/admin/types/merchant";
+import { getPlanByCode } from "@/lib/domains/subscriptions";
+import type { SubscriptionPlan } from "@/lib/domains/subscriptions";
 import {
   applyMerchantPatch,
   addMerchantToStore,
@@ -61,33 +63,35 @@ function priceForPlan(
   plan: SubscriptionPlan,
   billingCycle: "monthly" | "annual"
 ): number {
-  const raw =
-    billingCycle === "annual" ? plan.annualPrice : plan.monthlyPrice;
-  const match = raw.match(/[\d,]+(\.\d+)?/);
-  if (!match) return 0;
-  const parsed = Number(match[0].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
+  const value =
+    billingCycle === "annual" ? plan.annualPriceGHS : plan.monthlyPriceGHS;
+  if (value === "custom") return 0;
+  return value;
+}
+
+function isCustomPriced(plan: SubscriptionPlan): boolean {
+  return typeof plan.monthlyPriceGHS === "string";
 }
 
 /* ------------------------------ Mutations ----------------------------- */
 
 export function changeSubscriptionPlan(
   merchantId: string,
-  planCode: PlanCode,
+  planCode: string,
   actor: MerchantActor
 ): MerchantMutationResult {
   const plan = getPlanByCode(planCode);
-  if (!plan || plan.code !== planCode) {
+  if (!plan) {
     return { ok: false, error: "Plan not found." };
   }
 
   const result = applyMerchantPatch(merchantId, (m) => {
     if (m.subscription.planId === planCode) return m;
-    const previousPlanName = getPlanByCode(m.subscription.planId).name;
-    const amountPaid =
-      plan.code === "enterprise"
-        ? m.subscription.amountPaid
-        : priceForPlan(plan, m.subscription.billingCycle);
+    const previousPlan = getPlanByCode(m.subscription.planId);
+    const previousPlanName = previousPlan?.name ?? m.subscription.planId;
+    const amountPaid = isCustomPriced(plan)
+      ? m.subscription.amountPaid
+      : priceForPlan(plan, m.subscription.billingCycle);
     return withLogsAndPatch(
       m,
       "Changed plan from " + previousPlanName + " to " + plan.name,
@@ -122,7 +126,10 @@ export function applySubscriptionDiscount(
   const result = applyMerchantPatch(merchantId, (m) => {
     const previous = m.subscription.discountPercent ?? 0;
     if (previous === discountPercent) return m;
-    const direction = discountPercent === 0 ? "Removed discount" : "Applied " + discountPercent + "% discount";
+    const direction =
+      discountPercent === 0
+        ? "Removed discount"
+        : "Applied " + discountPercent + "% discount";
     return withLogsAndPatch(m, direction, actor, {
       subscription: {
         ...m.subscription,
@@ -155,7 +162,7 @@ export function cancelSubscription(
       {
         subscription: {
           ...m.subscription,
-          status: "cancelled" as MerchantSubscriptionStatus,
+          status: "cancelled" as SubscriptionStatus,
         },
       }
     );
@@ -175,7 +182,7 @@ export function reactivateSubscription(
     return withLogsAndPatch(m, "Subscription reactivated", actor, {
       subscription: {
         ...m.subscription,
-        status: "active" as MerchantSubscriptionStatus,
+        status: "active" as SubscriptionStatus,
       },
     });
   });
@@ -192,7 +199,7 @@ export interface OnboardMerchantInput {
   contactPerson: string;
   email: string;
   phone: string;
-  planCode: PlanCode;
+  planCode: string;
   billingCycle: "monthly" | "annual";
   storeName: string;
   templateId: string;
@@ -203,15 +210,18 @@ export function onboardMerchant(
   actor: MerchantActor
 ): Merchant {
   const plan = getPlanByCode(input.planCode);
+  if (!plan) {
+    throw new Error("Unknown plan code: " + input.planCode);
+  }
+
   const nowIso = new Date().toISOString();
   const endMs =
     input.billingCycle === "annual"
       ? Date.now() + 86_400_000 * 365
       : Date.now() + 86_400_000 * 30;
-  const amountPaid =
-    plan.code === "enterprise"
-      ? 0
-      : priceForPlan(plan, input.billingCycle);
+  const amountPaid = isCustomPriced(plan)
+    ? 0
+    : priceForPlan(plan, input.billingCycle);
 
   const merchant: Merchant = {
     id: "MER-" + crypto.randomUUID().slice(0, 6).toUpperCase(),
@@ -225,7 +235,9 @@ export function onboardMerchant(
       primaryColor: "#166e59",
       accentColor: "#ffa000",
       templateId: input.templateId,
-      subdomain: input.storeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".atlas.store",
+      subdomain:
+        input.storeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") +
+        ".atlas.store",
     },
     subscription: {
       planId: input.planCode,
@@ -238,13 +250,11 @@ export function onboardMerchant(
     },
     verificationStatus: "pending",
     merchantStatus: "pending",
-    storeStatus: "draft",
+    storeStatus: "disabled",
     totalOrders: 0,
     totalRevenue: 0,
     lastActive: nowIso,
     createdAt: nowIso,
-    walletBalance: 0,
-    walletTransactions: [],
     activityLog: [
       {
         id: makeActivityId(),

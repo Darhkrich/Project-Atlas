@@ -11,7 +11,6 @@ import type {
   PaymentsSummary,
   PlanChargeEvent,
   RefundEvent,
-  WithdrawalQueueRow,
   MetricWithDelta,
 } from "@/lib/admin/types/merchant-money";
 import type { MerchantWithdrawalRequest } from "@/lib/domains/wallet/merchant-money/types";
@@ -139,43 +138,6 @@ export function projectLedger(
   return rows;
 }
 
-export function projectWithdrawalQueue(
-  state: MerchantMoneyState,
-  merchants: Merchant[]
-): WithdrawalQueueRow[] {
-  const map = new Map(merchants.map((m) => [m.id, m] as const));
-  const rows: WithdrawalQueueRow[] = state.withdrawals.map((w) => {
-    const dest = state.destinations[w.merchantId];
-    return {
-      id: w.id,
-      merchantId: w.merchantId,
-      merchantName: nameFor(w.merchantId, map),
-      amount: w.amount,
-      fee: w.fee,
-      total: w.total,
-      destinationLabel: dest ? dest.provider + " " + dest.method : "unknown",
-      destinationProvider: w.destinationProvider,
-      destinationMasked: w.destinationMaskedLabel,
-      destinationVerified: Boolean(dest?.verifiedAt) && !dest?.pendingChange,
-      destinationPendingChange: Boolean(dest?.pendingChange),
-      approvalRequiredReasons: w.approvalRequiredReasons,
-      status: w.status,
-      statusLabel: WITHDRAWAL_STATUS_LABELS[w.status],
-      statusVariant: WITHDRAWAL_STATUS_VARIANT[w.status],
-      autoApproved: w.autoApproved,
-      createdAt: w.requestedAt,
-      raw: w,
-    };
-  });
-  rows.sort((a, b) => {
-    const aP = a.status === "pending_admin" ? 0 : 1;
-    const bP = b.status === "pending_admin" ? 0 : 1;
-    if (aP !== bP) return aP - bP;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
-  return rows;
-}
-
 function computeDelta(current: number, previous: number): MetricWithDelta {
   const diff = current - previous;
   let direction: "up" | "down" | "flat" = "flat";
@@ -203,7 +165,11 @@ export function projectSummary(
   const inPrev = (iso: string) =>
     hasPrevWindow && inRange(iso, prevSinceMs, prevUntilMs);
 
-  const countedStatuses = ["pending_processing", "completed", "pending_admin"] as const;
+  const countedStatuses = [
+    "pending_processing",
+    "completed",
+    "pending_admin",
+  ] as const;
 
   const currentRevenueWithdrawals = state.withdrawals.filter(
     (w) =>

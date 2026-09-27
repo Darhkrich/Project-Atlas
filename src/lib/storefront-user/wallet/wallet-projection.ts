@@ -22,8 +22,10 @@ import {
 } from "./wallet-labels";
 import { MIN_STOREFRONT_REFUND_AMOUNT } from "./wallet-constants";
 
-function isCreditKind(kind: StorefrontWalletLedgerEntry["kind"]): boolean {
-  return kind === "funding";
+function isCreditEntry(entry: StorefrontWalletLedgerEntry): boolean {
+  if (entry.kind === "funding") return true;
+  if (entry.kind === "adjustment") return entry.amount > 0;
+  return false;
 }
 
 function describeLedgerEntry(
@@ -39,6 +41,12 @@ function describeLedgerEntry(
     return {
       description: entry.service,
       detail: entry.plan + " - " + entry.relatedOrderId,
+    };
+  }
+  if (entry.kind === "adjustment") {
+    return {
+      description: "Admin adjustment",
+      detail: entry.reason,
     };
   }
   return {
@@ -66,7 +74,7 @@ export function projectLedgerRows(
     .filter((e) => e.walletId === walletId)
     .map((entry) => {
       const { description, detail } = describeLedgerEntry(entry);
-      const credit = isCreditKind(entry.kind);
+      const credit = isCreditEntry(entry);
       const row: StorefrontLedgerRow = {
         id: entry.id,
         kind: entry.kind,

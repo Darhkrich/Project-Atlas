@@ -16,8 +16,8 @@ import {
   getTreasuryEvents,
   isTreasuryStoreLoaded,
   subscribeToTreasuryStore,
-} from "@/lib/admin/mock/treasury-store";
-import { computeCashAtBank } from "@/lib/admin/treasury/treasury-helpers";
+} from "@/lib/domains/treasury/store";
+import { computeCashAtBank } from "@/lib/domains/treasury/helpers";
 import {
   projectRefundRows,
   projectRefundsSummary,

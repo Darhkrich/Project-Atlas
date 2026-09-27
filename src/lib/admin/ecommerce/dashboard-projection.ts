@@ -1,9 +1,9 @@
 import type { Merchant } from "@/lib/admin/types/merchant";
-import type {
-  PlanCode,
-  SubscriptionPlan,
-} from "@/config/subscription-plans";
-import { PLAN_CODE_LABEL, type ActivityKind } from "./dashboard-labels";
+import type { SubscriptionPlan } from "@/lib/domains/subscriptions";
+import {
+  planCodeLabelFor,
+  type ActivityKind,
+} from "./dashboard-labels";
 import { formatCurrency } from "@/lib/admin/formatters";
 
 /* ------------------------------ Types --------------------------------- */
@@ -18,7 +18,7 @@ export interface EcommerceSummary {
 }
 
 export interface PlanDistributionPoint {
-  code: PlanCode;
+  code: string;
   plan: string;
   count: number;
 }
@@ -50,21 +50,14 @@ export interface RecentActivityItem {
 
 /* ------------------------------ Pricing ------------------------------- */
 
-/**
- * Plan prices are stored as display strings ("GH₵ 50", "Custom").
- * Returns null when the string carries no numeric value.
- */
-export function parsePrice(value: string): number | null {
-  const match = value.match(/[\d,]+(\.\d+)?/);
-  if (!match) return null;
-  const parsed = Number(match[0].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
+function isCustomPriced(plan: SubscriptionPlan): boolean {
+  return typeof plan.monthlyPriceGHS === "string";
 }
 
 /**
- * Effective MRR contribution for a merchant, following the confirmed
- * rule: only active subscriptions contribute. Past due, expired, and
- * cancelled contribute zero. Enterprise uses contractMrr when set.
+ * Effective MRR contribution for a merchant. Only active subscriptions
+ * contribute. Past due, expired, and cancelled contribute zero.
+ * Custom-priced plans contribute their negotiated contract amount.
  */
 export function effectiveMrr(
   merchant: Merchant,
@@ -72,17 +65,19 @@ export function effectiveMrr(
 ): number {
   if (merchant.subscription.status !== "active") return 0;
 
-  if (plan.code === "enterprise") {
+  if (isCustomPriced(plan)) {
     return merchant.contractMrr ?? 0;
   }
 
-  if (merchant.subscription.billingCycle === "annual") {
-    const annual = parsePrice(plan.annualPrice);
-    return annual === null ? 0 : annual / 12;
-  }
+  const monthly =
+    plan.monthlyPriceGHS === "custom" ? 0 : plan.monthlyPriceGHS;
+  const annual =
+    plan.annualPriceGHS === "custom" ? 0 : plan.annualPriceGHS;
 
-  const monthly = parsePrice(plan.monthlyPrice);
-  return monthly === null ? 0 : monthly;
+  if (merchant.subscription.billingCycle === "annual") {
+    return annual / 12;
+  }
+  return monthly;
 }
 
 /* ------------------------------ Summary ------------------------------- */
@@ -102,7 +97,7 @@ export function projectEcommerceSummary(
   for (const m of merchants) {
     if (m.subscription.status === "active") active += 1;
     if (m.subscription.status === "past_due") pastDue += 1;
-    const plan = planByCode.get(m.subscription.planId as PlanCode);
+    const plan = planByCode.get(m.subscription.planId);
     if (plan) mrr += effectiveMrr(m, plan);
     orders += m.totalOrders;
     volume += m.totalRevenue;
@@ -124,18 +119,18 @@ export function projectPlanDistribution(
   merchants: Merchant[],
   plans: SubscriptionPlan[]
 ): PlanDistributionPoint[] {
-  const counts = new Map<PlanCode, number>();
+  const counts = new Map<string, number>();
   for (const plan of plans) counts.set(plan.code, 0);
 
   for (const m of merchants) {
-    const code = m.subscription.planId as PlanCode;
+    const code = m.subscription.planId;
     if (!counts.has(code)) continue;
     counts.set(code, (counts.get(code) ?? 0) + 1);
   }
 
   return plans.map((p) => ({
     code: p.code,
-    plan: PLAN_CODE_LABEL[p.code],
+    plan: planCodeLabelFor(p.code),
     count: counts.get(p.code) ?? 0,
   }));
 }
@@ -153,7 +148,7 @@ export function projectTopMerchants(
     .sort((a, b) => b.totalRevenue - a.totalRevenue)
     .slice(0, limit)
     .map((m) => {
-      const plan = planByCode.get(m.subscription.planId as PlanCode);
+      const plan = planByCode.get(m.subscription.planId);
       return {
         id: m.id,
         name: m.businessName,
@@ -211,7 +206,7 @@ export function projectRecentActivity(
       });
     }
 
-    for (const entry of m.auditTrail) {
+    for (const entry of m.auditTrail ?? []) {
       out.push({
         id: m.id + "-aud-" + entry.id,
         kind: "admin",
@@ -230,7 +225,7 @@ export function projectRecentActivity(
         description:
           "Order " +
           order.id +
-          " placed · " +
+          " placed \u00B7 " +
           formatCurrency(order.total),
         timestamp: order.date,
         merchantId: m.id,

@@ -86,7 +86,10 @@ export const ALL_SORT_KEYS: SortKey[] = [
 
 export type LastActiveFilter = "" | "7d" | "30d" | "90d" | "90d+";
 
-export const LAST_ACTIVE_OPTIONS: { value: LastActiveFilter; label: string }[] = [
+export const LAST_ACTIVE_OPTIONS: {
+  value: LastActiveFilter;
+  label: string;
+}[] = [
   { value: "", label: "Any activity" },
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
@@ -98,24 +101,15 @@ export const PAGE_SIZE = 12;
 
 export const CUSTOMER_RETENTION_DAYS = 90;
 
-export type WalletAdjustMethod =
-  | "atlas_wallet"
-  | "mobile_money"
-  | "card"
-  | "atlas_points";
+export type WalletAdjustMethod = "atlas_wallet";
 
 export const WALLET_METHOD_LABEL: Record<WalletAdjustMethod, string> = {
   atlas_wallet: "Atlas wallet balance",
-  mobile_money: "Mobile money refund",
-  card: "Card refund",
-  atlas_points: "Atlas Points",
 };
 
 export const WALLET_METHOD_HINT: Record<WalletAdjustMethod, string> = {
-  atlas_wallet: "Adjusts the customer's wallet balance directly.",
-  mobile_money: "Reverses to the original MoMo number. 1 to 24 hours.",
-  card: "Refunds the original card. 3 to 5 business days.",
-  atlas_points: "Adjusts Atlas Points. Redeemable on any service.",
+  atlas_wallet:
+    "Bookkeeping correction. Writes a ledger entry and a treasury adjustment event.",
 };
 
 export function statusLabel(status: CustomerStatus): string {

@@ -2,15 +2,17 @@
 //
 // Single write path for merchant wallet money. Public merchant UI and
 // admin payments UI both dispatch here. RBAC is enforced at the admin
-// wrapper layer, not here. This module has no knowledge of Atlas
-// permissions or admin actors.
+// wrapper layer, not here.
 //
 // Balance is never written directly. Every mutation writes a ledger entry
 // and the store recomputes the derived balance. Every debit is gated on
-// the running balance. A mutation that would drive a wallet negative is
-// rejected before any ledger entry is written.
+// the running balance.
+//
+// Layer 2: cash movements emit treasury events.
+// Layer 3 A1: every mutation call writes one audit entry.
 
 import type { WalletFundingMethod } from "@/lib/domains/wallet/enums";
+import type { WalletApprovalReason } from "@/lib/domains/wallet/enums";
 import { computeWithdrawalTotal } from "@/lib/domains/wallet/fee";
 import { getWalletConfig } from "@/lib/domains/wallet/config-store";
 import {
@@ -50,10 +52,51 @@ import type {
   MerchantWithdrawalRequest,
   RegisteredDestination,
 } from "./types";
+import { emitLedgerEvent } from "@/lib/domains/treasury/emit";
+import type {
+  TreasuryActor,
+  TreasuryCounterparty,
+  TreasuryLiabilityPoolType,
+} from "@/lib/domains/treasury/types";
+import { appendAuditEntry } from "@/lib/domains/audit";
 
-// ---------------------------------------------------------------------------
-// Funding
-// ---------------------------------------------------------------------------
+function toTreasuryActor(actor: MerchantMoneyActor): TreasuryActor {
+  return { id: actor.id, name: actor.name, email: actor.email };
+}
+
+function merchantCounterparty(actor: MerchantMoneyActor): TreasuryCounterparty {
+  return { type: "merchant", id: actor.id, name: actor.name };
+}
+
+function poolForWalletType(
+  walletType: MerchantWalletType
+): TreasuryLiabilityPoolType {
+  return walletType === "billing" ? "merchant_billing" : "merchant_main";
+}
+
+function startOfUtcDay(ms: number): number {
+  const d = new Date(ms);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function requestsTodayCount(merchantId: string, nowMs: number): number {
+  const state = getMerchantWalletState(merchantId);
+  if (!state) return 0;
+  const dayStart = startOfUtcDay(nowMs);
+  const dayEnd = dayStart + 86_400_000;
+  let count = 0;
+  for (const r of state.withdrawalRequests) {
+    const t = new Date(r.requestedAt).getTime();
+    if (t >= dayStart && t < dayEnd) count += 1;
+  }
+  for (const h of state.withdrawalHistory) {
+    const t = new Date(h.requestedAt).getTime();
+    if (t >= dayStart && t < dayEnd) count += 1;
+  }
+  return count;
+}
+
+/* ------------------------------ Funding -------------------------------- */
 
 export interface FundInput {
   amount: number;
@@ -104,13 +147,43 @@ export function fundMerchantWallet(
     lastCreditAt: nowIso,
   });
 
+  emitLedgerEvent({
+    kind: "wallet_funding_credit",
+    direction: "in",
+    amount: input.amount,
+    poolType: poolForWalletType(walletType),
+    ownerId: actor.id,
+    counterparty: merchantCounterparty(actor),
+    reference,
+    description:
+      "Merchant " +
+      walletType +
+      " wallet funding via " +
+      input.provider +
+      " " +
+      input.maskedLabel,
+    actor: toTreasuryActor(actor),
+    relatedEventId: entry.id,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.fund",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      walletType,
+      amount: input.amount,
+      provider: input.provider,
+      reference,
+    },
+  });
+
   return { ok: true, reference };
 }
 
-// ---------------------------------------------------------------------------
-// Transfer between billing and main. Free, instant, no approval.
-// Two ledger entries, paired by pairedEntryId. Source balance checked.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Transfer ------------------------------- */
 
 export interface TransferInput {
   from: MerchantWalletType;
@@ -133,13 +206,10 @@ export function transferBetweenWallets(
   if (!state) return { ok: false, error: "Merchant wallet not found." };
 
   const fromWallet = input.from === "billing" ? state.billing : state.main;
-  const toWallet = input.to === "billing" ? state.billing : state.main;
 
+  // Freeze is outbound-only. Only the source wallet is gated.
   if (fromWallet.status === "frozen") {
     return { ok: false, error: "The source wallet is frozen." };
-  }
-  if (toWallet.status === "frozen") {
-    return { ok: false, error: "The destination wallet is frozen." };
   }
   if (input.amount > fromWallet.balance) {
     return { ok: false, error: "Source wallet has insufficient balance." };
@@ -185,14 +255,40 @@ export function transferBetweenWallets(
     lastCreditAt: nowIso,
   });
 
+  // Cross-pool reclassification. Money lands in `to`, leaves `from`.
+  emitLedgerEvent({
+    kind: "internal_reclassification",
+    direction: "internal",
+    amount: input.amount,
+    poolType: poolForWalletType(input.to),
+    counterpartyPoolType: poolForWalletType(input.from),
+    ownerId: actor.id,
+    counterparty: merchantCounterparty(actor),
+    reference: transferRef,
+    description:
+      "Merchant wallet transfer: " + input.from + " to " + input.to,
+    actor: toTreasuryActor(actor),
+    relatedEventId: outId,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.transfer",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      from: input.from,
+      to: input.to,
+      amount: input.amount,
+      reference: transferRef,
+    },
+  });
+
   return { ok: true, reference: transferRef };
 }
 
-// ---------------------------------------------------------------------------
-// Withdrawal. Merchant-initiated. Debits main wallet on request via
-// derivation. Approval flips status. Rejection restores balance by
-// derivation. Balance checked before the ledger entry is written.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Withdrawal ----------------------------- */
 
 export interface WithdrawInput {
   amount: number;
@@ -251,11 +347,19 @@ export function requestMerchantWithdrawal(
     };
   }
 
-  const requiresApproval = total > config.thresholdGHS;
+  const approvalReasons: WalletApprovalReason[] = [];
+  if (total > config.thresholdGHS) {
+    approvalReasons.push("exceeds_threshold");
+  }
+  const todayCount = requestsTodayCount(actor.id, Date.now());
+  if (todayCount >= config.dailyCap) {
+    approvalReasons.push("daily_cap_reached");
+  }
+  const requiresApproval = approvalReasons.length > 0;
+
   const nowIso = new Date().toISOString();
   const requestId = "MWD-" + crypto.randomUUID().slice(0, 8).toUpperCase();
-  const transactionRef =
-    "TXN-" + crypto.randomUUID().slice(0, 8).toUpperCase();
+  const transactionRef = "TXN-" + crypto.randomUUID().slice(0, 8).toUpperCase();
 
   const request: MerchantWithdrawalRequest = {
     id: requestId,
@@ -271,7 +375,7 @@ export function requestMerchantWithdrawal(
     destinationNameOnAccount: destination.nameOnAccount,
     status: requiresApproval ? "pending_admin" : "completed",
     autoApproved: !requiresApproval,
-    approvalRequiredReasons: requiresApproval ? ["exceeds_threshold"] : [],
+    approvalRequiredReasons: approvalReasons,
     transactionRef,
     requestedAt: nowIso,
     completedAt: requiresApproval ? undefined : nowIso,
@@ -312,7 +416,35 @@ export function requestMerchantWithdrawal(
       updatedAt: nowIso,
       lastDebitAt: nowIso,
     });
+
+    emitLedgerEvent({
+      kind: "withdrawal_debit",
+      direction: "out",
+      amount: input.amount,
+      poolType: "merchant_main",
+      ownerId: actor.id,
+      counterparty: merchantCounterparty(actor),
+      reference: transactionRef,
+      description: "Merchant main wallet withdrawal to registered destination",
+      actor: toTreasuryActor(actor),
+      relatedEventId: requestId,
+      settledAt: nowIso,
+    });
   }
+
+  appendAuditEntry({
+    action: "wallet.merchant.withdraw_request",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: {
+      amount: input.amount,
+      total,
+      requiresApproval,
+      approvalReasons,
+      reference: transactionRef,
+    },
+  });
 
   return { ok: true, reference: transactionRef, requiresApproval };
 }
@@ -354,22 +486,25 @@ export function cancelMerchantWithdrawal(
   internalAddWithdrawalHistory(history);
   internalPatchWalletMeta(actor.id, "main", { updatedAt: nowIso });
 
+  appendAuditEntry({
+    action: "wallet.merchant.withdraw_cancel",
+    resourceType: "wallet",
+    resourceId: actor.id,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId, amount: request.amount },
+  });
+
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Admin withdrawal decisions. RBAC enforced at the caller in the admin
-// wrapper layer. This module records the actor and persists the note.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Admin withdrawal ----------------------- */
 
 function findMerchantIdForWithdrawal(
   withdrawalId: string
 ): string | null {
   const s = getMerchantMoneyStoreState();
   for (const merchantId of Object.keys(s)) {
-    if (
-      s[merchantId].withdrawalRequests.some((r) => r.id === withdrawalId)
-    ) {
+    if (s[merchantId].withdrawalRequests.some((r) => r.id === withdrawalId)) {
       return merchantId;
     }
     if (
@@ -400,6 +535,17 @@ export function approveMerchantWithdrawal(
     return { ok: false, error: "Withdrawal is not awaiting approval." };
   }
 
+  // Snapshot approval. The destination the merchant committed to at
+  // request time is the destination the payout ships to. Freeze state is
+  // not re-checked: the wallet was already debited at request time.
+  if (state.destination && state.destination.pendingChange) {
+    return {
+      ok: false,
+      error:
+        "The merchant has a pending destination change. Approve or cancel it before approving this withdrawal.",
+    };
+  }
+
   const nowIso = new Date().toISOString();
   const trimmedNote = note && note.trim().length > 0 ? note.trim() : undefined;
 
@@ -428,6 +574,32 @@ export function approveMerchantWithdrawal(
   internalPatchWalletMeta(merchantId, "main", {
     updatedAt: nowIso,
     lastDebitAt: nowIso,
+  });
+
+  emitLedgerEvent({
+    kind: "withdrawal_debit",
+    direction: "out",
+    amount: request.amount,
+    poolType: "merchant_main",
+    ownerId: merchantId,
+    counterparty: {
+      type: "merchant",
+      id: merchantId,
+      name: request.merchantName,
+    },
+    reference: request.transactionRef,
+    description: "Merchant main wallet withdrawal to registered destination",
+    actor: toTreasuryActor(actor),
+    relatedEventId: withdrawalId,
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.withdraw_approve",
+    resourceType: "wallet",
+    resourceId: merchantId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId: withdrawalId, amount: request.amount },
   });
 
   return { ok: true };
@@ -476,14 +648,121 @@ export function rejectMerchantWithdrawal(
   internalAddWithdrawalHistory(history);
   internalPatchWalletMeta(merchantId, "main", { updatedAt: nowIso });
 
+  appendAuditEntry({
+    action: "wallet.merchant.withdraw_reject",
+    resourceType: "wallet",
+    resourceId: merchantId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { requestId: withdrawalId, reason: trimmed },
+  });
+
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Admin adjustment. Credit or debit with reason. Immutable ledger entry.
-// Debit is gated on the main wallet balance.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Admin adjust --------------------------- */
 
+export interface AdminAdjustWalletInput {
+  merchantId: string;
+  merchantName: string;
+  walletType: MerchantWalletType;
+  amount: number;
+  reason: string;
+  actor: MerchantMoneyActor;
+}
+
+export function adjustMerchantWallet(
+  input: AdminAdjustWalletInput
+): MerchantMoneyMutationResult {
+  const trimmed = input.reason.trim();
+  if (trimmed.length < 10) {
+    return { ok: false, error: "Reason must be at least 10 characters." };
+  }
+  if (!Number.isFinite(input.amount) || input.amount === 0) {
+    return { ok: false, error: "Amount must be non-zero." };
+  }
+  if (Math.abs(input.amount) > 100_000) {
+    return { ok: false, error: "Amount exceeds the per-adjustment limit." };
+  }
+
+  const state = getMerchantWalletState(input.merchantId);
+  if (!state) return { ok: false, error: "Merchant wallet not found." };
+
+  const wallet =
+    input.walletType === "billing" ? state.billing : state.main;
+  const projected = wallet.balance + input.amount;
+  if (projected < 0) {
+    return {
+      ok: false,
+      error: "Adjustment would overdraw the wallet.",
+    };
+  }
+
+  const nowIso = new Date().toISOString();
+  const entry: MerchantAdjustmentLedgerEntry = {
+    id: "ML-ADJ-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
+    merchantId: input.merchantId,
+    walletType: input.walletType,
+    kind: "adjustment",
+    amount: input.amount,
+    reason: trimmed,
+    actor: {
+      id: input.actor.id,
+      name: input.actor.name,
+      email: input.actor.email,
+    },
+    createdAt: nowIso,
+  };
+
+  internalAppendLedgerEntry(entry);
+  internalPatchWalletMeta(input.merchantId, input.walletType, {
+    updatedAt: nowIso,
+  });
+
+  const isCredit = input.amount > 0;
+
+  emitLedgerEvent({
+    kind: isCredit ? "adjustment_credit" : "adjustment_debit",
+    direction: isCredit ? "in" : "out",
+    amount: Math.abs(input.amount),
+    poolType: poolForWalletType(input.walletType),
+    ownerId: input.merchantId,
+    counterparty: {
+      type: "merchant",
+      id: input.merchantId,
+      name: input.merchantName,
+    },
+    reference: entry.id,
+    description: "Admin adjustment: " + trimmed,
+    actor: toTreasuryActor(input.actor),
+    settledAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.adjust",
+    resourceType: "wallet",
+    resourceId: input.merchantId,
+    actor: {
+      id: input.actor.id,
+      name: input.actor.name,
+      email: input.actor.email,
+    },
+    metadata: {
+      walletType: input.walletType,
+      amount: input.amount,
+      direction: isCredit ? "credit" : "debit",
+      reason: trimmed,
+      reference: entry.id,
+    },
+  });
+
+  return { ok: true, reference: entry.id };
+}
+
+/**
+ * @deprecated Use adjustMerchantWallet. Kept as a thin wrapper for the
+ * admin payments wrapper that still calls this name. Defaults to main
+ * wallet.
+ */
 export interface AdminAdjustInput {
   merchantId: string;
   amount: number;
@@ -494,52 +773,82 @@ export interface AdminAdjustInput {
 export function applyAdminMerchantAdjustment(
   input: AdminAdjustInput
 ): MerchantMoneyMutationResult {
-  const trimmed = input.reason.trim();
-  if (trimmed.length < 8) {
-    return { ok: false, error: "Reason must be at least 8 characters." };
-  }
-  if (!Number.isFinite(input.amount) || input.amount === 0) {
-    return { ok: false, error: "Amount must be non-zero." };
-  }
+  return adjustMerchantWallet({
+    merchantId: input.merchantId,
+    merchantName: input.merchantId,
+    walletType: "main",
+    amount: input.amount,
+    reason: input.reason,
+    actor: input.actor,
+  });
+}
 
-  const state = getMerchantWalletState(input.merchantId);
+/* ------------------------------ Freeze --------------------------------- */
+
+export function freezeMerchantWallet(
+  merchantId: string,
+  walletType: MerchantWalletType,
+  reason: string,
+  actor: MerchantMoneyActor
+): MerchantMoneyMutationResult {
+  const trimmed = reason.trim();
+  if (trimmed.length < 10) {
+    return { ok: false, error: "Reason must be at least 10 characters." };
+  }
+  const state = getMerchantWalletState(merchantId);
   if (!state) return { ok: false, error: "Merchant wallet not found." };
-
-  // Debit gate: a negative adjustment reduces the main wallet. Refuse if
-  // the reduction would take the balance below zero.
-  if (input.amount < 0) {
-    const projected = state.main.balance + input.amount;
-    if (projected < 0) {
-      return {
-        ok: false,
-        error: "Adjustment would overdraw the merchant main wallet.",
-      };
-    }
+  const wallet = walletType === "billing" ? state.billing : state.main;
+  if (wallet.status === "frozen") {
+    return { ok: false, error: "This wallet is already frozen." };
   }
 
   const nowIso = new Date().toISOString();
-  const entry: MerchantAdjustmentLedgerEntry = {
-    id: "ML-ADJ-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
-    merchantId: input.merchantId,
-    walletType: "main",
-    kind: "adjustment",
-    amount: input.amount,
-    reason: trimmed,
-    actor: { name: input.actor.name, email: input.actor.email },
-    createdAt: nowIso,
-  };
+  internalPatchWalletMeta(merchantId, walletType, {
+    status: "frozen",
+    updatedAt: nowIso,
+  });
 
-  internalAppendLedgerEntry(entry);
-  internalPatchWalletMeta(input.merchantId, "main", { updatedAt: nowIso });
+  appendAuditEntry({
+    action: "wallet.merchant.freeze",
+    resourceType: "wallet",
+    resourceId: merchantId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { walletType, reason: trimmed },
+  });
 
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Destination change. Request writes a pending change. Cancellation
-// removes the pending change. Admin approval of the change is a
-// separate flow.
-// ---------------------------------------------------------------------------
+export function unfreezeMerchantWallet(
+  merchantId: string,
+  walletType: MerchantWalletType,
+  actor: MerchantMoneyActor
+): MerchantMoneyMutationResult {
+  const state = getMerchantWalletState(merchantId);
+  if (!state) return { ok: false, error: "Merchant wallet not found." };
+  const wallet = walletType === "billing" ? state.billing : state.main;
+  if (wallet.status !== "frozen") {
+    return { ok: false, error: "This wallet is not frozen." };
+  }
+
+  const nowIso = new Date().toISOString();
+  internalPatchWalletMeta(merchantId, walletType, {
+    status: "active",
+    updatedAt: nowIso,
+  });
+
+  appendAuditEntry({
+    action: "wallet.merchant.unfreeze",
+    resourceType: "wallet",
+    resourceId: merchantId,
+    actor: { id: actor.id, name: actor.name, email: actor.email },
+    metadata: { walletType },
+  });
+
+  return { ok: true };
+}
+
+/* ------------------------------ Destination ---------------------------- */
 
 export interface DestinationChangeInput {
   method: "momo" | "bank";
@@ -648,9 +957,7 @@ export function cancelPendingDestinationChange(
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Auto-pay. Card and billing wallet sources.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Auto-pay ------------------------------- */
 
 export interface UpdateCardInput {
   cardRef: string;
@@ -731,9 +1038,7 @@ export function setAutoPaySource(
   return { ok: true };
 }
 
-// ---------------------------------------------------------------------------
-// Saved methods.
-// ---------------------------------------------------------------------------
+/* ------------------------------ Saved methods -------------------------- */
 
 export interface AddSavedMethodInput {
   methodId: WalletFundingMethod;

@@ -8,11 +8,6 @@ import { Input } from "@/components/admin/ui/input";
 import { ModalShell } from "@/components/admin/ui/model-shell";
 import { SettingsField } from "@/components/admin/ui/settings-field";
 import { formatCurrency } from "@/lib/admin/formatters";
-import {
-  WALLET_METHOD_HINT,
-  WALLET_METHOD_LABEL,
-  type WalletAdjustMethod,
-} from "@/lib/admin/customers/constants";
 
 /* ------------------------------ Wallet adjust --------------------------- */
 
@@ -21,11 +16,7 @@ interface WalletAdjustModalProps {
   customerName: string;
   currentBalance: number;
   onClose: () => void;
-  onConfirm: (
-    amount: number,
-    reason: string,
-    method: WalletAdjustMethod
-  ) => void;
+  onConfirm: (amount: number, reason: string) => void;
 }
 
 export function WalletAdjustModal({
@@ -38,7 +29,6 @@ export function WalletAdjustModal({
   const [mode, setMode] = useState<"credit" | "debit">("credit");
   const [amountInput, setAmountInput] = useState("");
   const [reason, setReason] = useState("");
-  const [method, setMethod] = useState<WalletAdjustMethod>("atlas_wallet");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,14 +36,13 @@ export function WalletAdjustModal({
     setMode("credit");
     setAmountInput("");
     setReason("");
-    setMethod("atlas_wallet");
     setError(null);
   }, [open]);
 
   const amount = Number(amountInput);
   const amountValid =
     amountInput.length > 0 && !Number.isNaN(amount) && amount > 0;
-  const reasonValid = reason.trim().length > 0;
+  const reasonValid = reason.trim().length >= 10;
   const canSubmit = amountValid && reasonValid;
 
   const handleSubmit = () => {
@@ -62,11 +51,11 @@ export function WalletAdjustModal({
       return;
     }
     if (!reasonValid) {
-      setError("Explain why the balance is being adjusted.");
+      setError("Explain why the balance is being adjusted (10 characters or more).");
       return;
     }
     const signed = mode === "credit" ? amount : -amount;
-    onConfirm(signed, reason.trim(), method);
+    onConfirm(signed, reason.trim());
     onClose();
   };
 
@@ -133,33 +122,10 @@ export function WalletAdjustModal({
         </SettingsField>
 
         <SettingsField
-          label="Method"
-          htmlFor="wallet-adjust-method"
-          hint={WALLET_METHOD_HINT[method]}
-        >
-          <select
-            id="wallet-adjust-method"
-            className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-            value={method}
-            onChange={(e) =>
-              setMethod(e.target.value as WalletAdjustMethod)
-            }
-          >
-            {(
-              Object.keys(WALLET_METHOD_LABEL) as WalletAdjustMethod[]
-            ).map((m) => (
-              <option key={m} value={m}>
-                {WALLET_METHOD_LABEL[m]}
-              </option>
-            ))}
-          </select>
-        </SettingsField>
-
-        <SettingsField
           label="Reason"
           htmlFor="wallet-adjust-reason"
           required
-          hint="Recorded on the customer's activity log."
+          hint="Recorded on the customer's audit entry and visible in the treasury statement."
         >
           <textarea
             id="wallet-adjust-reason"
@@ -170,9 +136,14 @@ export function WalletAdjustModal({
               setReason(e.target.value);
               setError(null);
             }}
-            placeholder="e.g. Provider wallet empty at time of purchase"
+            placeholder="e.g. Correcting double credit from a failed funding"
           />
         </SettingsField>
+
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          Adjustments write a treasury adjustment event and are reconciliation-eligible.
+          Atlas Points and rail refunds are separate operations and are not adjustable from here.
+        </p>
 
         {error && (
           <p
@@ -263,6 +234,98 @@ export function SuspendModal({
               setError(null);
             }}
             placeholder="e.g. Repeated chargeback pattern across multiple payment methods"
+          />
+        </SettingsField>
+
+        {error && (
+          <p
+            role="alert"
+            className="rounded-md border border-danger-200 bg-danger-50 p-2 text-xs text-danger-800 dark:border-danger-800/60 dark:bg-danger-900/25 dark:text-danger-200"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ------------------------------ Wallet freeze --------------------------- */
+
+interface WalletFreezeModalProps {
+  open: boolean;
+  customerName: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}
+
+export function WalletFreezeModal({
+  open,
+  customerName,
+  onClose,
+  onConfirm,
+}: WalletFreezeModalProps) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setError(null);
+    }
+  }, [open]);
+
+  const canSubmit = reason.trim().length >= 10;
+
+  const handleSubmit = () => {
+    if (!canSubmit) {
+      setError("Give a reason of at least 10 characters.");
+      return;
+    }
+    onConfirm(reason.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={`Freeze wallet for ${customerName}?`}
+      description="The customer can still receive funds. They cannot withdraw, purchase from their wallet balance, or transfer out. An admin can still adjust the balance."
+      size="md"
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+          >
+            Freeze wallet
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <SettingsField
+          label="Reason"
+          htmlFor="wallet-freeze-reason"
+          required
+          hint="Recorded on the audit trail. Visible to other admins."
+        >
+          <textarea
+            id="wallet-freeze-reason"
+            className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+            rows={4}
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+            placeholder="e.g. Wallet under review for suspicious funding activity"
           />
         </SettingsField>
 

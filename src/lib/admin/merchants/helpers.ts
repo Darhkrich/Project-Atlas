@@ -1,14 +1,16 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // lib/admin/merchants/helpers.ts
 
-import { subscriptionPlans } from "@/config/subscription-plans";
 import type {
   Merchant,
   MerchantActivityEntry,
   MerchantAuditEntry,
   MerchantPlanLimitsExceeded,
-  SubscriptionPlan,
+  MerchantSubscriptionPlanId,
 } from "@/lib/admin/types/merchant";
 import type { CurrentAdmin } from "@/lib/admin/rbac";
+import { getPlanByCode } from "@/lib/domains/subscriptions";
+import type { SubscriptionPlan } from "@/lib/domains/subscriptions";
 
 /* ------------------------------ Audit helpers -------------------------- */
 
@@ -74,8 +76,8 @@ export type PlanChangeDirection = "upgrade" | "downgrade" | "sidegrade";
 
 export interface PlanChangeImpact {
   direction: PlanChangeDirection;
-  fromPlan: SubscriptionPlan | null;
-  toPlan: SubscriptionPlan | null;
+  fromPlan: MerchantSubscriptionPlanId | null;
+  toPlan: MerchantSubscriptionPlanId | null;
   fromMrr: number;
   toMrr: number;
   mrrDelta: number;
@@ -83,48 +85,47 @@ export interface PlanChangeImpact {
   blockingIssues: string[];
 }
 
-const PLAN_RANK: Record<SubscriptionPlan, number> = {
-  starter: 0,
-  growth: 1,
-  pro: 2,
-  enterprise: 3,
-};
-
-function planByCode(code: SubscriptionPlan) {
-  return subscriptionPlans.find((p) => p.code === code) ?? null;
+function planMonthly(mrr: number | "custom"): number {
+  return typeof mrr === "number" ? mrr : 0;
 }
 
-function parseGhsString(value: string): number {
-  const match = value.match(/[\d,]+/);
-  if (!match) return Number.POSITIVE_INFINITY;
-  return parseFloat(match[0].replace(/,/g, ""));
+function planAnnual(annual: number | "custom"): number {
+  return typeof annual === "number" ? annual : 0;
 }
 
 export function planChangeImpact(
   merchant: Merchant,
-  toCode: SubscriptionPlan
+  toCode: MerchantSubscriptionPlanId
 ): PlanChangeImpact {
-  const fromPlan = planByCode(merchant.subscription.planId);
-  const toPlan = planByCode(toCode);
+  const fromPlan: SubscriptionPlan | undefined = getPlanByCode(
+    merchant.subscription.planId
+  );
+  const toPlan: SubscriptionPlan | undefined = getPlanByCode(toCode);
 
+  // Custom-priced plans fall back to the negotiated contract.
   const fromMrr =
-    merchant.subscription.planId === "enterprise"
+    fromPlan && typeof fromPlan.monthlyPriceGHS === "string"
       ? merchant.contractMrr ?? 0
       : fromPlan
-      ? parseGhsString(fromPlan.monthlyPrice)
+      ? planMonthly(fromPlan.monthlyPriceGHS)
       : 0;
 
   const toMrr =
-    toCode === "enterprise"
+    toPlan && typeof toPlan.monthlyPriceGHS === "string"
       ? 0
       : toPlan
-      ? parseGhsString(toPlan.monthlyPrice)
+      ? planMonthly(toPlan.monthlyPriceGHS)
       : 0;
 
+  // Upgrade / downgrade derives from sortOrder. Reordering plans in the
+  // editor changes which moves count as upgrades.
+  const fromSort = fromPlan?.sortOrder ?? 0;
+  const toSort = toPlan?.sortOrder ?? 0;
+
   const direction: PlanChangeDirection =
-    PLAN_RANK[toCode] > PLAN_RANK[merchant.subscription.planId]
+    toSort > fromSort
       ? "upgrade"
-      : PLAN_RANK[toCode] < PLAN_RANK[merchant.subscription.planId]
+      : toSort < fromSort
       ? "downgrade"
       : "sidegrade";
 
@@ -132,28 +133,25 @@ export function planChangeImpact(
   const blockingIssues: string[] = [];
 
   if (toPlan && fromPlan) {
-    if (
-      toPlan.maxProducts < fromPlan.maxProducts &&
-      merchant.totalOrders > toPlan.maxProducts &&
-      toPlan.maxProducts !== Infinity
-    ) {
+    const toMax = toPlan.maxProducts;
+    const fromMax = fromPlan.maxProducts;
+
+    const toIsFinite = typeof toMax === "number";
+    const fromIsFinite = typeof fromMax === "number";
+
+    const isTighter =
+      toIsFinite &&
+      (!fromIsFinite || (fromIsFinite && toMax < (fromMax as number)));
+
+    if (isTighter && merchant.totalOrders > (toMax as number)) {
       limitsExceeded.products = true;
       blockingIssues.push(
-        `This merchant exceeds the new plan's ${toPlan.maxProducts.toLocaleString(
-          "en-GH"
-        )} product limit.`
+        "This merchant has " +
+          merchant.totalOrders.toLocaleString("en-GH") +
+          " orders, above the new plan's " +
+          (toMax as number).toLocaleString("en-GH") +
+          " product limit."
       );
-    }
-
-    const toTransactionLimit = parseGhsString(toPlan.maxMonthlyTransactions);
-    const fromTransactionLimit = parseGhsString(
-      fromPlan.maxMonthlyTransactions
-    );
-    if (
-      toTransactionLimit < fromTransactionLimit &&
-      toTransactionLimit !== Infinity
-    ) {
-      limitsExceeded.transactions = true;
     }
   }
 

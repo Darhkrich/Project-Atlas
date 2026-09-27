@@ -1,144 +1,109 @@
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
-import { formatCurrency } from "@/lib/admin/formatters";
 import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/admin/ui/button";
+import { formatCurrency } from "@/lib/admin/formatters";
+import type { RevenueKpis } from "@/lib/admin/revenue/revenue-projection";
 
-interface RevenueSummaryData {
-  totalRevenue: number;
-  todayRevenue: number;
-  monthRevenue: number;
-  yearRevenue: number;
-  avgDailyRevenue: number;
-  comparison: {
-    totalRevenue: number;
-    todayRevenue: number;
-    monthRevenue: number;
-    yearRevenue: number;
-    avgDailyRevenue: number;
-  };
+interface CardDef {
+  key: string;
+  label: string;
+  value: number;
+  delta: number | null;
+  icon: AtlasIconName;
+  toneClass: string;
 }
 
-type Range = "today" | "7d" | "30d" | "90d" | "12m";
-
-interface RevenueSummaryCardsProps {
-  data: RevenueSummaryData;
-  range: Range;
-  onRangeChange: (range: Range) => void;
-}
-
-const ranges: { key: Range; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "7d", label: "7d" },
-  { key: "30d", label: "30d" },
-  { key: "90d", label: "90d" },
-  { key: "12m", label: "12m" },
-];
-
-export function RevenueSummaryCards({ data, range, onRangeChange }: RevenueSummaryCardsProps) {
-  const cards: {
-    label: string;
-    value: string;
-    icon: AtlasIconName;
-    color: string;
-    bg: string;
-    change: number;
-  }[] = [
+export function RevenueSummaryCards({ kpis }: { kpis: RevenueKpis }) {
+  const cards: CardDef[] = [
     {
-      label: "Total Revenue",
-      value: formatCurrency(data.totalRevenue),
+      key: "total",
+      label: "Total platform revenue",
+      value: kpis.totalPlatform,
+      delta: kpis.deltas.total,
       icon: "sales",
-      color: "text-brand-600",
-      bg: "bg-brand-50 dark:bg-brand-900/20",
-      change: data.comparison.totalRevenue,
+      toneClass: "text-brand-600 dark:text-brand-400",
     },
     {
-      label: "Today's Revenue",
-      value: formatCurrency(data.todayRevenue),
+      key: "today",
+      label: "Today",
+      value: kpis.todayPlatform,
+      delta: kpis.deltas.today,
       icon: "trending-up",
-      color: "text-info-600",
-      bg: "bg-info-50 dark:bg-info-900/20",
-      change: data.comparison.todayRevenue,
+      toneClass: "text-info-600 dark:text-info-400",
     },
     {
-      label: "This Month",
-      value: formatCurrency(data.monthRevenue),
+      key: "month",
+      label: "This month",
+      value: kpis.monthPlatform,
+      delta: kpis.deltas.month,
       icon: "calendar",
-      color: "text-warning-600",
-      bg: "bg-warning-50 dark:bg-warning-900/20",
-      change: data.comparison.monthRevenue,
+      toneClass: "text-warning-600 dark:text-warning-400",
     },
     {
-      label: "This Year",
-      value: formatCurrency(data.yearRevenue),
+      key: "year",
+      label: "This year",
+      value: kpis.yearPlatform,
+      delta: kpis.deltas.year,
       icon: "bar-chart",
-      color: "text-success-600",
-      bg: "bg-success-50 dark:bg-success-900/20",
-      change: data.comparison.yearRevenue,
+      toneClass: "text-success-600 dark:text-success-400",
     },
     {
-      label: "Avg Daily",
-      value: formatCurrency(data.avgDailyRevenue),
+      key: "avg",
+      label: "Average daily",
+      value: kpis.avgDailyPlatform,
+      delta: kpis.deltas.avgDaily,
       icon: "record",
-      color: "text-neutral-600",
-      bg: "bg-neutral-100 dark:bg-neutral-800",
-      change: data.comparison.avgDailyRevenue,
+      toneClass: "text-neutral-600 dark:text-neutral-400",
     },
   ];
 
   return (
-    <div className="space-y-3">
-      {/* Range selector */}
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="text-xs font-medium text-neutral-500">Range:</span>
-        {ranges.map((r) => (
-          <Button
-            key={r.key}
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "text-xs",
-              range === r.key &&
-                "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300"
-            )}
-            onClick={() => onRangeChange(r.key)}
-          >
-            {r.label}
-          </Button>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {cards.map((card) => (
-          <Card
-            key={card.label}
-            className={cn(
-              "border-0 shadow-sm transition-shadow hover:shadow-md",
-              card.bg
-            )}
-          >
-            <div className="p-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                  {card.label}
-                </p>
-                <AtlasIcon name={card.icon} className={cn("h-4 w-4", card.color)} />
-              </div>
-              <p className="mt-2 text-2xl font-bold">{card.value}</p>
+    <div
+      role="region"
+      aria-label="Revenue summary"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+    >
+      {cards.map((card) => (
+        <Card key={card.key}>
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                {card.label}
+              </p>
+              <AtlasIcon
+                name={card.icon}
+                aria-hidden="true"
+                className={cn("h-4 w-4", card.toneClass)}
+              />
+            </div>
+            <p className="mt-2 text-2xl font-bold tabular-nums">
+              {formatCurrency(card.value)}
+            </p>
+            {card.delta !== null && (
               <p
                 className={cn(
-                  "mt-1 text-xs",
-                  card.change >= 0 ? "text-success-600" : "text-danger-600"
+                  "mt-1 text-xs font-medium",
+                  card.delta >= 0
+                    ? "text-success-700 dark:text-success-400"
+                    : "text-danger-700 dark:text-danger-400"
                 )}
               >
-                {card.change >= 0 ? "▲" : "▼"} {Math.abs(card.change)}% vs prev
+                <span aria-hidden="true">
+                  {card.delta >= 0 ? "▲" : "▼"}{" "}
+                </span>
+                {Math.abs(card.delta).toFixed(1)}% vs prev
               </p>
-            </div>
-          </Card>
-        ))}
-      </div>
+            )}
+            {card.delta === null && (
+              <p className="mt-1 text-xs text-neutral-400 dark:text-neutral-500">
+                No prior data
+              </p>
+            )}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }

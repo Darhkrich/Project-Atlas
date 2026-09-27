@@ -19,6 +19,7 @@ import { OrdersEmptyState } from "@/components/admin/orders/orders-empty-state";
 import { Button } from "@/components/admin/ui/button";
 import { ErrorState } from "@/components/admin/ui/error-state";
 import { Can } from "@/lib/admin/rbac/can";
+import { useCurrentAdmin } from "@/lib/admin/rbac";
 import { PERMISSIONS } from "@/lib/admin/rbac/permissions";
 import { useNow } from "@/lib/shared/hooks/use-now";
 import { useOrders } from "@/lib/admin/hooks/use-orders";
@@ -33,6 +34,7 @@ import {
   type OrdersAnalyticsRange,
 } from "@/lib/admin/orders/orders-projection";
 import type { Order } from "@/lib/admin/types/orders";
+import type { AuditActor } from "@/lib/domains/audit";
 import { DEFAULT_ORDERS_PAGE_SIZE } from "@/lib/admin/orders/orders-constants";
 
 const VIEW_VALUES: OrdersView[] = ["live", "history", "analytics"];
@@ -77,7 +79,20 @@ export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const now = useNow();
+  const admin = useCurrentAdmin();
   const { orders, isLoading, error } = useOrders();
+
+  const actor: AuditActor = useMemo(
+    () =>
+      admin
+        ? {
+            id: admin.id ?? admin.email,
+            name: admin.name,
+            email: admin.email,
+          }
+        : { id: "system", name: "System", email: "system@atlas.com" },
+    [admin]
+  );
 
   const activeView = useMemo(
     () => parseView(searchParams.get("view")),
@@ -99,7 +114,10 @@ export default function OrdersPage() {
   const [pendingCancel, setPendingCancel] = useState<Order | null>(null);
 
   const selectedOrder = useMemo(
-    () => (selectedOrderId ? orders.find((o) => o.id === selectedOrderId) ?? null : null),
+    () =>
+      selectedOrderId
+        ? orders.find((o) => o.id === selectedOrderId) ?? null
+        : null,
     [orders, selectedOrderId]
   );
 
@@ -159,11 +177,11 @@ export default function OrdersPage() {
 
   const handleCancelConfirmed = useCallback(
     (orderId: string, reason: string) => {
-      cancelOrder(orderId, reason);
+      cancelOrder(orderId, reason, actor);
       setPendingCancel(null);
       setParam("order", undefined);
     },
-    [setParam]
+    [setParam, actor]
   );
 
   const handleExport = useCallback(() => {

@@ -2,7 +2,13 @@
 // src/app/admin/resellers/storefront-users/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
@@ -19,7 +25,6 @@ import {
 } from "@/components/admin/storefront-users/storefront-user-filters";
 import { StorefrontUserCard } from "@/components/admin/storefront-users/storefront-user-card";
 import { StorefrontUserDetailDrawer } from "@/components/admin/storefront-users/storefront-user-detail-drawer";
-import { StorefrontUserAddTagModal } from "@/components/admin/storefront-users/storefront-user-action-modals";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
@@ -29,7 +34,6 @@ import { mockStorefrontUsers } from "@/lib/admin/mock/storefront-users";
 import { mockStorefronts } from "@/lib/admin/mock/storefronts";
 import {
   PAGE_SIZE,
-  SORT_LABEL,
   TAG_PRESETS,
   type SortKey,
 } from "@/lib/admin/storefront-users/constants";
@@ -40,6 +44,16 @@ import {
 } from "@/lib/admin/storefront-users/helpers";
 import { storefrontUsersToCsv } from "@/lib/admin/storefront-users/csv-export";
 import type { StorefrontUser } from "@/lib/admin/types/storefront-user";
+import {
+  getStorefrontUserState,
+  subscribeToStorefrontUserState,
+} from "@/lib/domains/wallet/storefront-user-state";
+import { walletIdFor } from "@/lib/domains/wallet/storefront-user-types";
+import {
+  adjustStorefrontUserWallet,
+  freezeStorefrontUserWallet,
+  unfreezeStorefrontUserWallet,
+} from "@/lib/domains/wallet/storefront-user-wallet-mutations";
 
 const VIEWS_KEY = "atlas-reseller-storefront-users-views-v2";
 
@@ -118,6 +132,9 @@ function SfuPageInner() {
   const [bulkIntent, setBulkIntent] = useState<BulkIntent | null>(null);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [walletState, setWalletState] = useState(() =>
+    getStorefrontUserState()
+  );
 
   const { filters, setFilters, clearFilters, hasActive } =
     useUrlFilters<SfuUrlFilters>(DEFAULT_FILTERS);
@@ -134,6 +151,34 @@ function SfuPageInner() {
     }, 400);
     return () => window.clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const sync = () => setWalletState(getStorefrontUserState());
+    const unsubscribe = subscribeToStorefrontUserState(sync);
+    sync();
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const walletById = useMemo(() => {
+    const map = new Map<
+      string,
+      { balance: number; frozen: boolean }
+    >();
+    for (const w of Object.values(walletState.wallets)) {
+      map.set(w.id, {
+        balance: w.balance,
+        frozen: w.status === "frozen",
+      });
+    }
+    return map;
+  }, [walletState]);
+
+  const walletForUser = (user: { id: string; storefrontId: string }) => {
+    const id = walletIdFor(user.storefrontId, user.id);
+    return walletById.get(id) ?? { balance: 0, frozen: false };
+  };
 
   useEffect(() => {
     try {
@@ -249,10 +294,7 @@ function SfuPageInner() {
   useInboxKeyboard({
     itemIds: paginatedIds,
     focusedId,
-    enabled:
-      selectedId === null &&
-      bulkIntent === null &&
-      !bulkTagOpen,
+    enabled: selectedId === null && bulkIntent === null && !bulkTagOpen,
     onFocusChange: setFocusedId,
     onOpen: setSelectedId,
     onFocusSearch: () => searchInputRef.current?.focus(),
@@ -357,9 +399,7 @@ function SfuPageInner() {
   };
 
   const handleRevealPII = (id: string) => {
-    updateUser(id, (u) =>
-      applyAudit(u, "Revealed contact details")
-    );
+    updateUser(id, (u) => applyAudit(u, "Revealed contact details"));
   };
 
   const handleResetPassword = (id: string) => {
@@ -372,6 +412,71 @@ function SfuPageInner() {
       kind: "success",
       text: `Reset link sent to ${target.email}.`,
     });
+  };
+
+  const handleAdjustWallet = (
+    userId: string,
+    storefrontId: string,
+    amount: number,
+    reason: string
+  ) => {
+    if (!admin) return;
+    const walletId = walletIdFor(storefrontId, userId);
+    const result = adjustStorefrontUserWallet(
+      { walletId, amount, reason },
+      {
+        id: admin.id ?? admin.email,
+        name: admin.name,
+        email: admin.email,
+      }
+    );
+    if (!result.ok) {
+      setToast({
+        kind: "error",
+        text: result.error ?? "Adjustment failed.",
+      });
+      return;
+    }
+    setToast({
+      kind: "success",
+      text: `Wallet ${amount >= 0 ? "credited" : "debited"} ${Math.abs(
+        amount
+      ).toFixed(2)} GHS.`,
+    });
+  };
+
+  const handleFreezeWallet = (
+    userId: string,
+    storefrontId: string,
+    reason: string
+  ) => {
+    if (!admin) return;
+    const walletId = walletIdFor(storefrontId, userId);
+    const result = freezeStorefrontUserWallet(walletId, reason, {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    });
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Freeze failed." });
+      return;
+    }
+    setToast({ kind: "success", text: "Wallet frozen." });
+  };
+
+  const handleUnfreezeWallet = (userId: string, storefrontId: string) => {
+    if (!admin) return;
+    const walletId = walletIdFor(storefrontId, userId);
+    const result = unfreezeStorefrontUserWallet(walletId, {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    });
+    if (!result.ok) {
+      setToast({ kind: "error", text: result.error ?? "Unfreeze failed." });
+      return;
+    }
+    setToast({ kind: "success", text: "Wallet unfrozen." });
   };
 
   /* ------------------------------ Bulk ------------------------------- */
@@ -411,15 +516,9 @@ function SfuPageInner() {
           const next: StorefrontUser = { ...u, status: "suspended" };
           const withActivity: StorefrontUser = {
             ...next,
-            activityLog: appendActivity(
-              next,
-              "Suspended via bulk action"
-            ),
+            activityLog: appendActivity(next, "Suspended via bulk action"),
           };
-          return applyAudit(
-            withActivity,
-            "Suspended via bulk action"
-          );
+          return applyAudit(withActivity, "Suspended via bulk action");
         })
       );
       setToast({
@@ -475,11 +574,15 @@ function SfuPageInner() {
     setFilters({ ...DEFAULT_FILTERS, ...view.filters, page: "1" });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+  const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
 
   const filterValues: StorefrontUserFilterValues = filters;
+
+  const selectedWallet = selectedUser
+    ? walletForUser(selectedUser)
+    : { balance: 0, frozen: false };
 
   const headerMeta = (
     <>
@@ -515,9 +618,7 @@ function SfuPageInner() {
         storefrontCount={resellerStorefronts.length}
         activeStatus={filters.status}
         activeRisk={filters.risk}
-        onFilterAll={() =>
-          setFilters({ status: "", risk: "", page: "1" })
-        }
+        onFilterAll={() => setFilters({ status: "", risk: "", page: "1" })}
         onFilterActive={() =>
           setFilters({ status: "active", risk: "", page: "1" })
         }
@@ -732,6 +833,8 @@ function SfuPageInner() {
             ? storefrontById.get(selectedUser.storefrontId)
             : undefined
         }
+        walletBalance={selectedWallet.balance}
+        walletFrozen={selectedWallet.frozen}
         onClose={() => setSelectedId(null)}
         onAddTag={handleAddTag}
         onRemoveTag={handleRemoveTag}
@@ -740,19 +843,9 @@ function SfuPageInner() {
         onSendNotification={handleSendNotification}
         onRevealPII={handleRevealPII}
         onResetPassword={handleResetPassword}
-      />
-
-      <StorefrontUserAddTagModal
-        open={bulkTagOpen && false}
-        userName=""
-        existingTags={[]}
-        presets={TAG_PRESETS}
-        onClose={() => {
-          /* unused, bulk tag uses inline picker */
-        }}
-        onConfirm={() => {
-          /* unused */
-        }}
+        onAdjustWallet={handleAdjustWallet}
+        onFreezeWallet={handleFreezeWallet}
+        onUnfreezeWallet={handleUnfreezeWallet}
       />
 
       <ConfirmDialog

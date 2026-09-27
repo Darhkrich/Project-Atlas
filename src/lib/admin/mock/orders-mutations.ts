@@ -9,19 +9,8 @@ import { RETRY_TICK_MS } from "../orders/orders-constants";
 import { getRetryScenario, isSuccessAttempt } from "./orders-retry-scenarios";
 import { nextRetryDelayMs } from "../orders/retry";
 import { fireAutomaticRefund } from "../refunds/automatic-refund";
-
-interface AuditEntry {
-  action: string;
-  orderId: string;
-  actor: string;
-  meta?: Record<string, unknown>;
-}
-
-function writeAudit(entry: AuditEntry): void {
-  if (typeof console !== "undefined") {
-    console.warn("[admin-audit]", entry);
-  }
-}
+import { appendAuditEntry, type AuditActor } from "@/lib/domains/audit";
+import { emitOrderSettled } from "@/lib/domains/orders/emit-order-settled";
 
 interface ActivityEntry {
   orderId: string;
@@ -122,6 +111,10 @@ function advanceRetry(order: Order, nowMs: number): Order {
         },
       ],
     };
+    emitOrderSettled({
+      order: next,
+      providerCost: next.providerCost ?? null,
+    });
     writeActivity({
       orderId: order.id,
       audience: order.audience,
@@ -159,16 +152,12 @@ function advanceRetry(order: Order, nowMs: number): Order {
       ],
     };
 
-    // Fire the automatic refund. This is what actually returns money to the
-    // wallet and debits the Atlas treasury. The walletDebit flip above is
-    // bookkeeping so the Orders page reflects the release.
     fireAutomaticRefund(next);
 
     writeActivity({
       orderId: order.id,
       audience: order.audience,
-      message:
-        "Order failed permanently after " + nextAttempt + " attempts",
+      message: "Order failed permanently after " + nextAttempt + " attempts",
     });
     return next;
   }
@@ -201,7 +190,11 @@ function advanceRetry(order: Order, nowMs: number): Order {
   };
 }
 
-export function cancelOrder(orderId: string, reason: string): boolean {
+export function cancelOrder(
+  orderId: string,
+  reason: string,
+  actor: AuditActor
+): boolean {
   const trimmed = reason.trim();
   if (!trimmed) return false;
 
@@ -254,11 +247,12 @@ export function cancelOrder(orderId: string, reason: string): boolean {
 
   if (!internalReplaceOrder(orderId, next)) return false;
 
-  writeAudit({
+  appendAuditEntry({
     action: "order.cancel",
-    orderId,
-    actor: "admin",
-    meta: { reason: trimmed },
+    resourceType: "order",
+    resourceId: orderId,
+    actor,
+    metadata: { reason: trimmed, audience: order.audience },
   });
   writeActivity({
     orderId,

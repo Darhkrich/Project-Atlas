@@ -1,30 +1,31 @@
+// lib/admin/ecommerce/subscription-projection.ts
+
 import type {
   MerchantSubscription,
   SubscriptionStatus,
 } from "@/lib/admin/types/ecommerce";
 import type { Merchant } from "@/lib/admin/types/merchant";
-import type { SubscriptionPlan } from "@/config/subscription-plans";
+import type { SubscriptionPlan } from "@/lib/domains/subscriptions";
 
 /* ------------------------------ Pricing ------------------------------- */
-
-export function parsePrice(value: string): number | null {
-  const match = value.match(/[\d,]+(\.\d+)?/);
-  if (!match) return null;
-  const parsed = Number(match[0].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
 
 export function effectivePlanPrice(
   subscription: MerchantSubscription,
   plan: SubscriptionPlan | undefined
 ): number {
   if (!plan) return subscription.amountPaid;
-  if (plan.code === "enterprise") return subscription.amountPaid;
+
+  // Custom-priced plans fall back to the amount the merchant is actually
+  // paying. Atlas Enterprise contracts are negotiated individually.
+  if (typeof plan.monthlyPriceGHS === "string") return subscription.amountPaid;
+
   const base =
     subscription.billingCycle === "annual"
-      ? parsePrice(plan.annualPrice)
-      : parsePrice(plan.monthlyPrice);
-  return base ?? subscription.amountPaid;
+      ? plan.annualPriceGHS
+      : plan.monthlyPriceGHS;
+
+  if (typeof base === "string") return subscription.amountPaid;
+  return base;
 }
 
 /**
@@ -37,11 +38,15 @@ export function effectiveMrr(
   plan: SubscriptionPlan | undefined
 ): number {
   if (subscription.status !== "active") return 0;
+
   const discount = subscription.discountPercent ?? 0;
   const factor = 1 - discount / 100;
-  if (plan?.code === "enterprise") {
+
+  // Custom-priced plans count at the negotiated contract amount.
+  if (plan && typeof plan.monthlyPriceGHS === "string") {
     return subscription.amountPaid * factor;
   }
+
   const cyclePrice = effectivePlanPrice(subscription, plan);
   if (subscription.billingCycle === "annual") {
     return (cyclePrice * factor) / 12;
@@ -137,7 +142,13 @@ export function filterSubscriptions(
   const q = filters.q.trim().toLowerCase();
   return subscriptions.filter((s) => {
     if (q) {
-      const hay = (s.merchantName + " " + s.merchantId + " " + s.id).toLowerCase();
+      const hay = (
+        s.merchantName +
+        " " +
+        s.merchantId +
+        " " +
+        s.id
+      ).toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (filters.status && s.status !== filters.status) return false;

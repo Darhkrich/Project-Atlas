@@ -69,6 +69,8 @@ import type { Payment, PaymentFlagReason } from "@/lib/admin/types/payment";
 import type { PaymentsLedgerRow } from "@/lib/admin/payments/payments-projection";
 import type { WalletWithdrawalQueueRow } from "@/lib/admin/types/customer-wallet";
 import { QUEUE_OWNER_TYPE_LABEL } from "@/lib/admin/wallets/wallet-labels";
+import { approveResellerWithdrawal, rejectResellerWithdrawal } from "@/lib/reseller/wallet/wallet-mutations";
+import { approveMerchantWithdrawal, rejectMerchantWithdrawal } from "@/lib/domains/wallet/merchant-money/mutations";
 
 interface Toast {
   kind: "success" | "error";
@@ -359,18 +361,25 @@ function PaymentsPageInner() {
     if (!approveTarget || !admin) return;
     setSubmitting(true);
 
-    const result =
-      approveTarget.ownerType === "storefront_user"
-        ? approveStorefrontRefund(approveTarget.id, {
-            id: admin.id ?? admin.email,
-            name: admin.name,
-            email: admin.email,
-          })
-        : approveWalletWithdrawal(approveTarget.id, {
-            id: admin.id ?? admin.email,
-            name: admin.name,
-            email: admin.email,
-          });
+  const actor = {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    };
+    let result: { ok: boolean; error?: string };
+    if (approveTarget.ownerType === "customer") {
+      result = approveWalletWithdrawal(approveTarget.id, actor);
+    } else if (approveTarget.ownerType === "storefront_user") {
+      result = approveStorefrontRefund(approveTarget.id, actor);
+    } else if (approveTarget.ownerType === "reseller") {
+      result = approveResellerWithdrawal(
+        approveTarget.ownerId,
+        approveTarget.id,
+        actor
+      );
+    } else {
+      result = approveMerchantWithdrawal(approveTarget.id, actor);
+    }
 
     setSubmitting(false);
     setToast({
@@ -386,18 +395,26 @@ function PaymentsPageInner() {
     if (!rejectTarget || !admin) return;
     setSubmitting(true);
 
-    const result =
-      rejectTarget.ownerType === "storefront_user"
-        ? rejectStorefrontRefund(rejectTarget.id, reason, {
-            id: admin.id ?? admin.email,
-            name: admin.name,
-            email: admin.email,
-          })
-        : rejectWalletWithdrawal(rejectTarget.id, reason, {
-            id: admin.id ?? admin.email,
-            name: admin.name,
-            email: admin.email,
-          });
+    const actor = {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    };
+    let result: { ok: boolean; error?: string };
+    if (rejectTarget.ownerType === "customer") {
+      result = rejectWalletWithdrawal(rejectTarget.id, reason, actor);
+    } else if (rejectTarget.ownerType === "storefront_user") {
+      result = rejectStorefrontRefund(rejectTarget.id, reason, actor);
+    } else if (rejectTarget.ownerType === "reseller") {
+      result = rejectResellerWithdrawal(
+        rejectTarget.ownerId,
+        rejectTarget.id,
+        reason,
+        actor
+      );
+    } else {
+      result = rejectMerchantWithdrawal(rejectTarget.id, reason, actor);
+    }
 
     setSubmitting(false);
     setToast({
@@ -907,21 +924,13 @@ function PaymentsPageInner() {
         onClose={() => setAction(null)}
       />
 
-      <WalletWithdrawalApproveModal
+   <WalletWithdrawalApproveModal
         open={approveTarget !== null}
         row={approveTarget}
-        wallet={
-          approveTarget
-            ? walletsState.wallets.find(
-                (w) => w.id === approveTarget.walletId
-              ) ?? null
-            : null
-        }
         submitting={submitting}
         onSubmit={handleWalletApprove}
         onClose={() => setApproveTarget(null)}
       />
-
       <WalletWithdrawalRejectModal
         open={rejectTarget !== null}
         row={rejectTarget}

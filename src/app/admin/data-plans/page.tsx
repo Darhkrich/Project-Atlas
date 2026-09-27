@@ -8,11 +8,13 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  Plan,
-  PlanCategory,
-  ServiceCategory,
-} from "@/lib/services-page-data";
+import type { Plan } from "@/lib/domains/catalog";
+import {
+  CATALOG_ACTIONS,
+  CATALOG_RESOURCE_TYPES,
+  applyCatalogMutation,
+  type CatalogActor,
+} from "@/lib/domains/catalog";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { EmptyState } from "@/components/admin/ui/empty-state";
@@ -36,9 +38,10 @@ import {
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
+import { useAuditEntries } from "@/lib/admin/hooks/use-audit-entries";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
 import { downloadCsv } from "@/lib/admin/support/csv-export";
-import { getFreshCatalog } from "@/lib/admin/mock/data-plans";
 import {
   projectNetworksFromCatalog,
   applyNetworkMutation,
@@ -50,12 +53,8 @@ import {
   type ImportRow,
 } from "@/lib/admin/data-plans/helpers";
 import { dataPlansToCsv } from "@/lib/admin/data-plans/csv-export";
-import {
-  buildDataPlanAuditEntry,
-  mockDataPlansAudit,
-  type DataPlanAuditEntry,
-  type DataPlanAuditScope,
-} from "@/lib/admin/data-plans/audit";
+import { auditEntriesToDataPlanEntries } from "@/lib/admin/data-plans/audit-adapters";
+import type { DataPlanAuditScope } from "@/lib/admin/data-plans/audit";
 
 interface DataPlanFilters {
   network: string;
@@ -67,14 +66,6 @@ const DEFAULT_FILTERS: DataPlanFilters = {
   network: "",
   q: "",
   filter: "all",
-};
-
-const SYSTEM_ADMIN = {
-  id: "system",
-  name: "System",
-  email: "system@atlas.com",
-  role: "super_admin" as const,
-  extraPermissions: [],
 };
 
 interface Toast {
@@ -126,10 +117,9 @@ function DataPlansSkeleton() {
 
 function DataPlansPageInner() {
   const admin = useCurrentAdmin();
+  const { categories, loading } = useCatalog();
+  const auditEntries = useAuditEntries();
 
-  const [catalog, setCatalog] = useState<ServiceCategory[]>([]);
-  const [audit, setAudit] = useState<DataPlanAuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
   const [focusedPlanId, setFocusedPlanId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [confirm, setConfirm] = useState<ConfirmState>({ kind: "none" });
@@ -142,14 +132,9 @@ function DataPlansPageInner() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const debouncedSearch = useDebouncedValue(filters.q, 300);
 
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setCatalog(getFreshCatalog());
-      setAudit(mockDataPlansAudit);
-      setLoading(false);
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, []);
+  const actor: CatalogActor | null = admin
+    ? { id: admin.id, name: admin.name, email: admin.email }
+    : null;
 
   useEffect(() => {
     if (!toast) return;
@@ -158,8 +143,8 @@ function DataPlansPageInner() {
   }, [toast]);
 
   const networks = useMemo(
-    () => projectNetworksFromCatalog(catalog),
-    [catalog]
+    () => projectNetworksFromCatalog(categories),
+    [categories]
   );
 
   const selectedNetwork = useMemo(() => {
@@ -203,24 +188,21 @@ function DataPlansPageInner() {
     [setFilters]
   );
 
-  const pushAudit = useCallback((entry: DataPlanAuditEntry) => {
-    setAudit((prev) => [entry, ...prev]);
-  }, []);
-
-  const buildAudit = useCallback(
-    (input: {
-      scope: DataPlanAuditScope;
-      scopeId: string;
-      scopeName: string;
-      networkName: string;
-      action: string;
-      summary: string;
-    }) =>
-      buildDataPlanAuditEntry({
-        admin: admin ?? SYSTEM_ADMIN,
-        ...input,
-      }),
-    [admin]
+  const auditMeta = useCallback(
+    (
+      scope: DataPlanAuditScope,
+      scopeId: string,
+      scopeName: string,
+      networkName: string,
+      summary: string
+    ) => ({
+      scope,
+      scopeId,
+      scopeName,
+      networkName,
+      summary,
+    }),
+    []
   );
 
   const findPlanContext = useCallback(
@@ -260,49 +242,64 @@ function DataPlansPageInner() {
     onFocusSearch: () => searchInputRef.current?.focus(),
   });
 
+  const dataPlanAudit = useMemo(
+    () => auditEntriesToDataPlanEntries(auditEntries),
+    [auditEntries]
+  );
+
   /* ----------------------------- Mutations ---------------------------- */
 
   const handleCreateNetwork = (name: string) => {
-    setCatalog((prev) =>
-      applyNetworkTreeMutation(prev, (tree) => ({
-        ...tree,
-        [name]: [],
-      }))
-    );
-    pushAudit(
-      buildAudit({
-        scope: "network",
-        scopeId: name,
-        scopeName: name,
-        networkName: name,
-        action: "Created",
-        summary: `Network "${name}" created`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkTreeMutation(cats, (tree) => ({
+          ...tree,
+          [name]: [],
+        })),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "network",
+          name,
+          name,
+          name,
+          `Network "${name}" created`
+        ),
+      },
+      actor,
+    });
     selectNetwork(name);
     setToast({ kind: "success", text: `${name} created.` });
   };
 
   const handleRenameNetwork = (oldName: string, newName: string) => {
-    setCatalog((prev) =>
-      applyNetworkTreeMutation(prev, (tree) => {
-        const next: Record<string, PlanCategory[]> = {};
-        for (const [key, value] of Object.entries(tree)) {
-          next[key === oldName ? newName : key] = value;
-        }
-        return next;
-      })
-    );
-    pushAudit(
-      buildAudit({
-        scope: "network",
-        scopeId: newName,
-        scopeName: newName,
-        networkName: newName,
-        action: "Renamed",
-        summary: `Network renamed from "${oldName}" to "${newName}"`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkTreeMutation(cats, (tree) => {
+          const next: Record<string, typeof tree[string]> = {};
+          for (const [key, value] of Object.entries(tree)) {
+            next[key === oldName ? newName : key] = value;
+          }
+          return next;
+        }),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "network",
+          newName,
+          newName,
+          newName,
+          `Network renamed from "${oldName}" to "${newName}"`
+        ),
+      },
+      actor,
+    });
     if (filters.network === oldName || !filters.network) {
       selectNetwork(newName);
     }
@@ -310,44 +307,54 @@ function DataPlansPageInner() {
   };
 
   const handleDeleteNetwork = (name: string) => {
-    setCatalog((prev) =>
-      applyNetworkTreeMutation(prev, (tree) => {
-        const next = { ...tree };
-        delete next[name];
-        return next;
-      })
-    );
-    pushAudit(
-      buildAudit({
-        scope: "network",
-        scopeId: name,
-        scopeName: name,
-        networkName: name,
-        action: "Deleted",
-        summary: `Network "${name}" deleted`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkTreeMutation(cats, (tree) => {
+          const next = { ...tree };
+          delete next[name];
+          return next;
+        }),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "network",
+          name,
+          name,
+          name,
+          `Network "${name}" deleted`
+        ),
+      },
+      actor,
+    });
     if (filters.network === name) selectNetwork("");
     setToast({ kind: "success", text: `${name} deleted.` });
   };
 
   const handleCreateCategory = (networkName: string, name: string) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) => [
-        ...cats,
-        { name, plans: [] },
-      ])
-    );
-    pushAudit(
-      buildAudit({
-        scope: "category",
-        scopeId: name,
-        scopeName: name,
-        networkName,
-        action: "Created",
-        summary: `Category "${name}" created on ${networkName}`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) => [
+          ...list,
+          { name, plans: [] },
+        ]),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "category",
+          name,
+          name,
+          networkName,
+          `Category "${name}" created on ${networkName}`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${name} added.` });
   };
 
@@ -356,21 +363,28 @@ function DataPlansPageInner() {
     oldName: string,
     newName: string
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
-      )
-    );
-    pushAudit(
-      buildAudit({
-        scope: "category",
-        scopeId: newName,
-        scopeName: newName,
-        networkName,
-        action: "Renamed",
-        summary: `Category renamed from "${oldName}" to "${newName}" on ${networkName}`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) =>
+            c.name === oldName ? { ...c, name: newName } : c
+          )
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "category",
+          newName,
+          newName,
+          networkName,
+          `Category renamed from "${oldName}" to "${newName}" on ${networkName}`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${newName} renamed.` });
   };
 
@@ -378,21 +392,26 @@ function DataPlansPageInner() {
     networkName: string,
     categoryName: string
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.filter((c) => c.name !== categoryName)
-      )
-    );
-    pushAudit(
-      buildAudit({
-        scope: "category",
-        scopeId: categoryName,
-        scopeName: categoryName,
-        networkName,
-        action: "Deleted",
-        summary: `Category "${categoryName}" removed from ${networkName}`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.filter((c) => c.name !== categoryName)
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "category",
+          categoryName,
+          categoryName,
+          networkName,
+          `Category "${categoryName}" removed from ${networkName}`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${categoryName} deleted.` });
   };
 
@@ -401,27 +420,32 @@ function DataPlansPageInner() {
     categoryName: string,
     direction: "up" | "down"
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) => {
-        const idx = cats.findIndex((c) => c.name === categoryName);
-        if (idx === -1) return cats;
-        const target = direction === "up" ? idx - 1 : idx + 1;
-        if (target < 0 || target >= cats.length) return cats;
-        const next = [...cats];
-        [next[idx], next[target]] = [next[target], next[idx]];
-        return next;
-      })
-    );
-    pushAudit(
-      buildAudit({
-        scope: "category",
-        scopeId: categoryName,
-        scopeName: categoryName,
-        networkName,
-        action: "Reordered",
-        summary: `Category "${categoryName}" moved ${direction}`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) => {
+          const idx = list.findIndex((c) => c.name === categoryName);
+          if (idx === -1) return list;
+          const target = direction === "up" ? idx - 1 : idx + 1;
+          if (target < 0 || target >= list.length) return list;
+          const next = [...list];
+          [next[idx], next[target]] = [next[target], next[idx]];
+          return next;
+        }),
+      audit: {
+        action: CATALOG_ACTIONS.CATEGORY_REORDER,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "category",
+          categoryName,
+          categoryName,
+          networkName,
+          `Category "${categoryName}" moved ${direction}`
+        ),
+      },
+      actor,
+    });
   };
 
   const handleSavePlan = (
@@ -430,31 +454,39 @@ function DataPlansPageInner() {
     plan: Plan,
     mode: "create" | "edit"
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) => {
-          if (c.name !== categoryName) return c;
-          if (mode === "create") return { ...c, plans: [...c.plans, plan] };
-          return {
-            ...c,
-            plans: c.plans.map((p) => (p.id === plan.id ? plan : p)),
-          };
-        })
-      )
-    );
-    pushAudit(
-      buildAudit({
-        scope: "plan",
-        scopeId: plan.id,
-        scopeName: plan.name,
-        networkName,
-        action: mode === "create" ? "Created" : "Updated",
-        summary:
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) => {
+            if (c.name !== categoryName) return c;
+            if (mode === "create")
+              return { ...c, plans: [...c.plans, plan] };
+            return {
+              ...c,
+              plans: c.plans.map((p) => (p.id === plan.id ? plan : p)),
+            };
+          })
+        ),
+      audit: {
+        action:
+          mode === "create"
+            ? CATALOG_ACTIONS.PLAN_CREATE
+            : CATALOG_ACTIONS.PLAN_UPDATE,
+        resourceType: CATALOG_RESOURCE_TYPES.PLAN,
+        resourceId: plan.id,
+        metadata: auditMeta(
+          "plan",
+          plan.id,
+          plan.name,
+          networkName,
           mode === "create"
             ? `Plan "${plan.name}" added to ${categoryName} on ${networkName}`
-            : `Plan "${plan.name}" updated in ${categoryName} on ${networkName}`,
-      })
-    );
+            : `Plan "${plan.name}" updated in ${categoryName} on ${networkName}`
+        ),
+      },
+      actor,
+    });
     setToast({
       kind: "success",
       text: `${plan.name} ${mode === "create" ? "created" : "updated"}.`,
@@ -467,25 +499,30 @@ function DataPlansPageInner() {
     planId: string,
     planName: string
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) =>
-          c.name === categoryName
-            ? { ...c, plans: c.plans.filter((p) => p.id !== planId) }
-            : c
-        )
-      )
-    );
-    pushAudit(
-      buildAudit({
-        scope: "plan",
-        scopeId: planId,
-        scopeName: planName,
-        networkName,
-        action: "Deleted",
-        summary: `Plan "${planName}" deleted from ${categoryName} on ${networkName}`,
-      })
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) =>
+            c.name === categoryName
+              ? { ...c, plans: c.plans.filter((p) => p.id !== planId) }
+              : c
+          )
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_DELETE,
+        resourceType: CATALOG_RESOURCE_TYPES.PLAN,
+        resourceId: planId,
+        metadata: auditMeta(
+          "plan",
+          planId,
+          planName,
+          networkName,
+          `Plan "${planName}" deleted from ${categoryName} on ${networkName}`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${planName} deleted.` });
   };
 
@@ -495,6 +532,7 @@ function DataPlansPageInner() {
     source: Plan,
     existingPlanIds: string[]
   ) => {
+    if (!actor) return;
     const baseName = `${source.name} Copy`;
     let candidateName = baseName;
     let suffix = 2;
@@ -513,28 +551,34 @@ function DataPlansPageInner() {
       statusHistory: [],
     };
 
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) =>
-          c.name === categoryName ? { ...c, plans: [...c.plans, copy] } : c
-        )
-      )
-    );
-    pushAudit(
-      buildAudit({
-        scope: "plan",
-        scopeId: newId,
-        scopeName: candidateName,
-        networkName,
-        action: "Duplicated",
-        summary: `Plan "${source.name}" duplicated as "${candidateName}"`,
-      })
-    );
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) =>
+            c.name === categoryName
+              ? { ...c, plans: [...c.plans, copy] }
+              : c
+          )
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_CREATE,
+        resourceType: CATALOG_RESOURCE_TYPES.PLAN,
+        resourceId: newId,
+        metadata: auditMeta(
+          "plan",
+          newId,
+          candidateName,
+          networkName,
+          `Plan "${source.name}" duplicated as "${candidateName}"`
+        ),
+      },
+      actor,
+    });
     setToast({ kind: "success", text: `${candidateName} created.` });
   };
 
   const handleTogglePlanActive = (networkName: string, planId: string) => {
-    if (!selectedNetwork) return;
+    if (!actor || !selectedNetwork) return;
     const plan = selectedNetwork.categories
       .flatMap((c) => c.plans)
       .find((p) => p.id === planId);
@@ -542,41 +586,44 @@ function DataPlansPageInner() {
 
     const nextActive = plan.active === false;
     const nowIso = new Date().toISOString();
-    const adminEmail = (admin ?? SYSTEM_ADMIN).email;
+    const adminEmail = actor.email;
 
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) => ({
-          ...c,
-          plans: c.plans.map((p) => {
-            if (p.id !== planId) return p;
-            return {
-              ...p,
-              active: nextActive,
-              statusHistory: [
-                ...(p.statusHistory ?? []),
-                {
-                  timestamp: nowIso,
-                  admin: adminEmail,
-                  status: nextActive ? "active" : "inactive",
-                },
-              ],
-            };
-          }),
-        }))
-      )
-    );
-
-    pushAudit(
-      buildAudit({
-        scope: "plan",
-        scopeId: planId,
-        scopeName: plan.name,
-        networkName,
-        action: nextActive ? "Enabled" : "Disabled",
-        summary: `Plan "${plan.name}" ${nextActive ? "enabled" : "disabled"}`,
-      })
-    );
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) => ({
+            ...c,
+            plans: c.plans.map((p) => {
+              if (p.id !== planId) return p;
+              return {
+                ...p,
+                active: nextActive,
+                statusHistory: [
+                  ...(p.statusHistory ?? []),
+                  {
+                    timestamp: nowIso,
+                    admin: adminEmail,
+                    status: nextActive ? "active" : "inactive",
+                  },
+                ],
+              };
+            }),
+          }))
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_TOGGLE,
+        resourceType: CATALOG_RESOURCE_TYPES.PLAN,
+        resourceId: planId,
+        metadata: auditMeta(
+          "plan",
+          planId,
+          plan.name,
+          networkName,
+          `Plan "${plan.name}" ${nextActive ? "enabled" : "disabled"}`
+        ),
+      },
+      actor,
+    });
   };
 
   const handleMovePlan = (
@@ -585,20 +632,35 @@ function DataPlansPageInner() {
     planId: string,
     direction: "up" | "down"
   ) => {
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) => {
-          if (c.name !== categoryName) return c;
-          const idx = c.plans.findIndex((p) => p.id === planId);
-          if (idx === -1) return c;
-          const target = direction === "up" ? idx - 1 : idx + 1;
-          if (target < 0 || target >= c.plans.length) return c;
-          const next = [...c.plans];
-          [next[idx], next[target]] = [next[target], next[idx]];
-          return { ...c, plans: next };
-        })
-      )
-    );
+    if (!actor) return;
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) => {
+            if (c.name !== categoryName) return c;
+            const idx = c.plans.findIndex((p) => p.id === planId);
+            if (idx === -1) return c;
+            const target = direction === "up" ? idx - 1 : idx + 1;
+            if (target < 0 || target >= c.plans.length) return c;
+            const next = [...c.plans];
+            [next[idx], next[target]] = [next[target], next[idx]];
+            return { ...c, plans: next };
+          })
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_REORDER,
+        resourceType: CATALOG_RESOURCE_TYPES.PLAN,
+        resourceId: planId,
+        metadata: auditMeta(
+          "plan",
+          planId,
+          planId,
+          networkName,
+          `Plan moved ${direction} in ${categoryName}`
+        ),
+      },
+      actor,
+    });
   };
 
   const handleBulkToggle = (
@@ -606,45 +668,49 @@ function DataPlansPageInner() {
     ids: string[],
     enable: boolean
   ) => {
+    if (!actor) return;
     const nowIso = new Date().toISOString();
-    const adminEmail = (admin ?? SYSTEM_ADMIN).email;
+    const adminEmail = actor.email;
     const idSet = new Set(ids);
 
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) => ({
-          ...c,
-          plans: c.plans.map((p) => {
-            if (!idSet.has(p.id)) return p;
-            return {
-              ...p,
-              active: enable,
-              statusHistory: [
-                ...(p.statusHistory ?? []),
-                {
-                  timestamp: nowIso,
-                  admin: adminEmail,
-                  status: enable ? "active" : "inactive",
-                },
-              ],
-            };
-          }),
-        }))
-      )
-    );
-
-    pushAudit(
-      buildAudit({
-        scope: "network",
-        scopeId: networkName,
-        scopeName: networkName,
-        networkName,
-        action: "Bulk update",
-        summary: `${enable ? "Enabled" : "Disabled"} ${ids.length} plan${
-          ids.length === 1 ? "" : "s"
-        }`,
-      })
-    );
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) => ({
+            ...c,
+            plans: c.plans.map((p) => {
+              if (!idSet.has(p.id)) return p;
+              return {
+                ...p,
+                active: enable,
+                statusHistory: [
+                  ...(p.statusHistory ?? []),
+                  {
+                    timestamp: nowIso,
+                    admin: adminEmail,
+                    status: enable ? "active" : "inactive",
+                  },
+                ],
+              };
+            }),
+          }))
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_TOGGLE,
+        resourceType: CATALOG_RESOURCE_TYPES.NETWORK,
+        resourceId: networkName,
+        metadata: auditMeta(
+          "network",
+          networkName,
+          networkName,
+          networkName,
+          `${enable ? "Enabled" : "Disabled"} ${ids.length} plan${
+            ids.length === 1 ? "" : "s"
+          }`
+        ),
+      },
+      actor,
+    });
 
     setSelectedPlanIds([]);
     setToast({
@@ -660,6 +726,7 @@ function DataPlansPageInner() {
     categoryName: string,
     rows: ImportRow[]
   ) => {
+    if (!actor) return;
     const newPlans: Plan[] = rows.map((row) => ({
       id: dataPlanIdFor(row.name, networkName),
       name: row.name,
@@ -671,28 +738,31 @@ function DataPlansPageInner() {
       statusHistory: [],
     }));
 
-    setCatalog((prev) =>
-      applyNetworkMutation(prev, networkName, (cats) =>
-        cats.map((c) =>
-          c.name === categoryName
-            ? { ...c, plans: [...c.plans, ...newPlans] }
-            : c
-        )
-      )
-    );
-
-    pushAudit(
-      buildAudit({
-        scope: "category",
-        scopeId: categoryName,
-        scopeName: categoryName,
-        networkName,
-        action: "Bulk import",
-        summary: `${rows.length} plan${
-          rows.length === 1 ? "" : "s"
-        } imported into ${categoryName}`,
-      })
-    );
+    applyCatalogMutation({
+      transform: (cats) =>
+        applyNetworkMutation(cats, networkName, (list) =>
+          list.map((c) =>
+            c.name === categoryName
+              ? { ...c, plans: [...c.plans, ...newPlans] }
+              : c
+          )
+        ),
+      audit: {
+        action: CATALOG_ACTIONS.PLAN_CREATE,
+        resourceType: CATALOG_RESOURCE_TYPES.CATEGORY,
+        resourceId: "data",
+        metadata: auditMeta(
+          "category",
+          categoryName,
+          categoryName,
+          networkName,
+          `${rows.length} plan${
+            rows.length === 1 ? "" : "s"
+          } imported into ${categoryName}`
+        ),
+      },
+      actor,
+    });
 
     setToast({
       kind: "success",
@@ -704,7 +774,7 @@ function DataPlansPageInner() {
     if (format !== "csv") return;
     const csv = dataPlansToCsv(networks);
     downloadCsv(
-      `atlas-data-plans-${new Date().toISOString().slice(0, 10)}.csv`,
+      `atlas-data-plans.k-${new Date().toISOString().slice(0, 10)}.csv`,
       csv
     );
   };
@@ -1080,7 +1150,7 @@ function DataPlansPageInner() {
             </div>
           </div>
 
-          <DataPlanAuditPanel entries={audit} />
+          <DataPlanAuditPanel entries={dataPlanAudit} />
         </>
       )}
 

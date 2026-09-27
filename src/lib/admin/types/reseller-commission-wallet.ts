@@ -11,7 +11,7 @@ export type WalletApprovalReason =
   | "exceeds_threshold"
   | "insufficient_balance"
   | "reseller_suspended"
-  | "verification_not_approved";
+  | "verification_not_approved"
 
 export interface WalletCredit {
   id: string;
@@ -53,6 +53,7 @@ export interface ResellerCommissionWallet {
   currency: string;
   balance: number;
   isOverdrawn: boolean;
+  frozen: boolean;
   pendingBalance: number;
   totalEarned: number;
   totalWithdrawn: number;

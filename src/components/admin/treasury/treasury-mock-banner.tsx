@@ -1,7 +1,7 @@
 "use client";
 
 import { AtlasIcon } from "@/components/atlas/icons";
-import { MOCK_BANNER_TEXT } from "@/lib/admin/treasury/treasury-constants";
+import { MOCK_BANNER_TEXT } from "@/lib/domains/treasury/constants";
 
 export function TreasuryMockBanner() {
   return (
