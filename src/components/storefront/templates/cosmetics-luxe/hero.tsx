@@ -2,15 +2,23 @@ import Link from "next/link";
 import Image from "next/image";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cosmeticsLuxeThemeStyles } from "./theme-styles";
-import type { MerchantStorefrontConfig, MerchantStorefrontProduct } from "@/types/merchant-storefront";
+import type {
+  MerchantStorefrontConfig,
+  MerchantStorefrontProduct,
+} from "@/types/merchant-storefront";
 
 interface CosmeticsLuxeHeroProps {
   store: MerchantStorefrontConfig;
   product?: MerchantStorefrontProduct;
 }
 
-export function CosmeticsLuxeHero({ store, product }: CosmeticsLuxeHeroProps) {
-  const styles = cosmeticsLuxeThemeStyles[store.theme] || cosmeticsLuxeThemeStyles.modern;
+export function CosmeticsLuxeHero({
+  store,
+  product,
+}: CosmeticsLuxeHeroProps) {
+  const styles =
+    cosmeticsLuxeThemeStyles[store.theme] ||
+    cosmeticsLuxeThemeStyles.airy;
 
   return (
     <section className={`relative overflow-hidden ${styles.heroBg}`}>
@@ -18,14 +26,25 @@ export function CosmeticsLuxeHero({ store, product }: CosmeticsLuxeHeroProps) {
         <div className="max-w-xl text-center lg:text-left">
           <span
             className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wider"
-            style={{ backgroundColor: `${store.primaryColor}10`, color: store.primaryColor }}
+            style={{
+              backgroundColor: `${store.primaryColor}10`,
+              color: store.primaryColor,
+            }}
           >
             {store.tagline}
           </span>
-          <h1 className={`mt-5 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl ${styles.heroText}`}>
+          <h1
+            className={`mt-5 text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl ${styles.heroText}`}
+          >
             {store.heroTitle}
           </h1>
-          <p className={`mt-5 text-base leading-7 ${store.theme === "bold" ? "text-neutral-300" : "text-neutral-600"}`}>
+          <p
+            className={`mt-5 text-base leading-7 ${
+              store.theme === "statement"
+                ? "text-neutral-300"
+                : "text-neutral-600"
+            }`}
+          >
             {store.heroDescription}
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -40,7 +59,9 @@ export function CosmeticsLuxeHero({ store, product }: CosmeticsLuxeHeroProps) {
             <Link
               href={`/ecommerce-stores/${store.slug}/about`}
               className={`inline-flex h-12 items-center justify-center px-8 text-sm font-semibold ${styles.button} ${
-                store.theme === "bold" ? "border border-white/50 bg-transparent text-white" : "border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
+                store.theme === "statement"
+                  ? "border border-white/50 bg-transparent text-white"
+                  : "border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
               }`}
             >
               Our Story
@@ -49,7 +70,9 @@ export function CosmeticsLuxeHero({ store, product }: CosmeticsLuxeHeroProps) {
         </div>
         {product && (
           <div className="relative mx-auto lg:mx-0">
-            <div className={`relative aspect-[4/5] w-full max-w-md overflow-hidden shadow-2xl ${styles.card}`}>
+            <div
+              className={`relative aspect-[4/5] w-full max-w-md overflow-hidden shadow-2xl ${styles.card}`}
+            >
               <Image
                 src={product.images[0]}
                 alt={product.name}
@@ -58,9 +81,15 @@ export function CosmeticsLuxeHero({ store, product }: CosmeticsLuxeHeroProps) {
                 className="object-cover"
               />
               <div className="absolute bottom-4 left-4 right-4 rounded-2xl bg-white/90 p-4 backdrop-blur">
-                <p className="text-sm font-semibold text-neutral-950">{product.name}</p>
-                <p className="mt-1 text-lg font-bold" style={{ color: store.primaryColor }}>
-                  GH₵ {product.salePrice || product.price}
+                <p className="text-sm font-semibold text-neutral-950">
+                  {product.name}
+                </p>
+                <p
+                  className="mt-1 text-lg font-bold"
+                  style={{ color: store.primaryColor }}
+                >
+                  {"GH\u20B5 "}
+                  {product.salePrice || product.price}
                 </p>
               </div>
             </div>

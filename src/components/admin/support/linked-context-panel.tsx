@@ -44,6 +44,10 @@ const panelTitleMap = {
   digital_transaction: "Linked transaction",
   reseller_order: "Linked order",
   merchant_account: "Linked merchant",
+  merchant_storefront: "Linked storefront",
+  merchant_order: "Linked order",
+  merchant_subscription: "Linked subscription",
+  merchant_template: "Linked template",
 } as const;
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -59,7 +63,9 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function StatusValue({ tone, label }: { tone: StatusTone; label: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5", textClassByTone[tone])}>
+    <span
+      className={cn("inline-flex items-center gap-1.5", textClassByTone[tone])}
+    >
       <StatusDot tone={tone} size="sm" />
       {label}
     </span>
@@ -89,6 +95,7 @@ export function LinkedContextPanel({
       : null;
 
   const actions: ReactNode[] = [];
+
   if (entity.kind === "digital_transaction") {
     if (onRetry) {
       actions.push(
@@ -163,7 +170,7 @@ export function LinkedContextPanel({
         </Button>
       );
     }
-  } else {
+  } else if (entity.kind === "merchant_account") {
     if (onExtendTrial) {
       actions.push(
         <Button
@@ -209,7 +216,7 @@ export function LinkedContextPanel({
     >
       <div className="flex items-center justify-between gap-3 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <StatusDot tone={toneFromSummary(summary.dotClass)} />
+          <StatusDot tone={summary.tone} />
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
               {panelTitleMap[entity.kind]}
@@ -286,7 +293,7 @@ export function LinkedContextPanel({
                 {entity.lastProviderResponse && (
                   <Field label="Last response">
                     {entity.lastProviderResponse.providerCode
-                      ? `${entity.lastProviderResponse.providerCode}: `
+                      ? entity.lastProviderResponse.providerCode + ": "
                       : ""}
                     {entity.lastProviderResponse.message}
                   </Field>
@@ -308,7 +315,9 @@ export function LinkedContextPanel({
                   />
                 </Field>
                 {entity.settledAt && (
-                  <Field label="Settled">{formatAbsolute(entity.settledAt)}</Field>
+                  <Field label="Settled">
+                    {formatAbsolute(entity.settledAt)}
+                  </Field>
                 )}
               </>
             )}
@@ -328,7 +337,7 @@ export function LinkedContextPanel({
                   />
                 </Field>
                 <Field label="Template">
-                  {entity.templateId} · {entity.templateVersion}
+                  {entity.templateId} {"\u00B7"} {entity.templateVersion}
                 </Field>
                 <Field label="Storefront">
                   <StatusValue
@@ -349,12 +358,4 @@ export function LinkedContextPanel({
       )}
     </section>
   );
-}
-
-function toneFromSummary(dotClass: string): StatusTone {
-  if (dotClass.includes("success")) return "success";
-  if (dotClass.includes("warning")) return "warning";
-  if (dotClass.includes("danger")) return "danger";
-  if (dotClass.includes("info")) return "info";
-  return "neutral";
 }

@@ -1,19 +1,61 @@
 export type MerchantStorefrontTheme =
-  | "modern"
-  | "classic"
-  | "minimal"
-  | "bold";
+  | "airy"
+  | "editorial"
+  | "studio"
+  | "statement";
 
 export type MerchantTemplateCategory =
   | "cosmetics"
   | "clothing"
   | "garden"
-  | "access"
+  | "accessories"
+  | "electronics"
   | "home"
   | "food"
   | "sports"
   | "health"
   | "general";
+
+export type StorefrontFont = "atlas" | "serif" | "rounded" | "mono";
+
+export type StorefrontCornerRadius = "sharp" | "soft" | "round";
+
+export type StorefrontGridDensity = 2 | 3 | 4;
+
+export type WwwRedirect = "none" | "www_to_apex" | "apex_to_www";
+
+export type DayOfWeek =
+  | "mon"
+  | "tue"
+  | "wed"
+  | "thu"
+  | "fri"
+  | "sat"
+  | "sun";
+
+export interface BusinessHoursDay {
+  day: DayOfWeek;
+  closed: boolean;
+  open: string;
+  close: string;
+}
+
+export type BusinessHours = BusinessHoursDay[];
+
+export interface ProductVariantGroup {
+  id: string;
+  name: string;
+  options: string[];
+}
+
+export interface ProductVariant {
+  id: string;
+  options: Record<string, string>;
+  name?: string;
+  priceOverride?: number;
+  stockLevel: number;
+  sku?: string;
+}
 
 export interface MerchantStorefrontProduct {
   id: string;
@@ -27,10 +69,56 @@ export interface MerchantStorefrontProduct {
   featured: boolean;
   status?: "Active" | "Draft" | "Archived";
   sku?: string;
+  stockLevel?: number;
+  variantGroups?: ProductVariantGroup[];
+  variants?: ProductVariant[];
+}
+
+export type DiscountType = "percent" | "fixed";
+
+export interface Discount {
+  id: string;
+  code: string;
+  type: DiscountType;
+  value: number;
+  minOrderValue?: number;
+  maxUses?: number;
+  usedCount: number;
+  expiresAt?: number;
+  enabled: boolean;
+}
+
+export interface CustomPage {
+  id: string;
+  slug: string;
+  title: string;
+  body: string;
+  published: boolean;
+  showInFooter: boolean;
+  order: number;
+}
+
+export interface MenuItem {
+  label: string;
+  href: string;
+  order: number;
+  visible: boolean;
+}
+
+export interface AnalyticsProviders {
+  ga?: string;
+  metaPixel?: string;
+  tiktokPixel?: string;
+}
+
+// icon must be one of the values the storefront knows how to render.
+// Validated in normalizeMerchantStorefront. Unknown values are dropped.
+export interface TrustItem {
+  icon: string;
+  label: string;
 }
 
 export interface MerchantStorefrontConfig {
-  /** Cross-references the storefront record in the admin catalog. */
   storefrontId: string;
   storeName: string;
   slug: string;
@@ -64,6 +152,50 @@ export interface MerchantStorefrontConfig {
   codEnabled?: boolean;
   planId?: string;
 
+  configVersion?: number;
+
+  favicon?: string;
+  font?: StorefrontFont;
+  cornerRadius?: StorefrontCornerRadius;
+  gridDensity?: StorefrontGridDensity;
+  darkStorefront?: boolean;
+
+  seoTitle?: string;
+  seoDescription?: string;
+  ogImage?: string;
+
+  businessHours?: BusinessHours;
+  pickupEnabled?: boolean;
+  codMaxOrderValue?: number;
+  codFee?: number;
+
+  returnsPolicy?: string;
+  privacyPolicy?: string;
+  termsPolicy?: string;
+
+  wwwRedirect?: WwwRedirect;
+
+  showPromoInHero?: boolean;
+  promoText?: string;
+  promoLink?: string;
+  promoLinkLabel?: string;
+
+  showCategoryStrip?: boolean;
+  showAbout?: boolean;
+  heroImageInAbout?: boolean;
+
+  taxPercent?: number;
+  taxIncluded?: boolean;
+  taxAppliesToShipping?: boolean;
+
+  analyticsProviders?: AnalyticsProviders;
+
+  menuItems?: MenuItem[];
+  sectionOrder?: string[];
+
+  trustItems?: TrustItem[];
+  showLookbook?: boolean;
+
   /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
   customDomain?: string;
   /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
@@ -73,6 +205,18 @@ export interface MerchantStorefrontConfig {
   /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
   atlasDomain?: string;
 }
+
+export const DEFAULT_BUSINESS_HOURS: BusinessHours = [
+  { day: "mon", closed: false, open: "09:00", close: "18:00" },
+  { day: "tue", closed: false, open: "09:00", close: "18:00" },
+  { day: "wed", closed: false, open: "09:00", close: "18:00" },
+  { day: "thu", closed: false, open: "09:00", close: "18:00" },
+  { day: "fri", closed: false, open: "09:00", close: "18:00" },
+  { day: "sat", closed: false, open: "10:00", close: "16:00" },
+  { day: "sun", closed: true, open: "10:00", close: "16:00" },
+];
+
+export const MERCHANT_STOREFRONT_CONFIG_VERSION = 4;
 
 export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   storefrontId: "SF-MER-001",
@@ -84,7 +228,7 @@ export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   description: "Welcome to my online store.",
   heroTitle: "Welcome to My Store",
   heroDescription: "Discover amazing products curated just for you.",
-  theme: "modern",
+  theme: "airy",
   templateId: "tpl-general-store",
   templateCategory: "general",
   announcement: "",
@@ -105,4 +249,38 @@ export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   paymentMethodIds: ["momo"],
   codEnabled: false,
   planId: "starter",
+
+  configVersion: MERCHANT_STOREFRONT_CONFIG_VERSION,
+  favicon: undefined,
+  font: "atlas",
+  cornerRadius: "soft",
+  gridDensity: 3,
+  darkStorefront: false,
+  seoTitle: "",
+  seoDescription: "",
+  ogImage: undefined,
+  businessHours: DEFAULT_BUSINESS_HOURS,
+  pickupEnabled: false,
+  codMaxOrderValue: undefined,
+  codFee: undefined,
+  returnsPolicy: "",
+  privacyPolicy: "",
+  termsPolicy: "",
+  wwwRedirect: "none",
+
+  showPromoInHero: false,
+  promoText: "",
+  promoLink: "",
+  promoLinkLabel: "Shop now",
+  showCategoryStrip: true,
+  showAbout: true,
+  heroImageInAbout: false,
+  taxPercent: undefined,
+  taxIncluded: false,
+  taxAppliesToShipping: false,
+  analyticsProviders: undefined,
+  menuItems: undefined,
+  sectionOrder: undefined,
+  trustItems: undefined,
+  showLookbook: true,
 };

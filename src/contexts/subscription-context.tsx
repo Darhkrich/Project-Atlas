@@ -1,7 +1,13 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from "react";
 import type { PlanCode } from "@/config/subscription-plans";
 import { getPlanByCode } from "@/config/subscription-plans";
 import { useAuth } from "@/contexts/auth-context";
@@ -27,6 +33,14 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(
 
 const STORAGE_KEY = "atlas-subscriptions";
 
+function planPriceValue(
+  plan: ReturnType<typeof getPlanByCode>,
+  cycle: "monthly" | "annual"
+): number {
+  const raw = cycle === "monthly" ? plan.monthlyPriceGHS : plan.annualPriceGHS;
+  return typeof raw === "number" ? raw : 0;
+}
+
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [allSubscriptions, setAllSubscriptions] = useState<
@@ -39,7 +53,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (stored) {
       try {
         setAllSubscriptions(JSON.parse(stored));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     }
     setLoaded(true);
   }, []);
@@ -74,22 +90,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     persist({ billingCycle: cycle });
   const setAutoRenew = (auto: boolean) => persist({ autoRenew: auto });
 
-  const upgradePlan = (newPlan: PlanCode, cycle: "monthly" | "annual"): number => {
+  const upgradePlan = (
+    newPlan: PlanCode,
+    cycle: "monthly" | "annual"
+  ): number => {
     const oldPlan = getPlanByCode(state.currentPlan);
     const newPlanDetails = getPlanByCode(newPlan);
 
-    const oldPrice = parseFloat(
-      (cycle === "monthly" ? oldPlan.monthlyPrice : oldPlan.annualPrice).replace(
-        /[^0-9.]/g,
-        ""
-      )
-    );
-    const newPrice = parseFloat(
-      (cycle === "monthly"
-        ? newPlanDetails.monthlyPrice
-        : newPlanDetails.annualPrice
-      ).replace(/[^0-9.]/g, "")
-    );
+    const oldPrice = planPriceValue(oldPlan, cycle);
+    const newPrice = planPriceValue(newPlanDetails, cycle);
 
     const now = Date.now();
     const remainingMs = Math.max(0, state.subscriptionEndDate - now);
@@ -101,7 +110,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const proratedAmount = priceDifference * remainingFraction;
 
     const duration =
-      cycle === "monthly" ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000;
+      cycle === "monthly"
+        ? 30 * 24 * 60 * 60 * 1000
+        : 365 * 24 * 60 * 60 * 1000;
     persist({
       currentPlan: newPlan,
       billingCycle: cycle,

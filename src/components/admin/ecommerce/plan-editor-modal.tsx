@@ -66,7 +66,7 @@ const EMPTY_DRAFT: Draft = {
   monthlyPriceGHS: 0,
   annualPriceGHS: 0,
   maxProducts: 20,
-  themes: ["minimal"],
+  themes: ["studio"],
   paymentMethods: ["momo"],
   subdomain: true,
   customDomain: false,

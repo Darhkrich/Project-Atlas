@@ -3,36 +3,98 @@
 import { StorefrontLayout } from "@/components/storefront/storefront-layout";
 import { GeneralStoreHero } from "./hero";
 import { GeneralStoreFeaturedProducts } from "./featured-products";
-import { GeneralStorePromoBanner } from "./promo-banner";
-import { GeneralStoreTestimonials } from "./testimonials-section";
-import { CategoryGrid } from "./category-grid";
+import { GeneralStoreFeaturedCollection } from "./featured-collection";
 import { AboutSection } from "@/components/storefront/shared/about-section";
-import type { MerchantStorefrontConfig, MerchantStorefrontProduct } from "@/types/merchant-storefront";
+import { TrustStrip } from "@/components/storefront/shared/trust-strip";
+import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
+import type {
+  MerchantStorefrontConfig,
+  MerchantStorefrontProduct,
+} from "@/types/merchant-storefront";
+
+const DEFAULT_SECTION_ORDER = [
+  "hero",
+  "trust",
+  "collection",
+  "featured",
+  "about",
+];
 
 interface GeneralStoreTemplateProps {
   store: MerchantStorefrontConfig;
   products: MerchantStorefrontProduct[];
 }
 
-export function GeneralStoreTemplate({ store, products }: GeneralStoreTemplateProps) {
-  const heroProduct = products.find((p) => p.featured) || products[0];
-  const featured = products.filter((p) => p.featured).slice(0, 8);
+export function GeneralStoreTemplate({
+  store,
+  products,
+}: GeneralStoreTemplateProps) {
+  const theme = getThemeDefinition(store.theme);
 
-  const categories = [
-    { name: "Electronics", image: "https://images.unsplash.com/photo-1498049794561-7780e7231661?w=400&h=400&fit=crop" },
-    { name: "Home", image: "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=400&h=400&fit=crop" },
-    { name: "Fashion", image: "https://images.unsplash.com/photo-1445205170230-053b83016050?w=400&h=400&fit=crop" },
-    { name: "Beauty", image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop" },
-  ];
+  const heroProduct = products.find((p) => p.featured) ?? products[0];
+  const featured = products.filter((p) => p.featured).slice(0, 8);
+  const featuredForCollection =
+    featured.length >= 3 ? featured : products.slice(0, 3);
+  const trustItems = store.trustItems ?? [];
+
+  const order =
+    store.sectionOrder && store.sectionOrder.length > 0
+      ? store.sectionOrder
+      : DEFAULT_SECTION_ORDER;
+
+  const showTrust =
+    store.showTrustSection !== false && trustItems.length > 0;
+  const showCollection = featuredForCollection.length === 3;
+  const showFeatured =
+    store.showFeaturedProducts !== false && featured.length > 0;
+  const showAbout = store.showAbout !== false;
 
   return (
     <StorefrontLayout store={store}>
-      <GeneralStoreHero store={store} product={heroProduct} />
-      {store.theme !== "minimal" && <CategoryGrid store={store} categories={categories} />}
-      {store.showFeaturedProducts && <GeneralStoreFeaturedProducts store={store} products={featured} />}
-      {store.theme !== "minimal" && <GeneralStorePromoBanner store={store} />}
-      <AboutSection store={store} />
-      <GeneralStoreTestimonials />
+      {order.map((key) => {
+        if (key === "hero") {
+          return (
+            <GeneralStoreHero
+              key="hero"
+              store={store}
+              product={heroProduct}
+            />
+          );
+        }
+        if (key === "trust" && showTrust) {
+          return (
+            <TrustStrip
+              key="trust"
+              theme={theme}
+              items={trustItems}
+              accentColor={store.accentColor}
+            />
+          );
+        }
+        if (key === "collection" && showCollection) {
+          return (
+            <GeneralStoreFeaturedCollection
+              key="collection"
+              store={store}
+              products={featuredForCollection}
+            />
+          );
+        }
+        if (key === "featured" && showFeatured) {
+          return (
+            <GeneralStoreFeaturedProducts
+              key="featured"
+              store={store}
+              products={featured}
+              allProducts={products}
+            />
+          );
+        }
+        if (key === "about" && showAbout) {
+          return <AboutSection key="about" store={store} />;
+        }
+        return null;
+      })}
     </StorefrontLayout>
   );
 }

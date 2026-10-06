@@ -1,13 +1,4 @@
-﻿src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(44,45): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(44,68): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(47,45): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(47,68): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(106,50): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(106,70): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(180,56): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(180,73): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/app/(merchant)/merchant/(dashbord)/billing/page.tsx(200,63): error TS2339: Property 'supportLevel' does not exist on type 'SubscriptionPlan'.
-src/app/(merchant)/merchant/(dashbord)/orders/[orderId]/page.tsx(21,3): error TS2322: Type '"Cancelled"' is not assignable to type 'MerchantOrderStatus'.
+﻿src/app/(merchant)/merchant/(dashbord)/orders/[orderId]/page.tsx(21,3): error TS2322: Type '"Cancelled"' is not assignable to type 'MerchantOrderStatus'.
 src/app/(merchant)/merchant/(dashbord)/transactions/page.tsx(140,9): error TS2322: Type '"withdraw"' is not assignable to type '"fund" | "purchase"'.
 src/app/(merchant)/merchant/onboarding/page.tsx(73,11): error TS2741: Property 'storefrontId' is missing in type '{ storeName: string; slug: string; primaryColor: string; accentColor: string; tagline: string; description: string; heroTitle: string; heroDescription: string; logo: string | undefined; theme: MerchantStorefrontTheme; ... 14 more ...; planId: string; }' but required in type 'MerchantStorefrontConfig'.
 src/app/admin/domains/page.tsx(30,8): error TS2459: Module '"@/lib/domains/store"' declares 'DomainActor' locally, but it is not exported.
@@ -172,6 +163,20 @@ src/components/admin/security/security-summary-cards.tsx(83,12): error TS2322: T
 src/components/admin/security/security-summary-cards.tsx(119,21): error TS2322: Type 'string' is not assignable to type 'AtlasIconName'.
 src/components/admin/settings/tabs/communication-tabs.tsx(15,3): error TS2459: Module '"@/lib/admin/types/settings"' declares 'NotificationChannel' locally, but it is not exported.
 src/components/admin/settings/tabs/platform-tabs.tsx(22,3): error TS2459: Module '"@/lib/admin/types/settings"' declares 'NotificationChannel' locally, but it is not exported.
+src/components/admin/support/compensation-dialog.tsx(189,47): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+src/components/admin/support/linked-context-panel.tsx(176,47): error TS2339: Property 'merchantId' does not exist on type 'MerchantAccountLink | MerchantStorefrontLink | MerchantOrderLink | MerchantSubscriptionLink | MerchantTemplateLink'.
+  Property 'merchantId' does not exist on type 'MerchantStorefrontLink'.
+src/components/admin/support/linked-context-panel.tsx(188,46): error TS2339: Property 'merchantId' does not exist on type 'MerchantAccountLink | MerchantStorefrontLink | MerchantOrderLink | MerchantSubscriptionLink | MerchantTemplateLink'.
+  Property 'merchantId' does not exist on type 'MerchantStorefrontLink'.
+src/components/admin/support/linked-context-panel.tsx(200,49): error TS2339: Property 'merchantId' does not exist on type 'MerchantAccountLink | MerchantStorefrontLink | MerchantOrderLink | MerchantSubscriptionLink | MerchantTemplateLink'.
+  Property 'merchantId' does not exist on type 'MerchantStorefrontLink'.
+src/components/admin/support/linked-context-panel.tsx(210,19): error TS7053: Element implicitly has an 'any' type because expression of type '"merchant_storefront" | "digital_transaction" | "reseller_order" | "merchant_account" | "merchant_order" | "merchant_subscription" | "merchant_template"' can't be used to index type '{ readonly digital_transaction: "Linked transaction"; readonly reseller_order: "Linked order"; readonly merchant_account: "Linked merchant"; }'.
+  Property 'merchant_storefront' does not exist on type '{ readonly digital_transaction: "Linked transaction"; readonly reseller_order: "Linked order"; readonly merchant_account: "Linked merchant"; }'.
+src/components/admin/support/linked-context-panel.tsx(218,16): error TS7053: Element implicitly has an 'any' type because expression of type '"merchant_storefront" | "digital_transaction" | "reseller_order" | "merchant_account" | "merchant_order" | "merchant_subscription" | "merchant_template"' can't be used to index type '{ readonly digital_transaction: "Linked transaction"; readonly reseller_order: "Linked order"; readonly merchant_account: "Linked merchant"; }'.
+  Property 'merchant_storefront' does not exist on type '{ readonly digital_transaction: "Linked transaction"; readonly reseller_order: "Linked order"; readonly merchant_account: "Linked merchant"; }'.
+src/components/admin/support/support-detail-drawer.tsx(11,37): error TS2307: Cannot find module '@/lib/admin/mock/support' or its corresponding type declarations.
+src/components/admin/support/support-detail-drawer.tsx(137,40): error TS7006: Parameter 'can' implicitly has an 'any' type.
+src/components/admin/support/support-detail-drawer.tsx(461,35): error TS7006: Parameter 'canned' implicitly has an 'any' type.
 src/components/admin/transactions/failed-transactions-card.tsx(6,10): error TS2305: Module '"@/lib/admin/types/transaction"' has no exported member 'Transaction'.
 src/components/admin/transactions/live-transactions-card.tsx(7,10): error TS2305: Module '"@/lib/admin/types/transaction"' has no exported member 'Transaction'.
 src/components/admin/transactions/transaction-analytics.tsx(74,24): error TS2322: Type '(value: number) => string | number' is not assignable to type 'Formatter<ValueType, NameType> & ((value: ValueType, name: NameType, item: TooltipPayloadEntry, index: number, payload: TooltipPayload) => ReactNode | [...])'.
@@ -198,11 +203,6 @@ src/components/merchant/merchant-wallet-overview.tsx(255,9): error TS2322: Type 
   Property 'description' does not exist on type 'IntrinsicAttributes & AtlasErrorStateProps'.
 src/components/merchant/merchant-wallet-overview.tsx(265,9): error TS2322: Type '{ title: string; description: string; onRetry: () => void; }' is not assignable to type 'IntrinsicAttributes & AtlasErrorStateProps'.
   Property 'description' does not exist on type 'IntrinsicAttributes & AtlasErrorStateProps'.
-src/components/merchant/onboarding/StepSubscription.tsx(64,41): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/components/merchant/onboarding/StepSubscription.tsx(64,60): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/components/merchant/onboarding/StepSubscription.tsx(123,25): error TS2339: Property 'supportLevel' does not exist on type 'SubscriptionPlan'.
-src/components/merchant/storefront/merchant-storefront.tsx(428,62): error TS2345: Argument of type 'string' is not assignable to parameter of type 'StorefrontTheme'.
-src/components/merchant/storefront/merchant-storefront.tsx(627,42): error TS2339: Property 'domainOptions' does not exist on type 'SubscriptionPlan'.
 src/components/reseller/reseller-customers.tsx(339,40): error TS2339: Property 'status' does not exist on type 'ResellerCustomerRow'.
 src/components/reseller/reseller-customers.tsx(342,39): error TS2339: Property 'status' does not exist on type 'ResellerCustomerRow'.
 src/components/reseller/reseller-overview.tsx(530,21): error TS2322: Type '"check" | "x"' is not assignable to type 'AtlasIconName'.
@@ -220,90 +220,21 @@ src/components/reseller/storefront/account/security-section.tsx(64,23): error TS
 src/components/reseller/wallet/wallet-recent-activity.tsx(79,63): error TS2322: Type '{ children: string; variant: "info" | "success" | "warning" | "danger" | "neutral"; size: string; }' is not assignable to type 'IntrinsicAttributes & AtlasBadgeProps'.
   Property 'size' does not exist on type 'IntrinsicAttributes & AtlasBadgeProps'.
 src/config/product-categories.ts(7,3): error TS2353: Object literal may only specify known properties, and 'accessories' does not exist in type 'Record<MerchantTemplateCategory, string[]>'.
-src/contexts/subscription-context.tsx(82,38): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/contexts/subscription-context.tsx(82,61): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/contexts/subscription-context.tsx(89,26): error TS2551: Property 'monthlyPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'monthlyPriceGHS'?
-src/contexts/subscription-context.tsx(90,26): error TS2551: Property 'annualPrice' does not exist on type 'SubscriptionPlan'. Did you mean 'annualPriceGHS'?
-src/lib/admin/commissions/commission-projection.ts(184,5): error TS2322: Type 'Variant' is not assignable to type '"info" | "success" | "warning" | "danger" | "neutral"'.
-  Type '"brand"' is not assignable to type '"info" | "success" | "warning" | "danger" | "neutral"'.
 src/lib/admin/ecommerce/support/support-projection.ts(16,8): error TS5097: An import path can only end with a '.ts' extension when 'allowImportingTsExtensions' is enabled.
 src/lib/admin/hooks/use-ecommerce-support-tickets.ts(36,57): error TS2345: Argument of type 'number | null' is not assignable to parameter of type 'number'.
   Type 'null' is not assignable to type 'number'.
 src/lib/admin/hooks/use-ecommerce-support-tickets.ts(38,55): error TS2345: Argument of type 'number | null' is not assignable to parameter of type 'number'.
   Type 'null' is not assignable to type 'number'.
+src/lib/admin/hooks/use-reseller-support-tickets.ts(6,42): error TS2307: Cannot find module '@/lib/admin/mock/support' or its corresponding type declarations.
 src/lib/admin/hooks/use-url-filters.ts(35,47): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
   No index signature with a parameter of type 'string' was found on type '{}'.
 src/lib/admin/hooks/use-url-filters.ts(35,64): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{}'.
   No index signature with a parameter of type 'string' was found on type '{}'.
-src/lib/admin/mock/customers.ts(40,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(97,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(150,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(151,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(192,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(193,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(234,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(235,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(277,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(311,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(312,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(346,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(347,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(381,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(382,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(416,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(417,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(451,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(452,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(486,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(487,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(521,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(522,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(556,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(557,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(591,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(592,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(626,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(627,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(661,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(662,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(696,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(697,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(731,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(732,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(766,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/customers.ts(767,5): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
-src/lib/admin/mock/reseller-dashboard.ts(5,3): error TS2305: Module '"../types/reseller-dashboard"' has no exported member 'CommissionTrendPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(9,14): error TS2741: Property 'asOf' is missing in type '{ totalResellers: number; activeResellers: number; pendingVerification: number; suspendedResellers: number; totalCommissionsPaid: number; }' but required in type 'ResellerDashboardSummary'.
-src/lib/admin/mock/reseller-dashboard.ts(18,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(19,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(20,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(21,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(22,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(23,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(24,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(25,3): error TS2741: Property 'year' is missing in type '{ month: string; newResellers: number; }' but required in type 'ResellerGrowthPoint'.
-src/lib/admin/mock/reseller-dashboard.ts(29,3): error TS2739: Type '{ id: string; name: string; revenue: number; commissions: number; }' is missing the following properties from type 'TopReseller': tier, tierId, status, verificationStatus, href
-src/lib/admin/mock/reseller-dashboard.ts(30,3): error TS2739: Type '{ id: string; name: string; revenue: number; commissions: number; }' is missing the following properties from type 'TopReseller': tier, tierId, status, verificationStatus, href
-src/lib/admin/mock/reseller-dashboard.ts(31,3): error TS2739: Type '{ id: string; name: string; revenue: number; commissions: number; }' is missing the following properties from type 'TopReseller': tier, tierId, status, verificationStatus, href
-src/lib/admin/mock/reseller-dashboard.ts(32,3): error TS2739: Type '{ id: string; name: string; revenue: number; commissions: number; }' is missing the following properties from type 'TopReseller': tier, tierId, status, verificationStatus, href
-src/lib/admin/mock/reseller-dashboard.ts(33,3): error TS2739: Type '{ id: string; name: string; revenue: number; commissions: number; }' is missing the following properties from type 'TopReseller': tier, tierId, status, verificationStatus, href
-src/lib/admin/mock/reseller-dashboard.ts(47,3): error TS2739: Type '{ id: string; type: "registration"; description: string; timestamp: string; }' is missing the following properties from type 'RecentActivity': resellerId, resellerName, href, source
-src/lib/admin/mock/reseller-dashboard.ts(48,3): error TS2739: Type '{ id: string; type: "verification"; description: string; timestamp: string; }' is missing the following properties from type 'RecentActivity': resellerId, resellerName, href, source
-src/lib/admin/mock/reseller-dashboard.ts(49,3): error TS2739: Type '{ id: string; type: "storefront"; description: string; timestamp: string; }' is missing the following properties from type 'RecentActivity': resellerId, resellerName, href, source
-src/lib/admin/mock/reseller-dashboard.ts(50,3): error TS2739: Type '{ id: string; type: "commission"; description: string; timestamp: string; }' is missing the following properties from type 'RecentActivity': resellerId, resellerName, href, source
-src/lib/admin/mock/reseller-dashboard.ts(51,3): error TS2739: Type '{ id: string; type: "wallet"; description: string; timestamp: string; }' is missing the following properties from type 'RecentActivity': resellerId, resellerName, href, source
 src/lib/admin/mock/reseller-verification-store.ts(7,3): error TS2305: Module '"@/lib/admin/resellers/verification-projection"' has no exported member 'VerificationSlice'.
 src/lib/admin/mock/reseller-verification-store.ts(8,3): error TS2305: Module '"@/lib/admin/resellers/verification-projection"' has no exported member 'VerificationSnapshot'.
-src/lib/admin/mock/support-store.ts(68,7): error TS2322: Type 'string | undefined' is not assignable to type 'string'.
-  Type 'undefined' is not assignable to type 'string'.
+src/lib/admin/mock/support-store.ts(19,42): error TS2307: Cannot find module './support' or its corresponding type declarations.
 src/lib/admin/mock/transactions.ts(1,15): error TS2305: Module '"../types/transaction"' has no exported member 'Transaction'.
 src/lib/admin/orders/orders-helpers.ts(46,62): error TS2339: Property 'walletOwner' does not exist on type 'OrderWalletDebit | undefined'.
-src/lib/admin/payments/payments-projection.ts(160,7): error TS2322: Type 'Variant' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info"'.
-  Type '"brand"' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info"'.
-src/lib/admin/payments/payments-projection.ts(175,7): error TS2322: Type 'Variant' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info" | undefined'.
-  Type '"brand"' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info" | undefined'.
-src/lib/admin/payments/payments-projection.ts(182,7): error TS2322: Type 'Variant' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info" | undefined'.
-  Type '"brand"' is not assignable to type '"danger" | "success" | "warning" | "neutral" | "info" | undefined'.
 src/lib/admin/resellers/analytics-projection.ts(75,30): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
   Type 'undefined' is not assignable to type 'string'.
 src/lib/admin/resellers/analytics-projection.ts(80,15): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
@@ -329,12 +260,10 @@ src/lib/admin/resellers/support-projection.ts(59,52): error TS2769: No overload 
 src/lib/admin/resellers/tier-projection.ts(23,16): error TS2538: Type 'undefined' cannot be used as an index type.
 src/lib/admin/resellers/tier-projection.ts(23,48): error TS2538: Type 'undefined' cannot be used as an index type.
 src/lib/admin/resellers/tier-projection.ts(24,12): error TS2538: Type 'undefined' cannot be used as an index type.
-src/lib/admin/types/support.ts(144,3): error TS2300: Duplicate identifier 'ticketRef'.
-src/lib/admin/types/support.ts(144,14): error TS2304: Cannot find name 'ReactNode'.
-src/lib/admin/types/support.ts(145,3): error TS2300: Duplicate identifier 'ticketRef'.
-src/lib/admin/wallets/wallet-csv-export.ts(43,15): error TS2339: Property 'sourceMethodId' does not exist on type 'WalletWithdrawalQueueRow'.
-src/lib/admin/wallets/wallet-csv-export.ts(44,15): error TS2339: Property 'sourceProvider' does not exist on type 'WalletWithdrawalQueueRow'.
-src/lib/admin/wallets/wallet-csv-export.ts(45,15): error TS2339: Property 'sourceMaskedLabel' does not exist on type 'WalletWithdrawalQueueRow'.
+src/lib/admin/support/csv-export.ts(14,45): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+src/lib/admin/support/entity-actions.ts(85,63): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+src/lib/admin/support/entity-actions.ts(96,59): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
+src/lib/admin/support/entity-actions.ts(107,62): error TS2366: Function lacks ending return statement and return type does not include 'undefined'.
 src/lib/domains/orders/use-reseller-orders.ts(27,3): error TS2741: Property 'paymentMethodId' is missing in type '{ id: string; audience: "storefront_user" | "reseller"; serviceId: string; providerId: string; networkId: string | undefined; customerName: string; customerPhone: string; amount: number; commission: number; status: OrderStatus; createdAt: string; }' but required in type 'ResellerOrderRow'.
 src/lib/domains/storefront/customer-mutations.ts(2,3): error TS2305: Module '"../../storefront/types"' has no exported member 'StorefrontCustomerRecord'.
 src/lib/domains/storefront/customer-mutations.ts(3,3): error TS2305: Module '"../../storefront/types"' has no exported member 'StorefrontCustomerSavedDetails'.

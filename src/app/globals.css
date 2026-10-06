@@ -2,7 +2,6 @@
 
 /* Atlas Design Tokens */
 @theme {
-  /* Brand — dark forest green */
   --color-brand-50: #f2f7f5;
   --color-brand-100: #e2eee9;
   --color-brand-200: #c0dcd2;
@@ -15,11 +14,9 @@
   --color-brand-900: #07332a;
   --color-brand-950: #04211c;
 
-  /* Accent — amber orange */
   --color-accent-500: #ffa000;
   --color-accent-600: #e69000;
 
-  /* Neutral warm */
   --color-neutral-50: #fafaf8;
   --color-neutral-100: #f5f4f1;
   --color-neutral-200: #ebeae5;
@@ -32,7 +29,6 @@
   --color-neutral-900: #1a1a1a;
   --color-neutral-950: #0f0f0e;
 
-  /* Success */
   --color-success-50: #f0f9f3;
   --color-success-100: #daf0df;
   --color-success-200: #b8e2c0;
@@ -45,7 +41,6 @@
   --color-success-900: #133f1f;
   --color-success-950: #0a2311;
 
-  /* Warning */
   --color-warning-50: #fcf9ec;
   --color-warning-100: #f7efc9;
   --color-warning-200: #f0de8f;
@@ -58,7 +53,6 @@
   --color-warning-900: #5c471e;
   --color-warning-950: #34260e;
 
-  /* Danger */
   --color-danger-50: #fcf6f5;
   --color-danger-100: #f8e9e7;
   --color-danger-200: #f2d3cf;
@@ -71,7 +65,6 @@
   --color-danger-900: #623029;
   --color-danger-950: #351612;
 
-  /* Info */
   --color-info-50: #f2f7f9;
   --color-info-100: #e2eef4;
   --color-info-200: #c5ddeb;
@@ -84,7 +77,6 @@
   --color-info-900: #20405a;
   --color-info-950: #11293b;
 
-  /* Spacing */
   --spacing-0: 0px;
   --spacing-1: 4px;
   --spacing-2: 8px;
@@ -99,9 +91,12 @@
   --spacing-20: 80px;
   --spacing-24: 96px;
 
-  /* Typography */
   --font-family-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-family-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times,
+    serif;
+  --font-family-rounded: ui-rounded, "Nunito", "Varela Round", system-ui,
+    sans-serif;
   --font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
     Consolas, "Liberation Mono", "Courier New", monospace;
   --font-weight-normal: 400;
@@ -119,14 +114,12 @@
   --text-4xl: 2.25rem;
   --text-5xl: 3rem;
 
-  /* Radius */
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
 
-  /* Shadows */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.04);
@@ -147,5 +140,210 @@
   }
   *:focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+@keyframes atlas-undo-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+/* ============================================================
+   Storefront shell. Unlayered on purpose. Tailwind utilities
+   live in @layer utilities. Unlayered CSS beats every layer,
+   so these rules win over .bg-white and friends. Do not wrap
+   any of the following in @layer base.
+   ============================================================ */
+
+.atlas-storefront {
+  --atlas-bg: #ffffff;
+  --atlas-surface: #ffffff;
+  --atlas-elevated: #fafaf8;
+  --atlas-text: #0a0a0a;
+  --atlas-muted: #6b6963;
+  --atlas-border: #ebeae5;
+
+  --atlas-radius-sm: var(--radius-sm);
+  --atlas-radius-md: var(--radius-md);
+  --atlas-radius-lg: var(--radius-lg);
+  --atlas-radius-xl: var(--radius-xl);
+  --atlas-radius-2xl: var(--radius-2xl);
+  --atlas-radius-full: 9999px;
+
+  --atlas-grid-cols: 3;
+
+  font-family: var(--font-family-sans);
+  background-color: var(--atlas-bg);
+  color: var(--atlas-text);
+}
+
+.atlas-storefront[data-font="serif"] {
+  font-family: var(--font-family-serif);
+}
+.atlas-storefront[data-font="rounded"] {
+  font-family: var(--font-family-rounded);
+}
+.atlas-storefront[data-font="mono"] {
+  font-family: var(--font-family-mono);
+}
+
+.atlas-storefront[data-radius="sharp"] {
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+}
+.atlas-storefront[data-radius="round"] {
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+}
+
+.atlas-storefront[data-dark="true"] {
+  --atlas-bg: #0f0f0e;
+  --atlas-surface: #1a1a1a;
+  --atlas-elevated: #1f1f1f;
+  --atlas-text: #f5f5f5;
+  --atlas-muted: #8a8881;
+  --atlas-border: #3f3d3b;
+
+  background-color: var(--atlas-bg);
+  color: var(--atlas-text);
+}
+
+/* ---------- Shell surface classes ---------- */
+
+.atlas-storefront .atlas-storefront-header {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: var(--atlas-border);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-header {
+  background-color: rgba(15, 15, 14, 0.95);
+  border-color: var(--atlas-border);
+}
+
+.atlas-storefront .atlas-storefront-mobile-menu {
+  background-color: var(--atlas-surface);
+  border-color: var(--atlas-border);
+  color: var(--atlas-text);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-mobile-menu {
+  background-color: var(--atlas-bg);
+  border-color: var(--atlas-border);
+  color: var(--atlas-text);
+}
+
+.atlas-storefront .atlas-storefront-nav-link {
+  color: var(--atlas-muted);
+}
+.atlas-storefront .atlas-storefront-nav-link:hover {
+  color: var(--atlas-text);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-nav-link {
+  color: var(--atlas-muted);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-nav-link:hover {
+  color: var(--atlas-text);
+}
+
+.atlas-storefront .atlas-storefront-mobile-link {
+  color: var(--atlas-text);
+  border-color: var(--atlas-border);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-mobile-link {
+  color: var(--atlas-text);
+  border-color: var(--atlas-border);
+}
+
+.atlas-storefront .atlas-storefront-icon-button {
+  color: var(--atlas-muted);
+}
+.atlas-storefront .atlas-storefront-icon-button:hover {
+  background-color: var(--atlas-elevated);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-icon-button {
+  color: var(--atlas-text);
+}
+.atlas-storefront[data-dark="true"] .atlas-storefront-icon-button:hover {
+  background-color: var(--atlas-elevated);
+}
+
+.atlas-storefront .atlas-storefront-footer {
+  background-color: var(--color-neutral-950);
+  color: #ffffff;
+}
+.atlas-storefront .atlas-storefront-footer p,
+.atlas-storefront .atlas-storefront-footer li {
+  color: var(--color-neutral-400);
+}
+.atlas-storefront .atlas-storefront-footer-link {
+  color: var(--color-neutral-400);
+}
+.atlas-storefront .atlas-storefront-footer-link:hover {
+  color: #ffffff;
+}
+.atlas-storefront .atlas-storefront-footer-meta {
+  color: var(--color-neutral-500);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- Dark mode overrides for Tailwind utility classes ----------
+   These are unlayered. They beat every Tailwind utility regardless of
+   specificity. Cover both whole-token classes and slash variants. */
+
+.atlas-storefront[data-dark="true"] .bg-white,
+.atlas-storefront[data-dark="true"] .bg-white\/90,
+.atlas-storefront[data-dark="true"] .bg-white\/95,
+.atlas-storefront[data-dark="true"] .bg-white\/50 {
+  background-color: var(--atlas-surface);
+}
+.atlas-storefront[data-dark="true"] .bg-neutral-50 {
+  background-color: var(--atlas-elevated);
+}
+.atlas-storefront[data-dark="true"] .bg-neutral-100 {
+  background-color: var(--atlas-surface);
+}
+.atlas-storefront[data-dark="true"] .bg-neutral-200 {
+  background-color: var(--atlas-surface);
+}
+
+.atlas-storefront[data-dark="true"] .text-neutral-950,
+.atlas-storefront[data-dark="true"] .text-neutral-900,
+.atlas-storefront[data-dark="true"] .text-neutral-800 {
+  color: var(--atlas-text);
+}
+.atlas-storefront[data-dark="true"] .text-neutral-700,
+.atlas-storefront[data-dark="true"] .text-neutral-600,
+.atlas-storefront[data-dark="true"] .text-neutral-500 {
+  color: var(--atlas-muted);
+}
+
+.atlas-storefront[data-dark="true"] .border-neutral-100,
+.atlas-storefront[data-dark="true"] .border-neutral-200,
+.atlas-storefront[data-dark="true"] .border-neutral-300 {
+  border-color: var(--atlas-border);
+}
+
+/* ---------- Product grid ---------- */
+
+.atlas-storefront .atlas-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+  .atlas-storefront .atlas-product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .atlas-storefront .atlas-product-grid {
+    grid-template-columns: repeat(var(--atlas-grid-cols, 3), minmax(0, 1fr));
   }
 }

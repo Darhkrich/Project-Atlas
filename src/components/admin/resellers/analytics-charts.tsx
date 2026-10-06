@@ -1,3 +1,4 @@
+// components/admin/resellers/analytics-charts.tsx
 "use client";
 
 import type {
@@ -17,6 +18,7 @@ import {
   YAxis,
 } from "recharts";
 import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import { ResellerDashboardChartCard } from "./reseller-dashboard-chart-card";
 import {
   CHART_AXIS_PROPS,
@@ -75,10 +77,10 @@ export function AnalyticsCharts({
               {...CHART_AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number) => [
+              formatter={chartFormatter((value) => [
                 formatCurrency(value),
                 "Revenue",
-              ]}
+              ])}
             />
             <Bar dataKey="revenue" barSize={20} radius={[0, 4, 4, 0]}>
               {revenueByReseller.map((row) => (
@@ -116,13 +118,15 @@ export function AnalyticsCharts({
               {...CHART_AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number, _name: string, payload) => {
-                const row = payload?.payload as
+              formatter={chartFormatter((value, _name, entry) => {
+                const row = entry.payload as
                   | RevenueByTierRow
                   | undefined;
-                const suffix = row ? ` · ${row.count} resellers` : "";
-                return [`${formatCurrency(value)}${suffix}`, "Revenue"];
-              }}
+                const suffix = row
+                  ? " \u00B7 " + row.count + " resellers"
+                  : "";
+                return [formatCurrency(value) + suffix, "Revenue"];
+              })}
             />
             <Bar dataKey="revenue" barSize={24} radius={[0, 4, 4, 0]}>
               {revenueByTier.map((row) => (
@@ -160,13 +164,13 @@ export function AnalyticsCharts({
               {...CHART_AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number, _name: string, payload) => {
-                const row = payload?.payload as VerificationCount | undefined;
+              formatter={chartFormatter((value, _name, entry) => {
+                const row = entry.payload as VerificationCount | undefined;
                 const label = row
                   ? VERIFICATION_STATUS_LABEL[row.status]
                   : "Resellers";
                 return [formatNumber(value), label];
-              }}
+              })}
             />
             <Bar dataKey="count" barSize={40} radius={[4, 4, 0, 0]}>
               {byVerification.map((row) => (
@@ -191,23 +195,21 @@ function buildResellerSummary(rows: RevenueByResellerRow[]): string {
   if (rows.length === 0) return "No reseller revenue recorded.";
   const top = rows[0];
   const total = rows.reduce((sum, r) => sum + r.revenue, 0);
-  return `Revenue by reseller, top ${rows.length}. Highest: ${top.name} at ${formatCurrency(
-    top.revenue
-  )}. Combined across listed resellers: ${formatCurrency(total)}.`;
+  return "Revenue by reseller, top " + rows.length + ". Highest: " + top.name + " at " + formatCurrency(top.revenue) + ". Combined across listed resellers: " + formatCurrency(total) + ".";
 }
 
 function buildTierSummary(rows: RevenueByTierRow[]): string {
   if (rows.length === 0) return "No tier data.";
   const parts = rows.map(
-    (r) => `${r.tier}: ${formatCurrency(r.revenue)} across ${r.count} resellers`
+    (r) => r.tier + ": " + formatCurrency(r.revenue) + " across " + r.count + " resellers"
   );
-  return `Revenue by tier. ${parts.join(". ")}.`;
+  return "Revenue by tier. " + parts.join(". ") + ".";
 }
 
 function buildVerificationSummary(rows: VerificationCount[]): string {
   if (rows.length === 0) return "No verification data.";
   const parts = rows.map(
-    (r) => `${VERIFICATION_STATUS_LABEL[r.status]}: ${r.count}`
+    (r) => VERIFICATION_STATUS_LABEL[r.status] + ": " + r.count
   );
-  return `Resellers by verification status. ${parts.join(". ")}.`;
+  return "Resellers by verification status. " + parts.join(". ") + ".";
 }

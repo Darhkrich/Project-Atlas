@@ -1,5 +1,11 @@
+// lib/admin/resellers/analytics-projection.ts
+
 import type { Reseller } from "@/lib/admin/types/reseller";
 import { TIER_ORDER } from "./dashboard-labels";
+import {
+  UNASSIGNED_TIER_ID,
+  UNASSIGNED_TIER_NAME,
+} from "./tier-constants";
 import type { CommissionTotals } from "./helpers";
 
 export interface RevenueByResellerRow {
@@ -60,8 +66,8 @@ export function projectRevenueByReseller(
       revenue: r.totalRevenue,
       commissions:
         (commissionTotalsById.get(r.id) ?? ZERO_TOTALS).earned,
-      tier: r.tierName ?? "",
-      tierId: r.tierId ?? "",
+      tier: r.tierName ?? UNASSIGNED_TIER_NAME,
+      tierId: r.tierId ?? UNASSIGNED_TIER_ID,
       status: r.status,
       href: `/admin/resellers/${r.id}`,
     }));
@@ -72,14 +78,16 @@ export function projectRevenueByTier(
 ): RevenueByTierRow[] {
   const map = new Map<string, RevenueByTierRow>();
   for (const r of resellers) {
-    const existing = map.get(r.tierId);
+    const tierId = r.tierId ?? UNASSIGNED_TIER_ID;
+    const tierName = r.tierName ?? UNASSIGNED_TIER_NAME;
+    const existing = map.get(tierId);
     if (existing) {
       existing.revenue += r.totalRevenue;
       existing.count += 1;
     } else {
-      map.set(r.tierId, {
-        tier: r.tierName,
-        tierId: r.tierId,
+      map.set(tierId, {
+        tier: tierName,
+        tierId,
         revenue: r.totalRevenue,
         count: 1,
       });
@@ -132,12 +140,14 @@ export function projectAnalyticsSummary(
 
   const tiers = new Map<string, TierCount>();
   for (const r of resellers) {
-    const existing = tiers.get(r.tierId);
+    const tierId = r.tierId ?? UNASSIGNED_TIER_ID;
+    const tierName = r.tierName ?? UNASSIGNED_TIER_NAME;
+    const existing = tiers.get(tierId);
     if (existing) existing.count += 1;
     else
-      tiers.set(r.tierId, {
-        tier: r.tierName,
-        tierId: r.tierId,
+      tiers.set(tierId, {
+        tier: tierName,
+        tierId,
         count: 1,
       });
   }

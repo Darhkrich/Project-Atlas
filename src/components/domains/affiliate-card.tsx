@@ -2,34 +2,67 @@
 
 import { AtlasIcon } from "@/components/atlas/icons";
 
+interface RegistrarLink {
+  name: string;
+  href: string;
+  hint: string;
+}
+
+const REGISTRARS: RegistrarLink[] = [
+  {
+    name: "Namecheap",
+    href: "https://www.namecheap.com/domains/",
+    hint: "Popular, low prices",
+  },
+  {
+    name: "Cloudflare",
+    href: "https://www.cloudflare.com/products/registrar/",
+    hint: "Free DNS, at-cost domains",
+  },
+  {
+    name: "GoDaddy",
+    href: "https://www.godaddy.com/domains",
+    hint: "Wide selection",
+  },
+];
+
 export function AffiliateCard() {
   return (
-    <div className="rounded-xl border-2 border-info-200 bg-gradient-to-br from-info-50 to-white p-4 dark:border-info-800/60 dark:from-info-900/20 dark:to-neutral-900">
+    <div className="rounded-xl border border-info-200 bg-info-50 p-4 dark:border-info-800/60 dark:bg-info-900/20">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-info-100 text-info-700 dark:bg-info-900/40 dark:text-info-300">
-          <AtlasIcon name="globe" aria-hidden="true" className="h-5 w-5" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-info-100 text-info-700 dark:bg-info-900/60 dark:text-info-300">
+          <AtlasIcon name="globe" aria-hidden="true" className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Don&apos;t have a domain yet?
+            Need a domain?
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Buy a domain from a popular registrar, then come back here to
-            connect it to your storefront. Setup takes about 5 minutes.
+          <p className="mt-0.5 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+            Buy a domain from a registrar, then come back here to connect it.
+            Setup takes about five minutes.
           </p>
-          <a
-            href="https://www.namecheap.com/domains/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg bg-info-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-info-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900"
-          >
-            Browse popular registrars
-            <AtlasIcon
-              name="external-link"
-              aria-hidden="true"
-              className="h-3.5 w-3.5"
-            />
-          </a>
+          <ul role="list" className="mt-3 space-y-1">
+            {REGISTRARS.map((r) => (
+              <li key={r.name}>
+                <a
+                  href={r.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs text-neutral-700 transition-colors hover:bg-info-100/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-info-500 dark:text-neutral-300 dark:hover:bg-info-900/30"
+                >
+                  <span className="font-medium">{r.name}</span>
+                  <span className="flex items-center gap-1.5 text-neutral-500 dark:text-neutral-400">
+                    {r.hint}
+                    <AtlasIcon
+                      name="external-link"
+                      aria-hidden="true"
+                      className="h-3 w-3"
+                    />
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>

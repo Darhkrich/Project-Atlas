@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/providers/provider-configuration.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -59,7 +60,7 @@ export function ProviderConfiguration({ provider }: ProviderConfigurationProps) 
     editing &&
     JSON.stringify(draft) !== JSON.stringify(draftFrom(provider));
 
-  useUnsavedChanges(dirty);
+  useUnsavedChanges({ hasChanges: dirty });
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};

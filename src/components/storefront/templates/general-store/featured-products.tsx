@@ -1,37 +1,89 @@
+"use client";
+
 import Link from "next/link";
+import { AtlasIcon } from "@/components/atlas/icons";
+import { SectionSurface } from "@/components/storefront/shared/section-surface";
 import { GeneralStoreProductCard } from "./product-card";
-import type { MerchantStorefrontConfig, MerchantStorefrontProduct } from "@/types/merchant-storefront";
+import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
+import type {
+  MerchantStorefrontConfig,
+  MerchantStorefrontProduct,
+} from "@/types/merchant-storefront";
 
 interface GeneralStoreFeaturedProductsProps {
   store: MerchantStorefrontConfig;
   products: MerchantStorefrontProduct[];
+  allProducts: MerchantStorefrontProduct[];
 }
 
-export function GeneralStoreFeaturedProducts({ store, products }: GeneralStoreFeaturedProductsProps) {
+export function GeneralStoreFeaturedProducts({
+  store,
+  products,
+  allProducts,
+}: GeneralStoreFeaturedProductsProps) {
+  const theme = getThemeDefinition(store.theme);
+
+  if (products.length === 0) return null;
+
+  const counts = new Map<string, number>();
+  for (const p of allProducts) {
+    counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+  }
+  const categories = Array.from(counts.keys()).slice(0, 6);
+
   return (
-    <section className="px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl">
-              Featured Products
-            </h2>
-            <p className="mt-2 text-sm text-neutral-500">Handpicked favorites from our store.</p>
-          </div>
-          <Link
-            href={`/ecommerce-stores/${store.slug}/products`}
-            className="hidden text-sm font-semibold sm:block"
-            style={{ color: store.primaryColor }}
-          >
-            View all →
-          </Link>
+    <SectionSurface theme={theme} ariaLabel="Featured products">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
+            Featured products
+          </h2>
+          <p className={`mt-2 text-sm ${theme.color.textMuted}`}>
+            Handpicked from our store
+          </p>
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
-          {products.map((product) => (
-            <GeneralStoreProductCard key={product.id} product={product} store={store} />
-          ))}
-        </div>
+        <Link
+          href={`/ecommerce-stores/${store.slug}/products`}
+          className="hidden items-center gap-1 text-sm font-semibold underline-offset-4 hover:underline sm:inline-flex"
+        >
+          View all
+          <AtlasIcon
+            name="arrow-right"
+            className="h-4 w-4"
+            aria-hidden="true"
+          />
+        </Link>
       </div>
-    </section>
+
+      {categories.length > 1 && (
+        <ul role="list" className="mt-7 flex gap-2 overflow-x-auto pb-1">
+          {categories.map((cat) => (
+            <li key={cat} className="shrink-0">
+              <Link
+                href={`/ecommerce-stores/${store.slug}/products?category=${encodeURIComponent(cat)}`}
+                className="inline-flex items-center border px-4 py-2 text-xs font-semibold transition-colors hover:border-neutral-900"
+                style={{
+                  borderColor: "var(--atlas-border)",
+                  borderRadius: "var(--atlas-radius-full)",
+                }}
+              >
+                {cat}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-10 grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+        {products.map((product, index) => (
+          <div
+            key={product.id}
+            className={index === 0 ? "col-span-2 sm:col-span-1" : ""}
+          >
+            <GeneralStoreProductCard product={product} store={store} />
+          </div>
+        ))}
+      </div>
+    </SectionSurface>
   );
 }

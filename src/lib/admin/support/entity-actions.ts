@@ -28,7 +28,8 @@ export const compensationOptionsByUserType: Record<
     {
       method: "atlas_wallet",
       label: "Atlas Wallet credit",
-      description: "Instant. Customer can spend immediately on any digital service.",
+      description:
+        "Instant. Customer can spend immediately on any digital service.",
     },
     {
       method: "mobile_money",
@@ -72,7 +73,8 @@ export const compensationOptionsByUserType: Record<
     {
       method: "bank_transfer",
       label: "Bank transfer",
-      description: "Refunds the original settlement account. 1 to 3 business days.",
+      description:
+        "Refunds the original settlement account. 1 to 3 business days.",
     },
     {
       method: "atlas_points",
@@ -82,7 +84,9 @@ export const compensationOptionsByUserType: Record<
   ],
 };
 
-export function compensationOptionsFor(entity: LinkedEntity): CompensationOption[] {
+export function compensationOptionsFor(
+  entity: LinkedEntity
+): CompensationOption[] {
   switch (entity.kind) {
     case "digital_transaction":
       return compensationOptionsByUserType.customer;
@@ -90,6 +94,8 @@ export function compensationOptionsFor(entity: LinkedEntity): CompensationOption
       return compensationOptionsByUserType.reseller;
     case "merchant_account":
       return compensationOptionsByUserType.merchant;
+    default:
+      return [];
   }
 }
 
@@ -101,16 +107,20 @@ export function suggestedAmountFor(entity: LinkedEntity): number {
       return entity.commission;
     case "merchant_account":
       return 0;
+    default:
+      return 0;
   }
 }
 
 export function compensationReasonFor(entity: LinkedEntity): string {
   switch (entity.kind) {
     case "digital_transaction":
-      return `Refund for ${entity.transactionId} (${entity.service})`;
+      return "Refund for " + entity.transactionId + " (" + entity.service + ")";
     case "reseller_order":
-      return `Commission adjustment for ${entity.orderId}`;
+      return "Commission adjustment for " + entity.orderId;
     case "merchant_account":
-      return `Credit for ${entity.merchantName} (${entity.plan})`;
+      return "Credit for " + entity.merchantName + " (" + entity.plan + ")";
+    default:
+      return entity.label;
   }
 }

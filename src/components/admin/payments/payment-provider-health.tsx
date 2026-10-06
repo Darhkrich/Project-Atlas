@@ -1,20 +1,32 @@
+// components/admin/payments/payment-provider-health.tsx
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
 import { Badge } from "@/components/admin/ui/badge";
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
 
-const providers = [
+type ProviderHealthStatus = "operational" | "degraded" | "down";
+
+interface ProviderHealthRow {
+  name: string;
+  successRate: number;
+  status: ProviderHealthStatus;
+}
+
+const providers: ProviderHealthRow[] = [
   { name: "MTN MoMo", successRate: 98, status: "operational" },
   { name: "Telecel", successRate: 91, status: "degraded" },
   { name: "Visa", successRate: 99, status: "operational" },
   { name: "Atlas Wallet", successRate: 100, status: "operational" },
 ];
 
-const statusConfig = {
-  operational: { label: "Operational", variant: "success" as const, color: "#22c55e" },
-  degraded: { label: "Degraded", variant: "warning" as const, color: "#f59e0b" },
-  down: { label: "Down", variant: "danger" as const, color: "#ef4444" },
+const statusConfig: Record<
+  ProviderHealthStatus,
+  { label: string; variant: "success" | "warning" | "danger"; color: string }
+> = {
+  operational: { label: "Operational", variant: "success", color: "#22c55e" },
+  degraded: { label: "Degraded", variant: "warning", color: "#f59e0b" },
+  down: { label: "Down", variant: "danger", color: "#ef4444" },
 };
 
 export function PaymentProviderHealth() {

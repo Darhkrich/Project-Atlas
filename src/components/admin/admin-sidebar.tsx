@@ -1,143 +1,23 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/admin-sidebar.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
+import { AtlasIcon } from "@/components/atlas/icons";
 import { useProviders } from "@/lib/admin/hooks/use-providers";
 import { sidebarProviderCounts } from "@/lib/admin/providers/sidebar-counts";
-
-interface NavItem {
-  label: string;
-  href: string;
-  icon: AtlasIconName;
-  badge?: string | number;
-  permission?: string;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-  collapsible?: boolean;
-}
-
+import { useCurrentAdmin } from "@/lib/admin/rbac";
+import { navGroups } from "@/lib/admin/nav/nav-items";
+import { filterNavGroups } from "@/lib/admin/nav/nav-filter";
+ 
 interface LiveBadge {
   count: number;
   tone: "warning" | "danger";
   label: string;
 }
-
-const navGroups: NavGroup[] = [
-  {
-    label: "Main",
-    collapsible: false,
-    items: [
-      { label: "Dashboard", href: "/admin/dashboard", icon: "dashboard" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { label: "Orders", href: "/admin/orders", icon: "orders", permission: "orders.read" },
-      { label: "Transactions", href: "/admin/transactions", icon: "transactions", permission: "transactions.read" },
-      { label: "Payments", href: "/admin/payments", icon: "credit-card", permission: "payments.read" },
-      { label: "Refunds", href: "/admin/refunds", icon: "receipt", permission: "refunds.read" },
-      { label: "Domains", href: "/admin/domains", icon: "globe", permission: "domains.read" },
-    ],
-  },
-  {
-    label: "Users",
-    items: [
-      { label: "Customers", href: "/admin/customers", icon: "user", permission: "customers.read" },
-      { label: "Reseller Accounts", href: "/admin/resellers", icon: "users", permission: "resellers.read" },
-      { label: "Merchant Accounts", href: "/admin/ecommerce/merchants", icon: "briefcase", permission: "ecommerce.merchants.read" },
-      { label: "Reported Accounts", href: "/admin/reported-accounts", icon: "alert", permission: "customers.read" },
-      { label: "Admin Users", href: "/admin/admin-users", icon: "shield", permission: "admins.read" },
-      { label: "Reseller Storefront Users", href: "/admin/resellers/storefront-users", icon: "users", permission: "customers.read" },
-      { label: "Merchant Storefront Users", href: "/admin/ecommerce/storefront-users", icon: "users", permission: "customers.read" },
-    ],
-  },
-  {
-    label: "Resellers",
-    items: [
-      { label: "Reseller Dashboard", href: "/admin/resellers/dashboard", icon: "sales", permission: "resellers.dashboard.read" },
-      { label: "Commission Wallets", href: "/admin/resellers/commission-wallets", icon: "wallet", permission: "resellers.commissions.read" },
-      { label: "Analytics", href: "/admin/resellers/analytics", icon: "bar-chart", permission: "resellers.analytics.read" },
-      { label: "Tiers", href: "/admin/resellers/tiers", icon: "star", permission: "resellers.tiers.read" },
-      { label: "Verification Queue", href: "/admin/resellers/verification-queue", icon: "shield", permission: "resellers.verify" },
-      { label: "Support Tickets", href: "/admin/resellers/support-tickets", icon: "support", permission: "support.read" },
-      { label: "Promotions", href: "/admin/resellers/promotions", icon: "gift", permission: "resellers.promotions.read" },
-      { label: "Storefronts", href: "/admin/resellers/storefronts", icon: "store", permission: "resellers.storefronts.read" },
-    ],
-  },
-  {
-    label: "E-commerce",
-    items: [
-      { label: "E‑commerce Dashboard", href: "/admin/ecommerce/dashboard", icon: "sales", permission: "ecommerce.dashboard.read" },
-      { label: "Subscriptions", href: "/admin/ecommerce/subscriptions", icon: "repeat", permission: "ecommerce.subscriptions.read" },
-      { label: "Templates", href: "/admin/ecommerce/templates", icon: "file-text", permission: "ecommerce.templates.read" },
-      { label: "Payments", href: "/admin/ecommerce/payments", icon: "credit-card", permission: "ecommerce.payments.read" },
-      { label: "Support", href: "/admin/ecommerce/support", icon: "support", permission: "ecommerce.support.read" },
-      { label: "Analytics", href: "/admin/ecommerce/analytics", icon: "bar-chart", permission: "ecommerce.analytics.read" },
-      { label: "Settings", href: "/admin/ecommerce/settings", icon: "settings", permission: "ecommerce.settings.read" },
-    ],
-  },
-  {
-    label: "Financial",
-    items: [
-      { label: "Treasury", href: "/admin/treasury", icon: "wallet", permission: "treasury.view" },
-   
-      { label: "Wallets", href: "/admin/wallets", icon: "wallet", permission: "wallets.read" },
-      { label: "Revenue", href: "/admin/revenue", icon: "trending-up", permission: "revenue.read" },
-      { label: "Commissions", href: "/admin/commissions", icon: "percent", permission: "commissions.read" },
-      { label: "Pricing", href: "/admin/pricing", icon: "price", permission: "pricing.read" },
-      { label: "Promotions", href: "/admin/promotions", icon: "gift", permission: "promotions.read" },
-     ],
-  },
-  {
-    label: "Services",
-    items: [
-      { label: "Services", href: "/admin/services", icon: "grid", permission: "services.read" },
-      { label: "Data Plans", href: "/admin/data-plans", icon: "wifi", permission: "data_plans.read" },
-      { label: "Providers", href: "/admin/providers", icon: "server", permission: "providers.read" },
-    ],
-  },
-  {
-    label: "Commerce",
-    items: [
-      { label: "Storefronts", href: "/admin/storefronts", icon: "store", permission: "storefronts.read" },
-    ],
-  },
-  {
-    label: "Communication",
-    items: [
-      { label: "Support", href: "/admin/support", icon: "support", permission: "support.read" },
-      { label: "Notifications", href: "/admin/notifications", icon: "bell", permission: "notifications.read" },
-    ],
-  },
-  {
-    label: "Insights",
-    items: [
-      { label: "Analytics", href: "/admin/analytics", icon: "bar-chart", permission: "analytics.read" },
-      { label: "Reports", href: "/admin/reports", icon: "file-text", permission: "reports.read" },
-    ],
-  },
-  {
-    label: "Security",
-    items: [
-      { label: "Security Center", href: "/admin/security", icon: "lock", permission: "security.read" },
-      { label: "Audit Logs", href: "/admin/audit-logs", icon: "list", permission: "audit_logs.read" },
-    ],
-  },
-  {
-    label: "System",
-    items: [
-      { label: "Settings", href: "/admin/settings", icon: "settings", permission: "settings.read" },
-    ],
-  },
-];
 
 const STORAGE_KEY = "atlas-admin-sidebar-groups";
 
@@ -146,10 +26,16 @@ export function AdminSidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
+  const admin = useCurrentAdmin();
   const { providers } = useProviders();
   const providerCounts = useMemo(
     () => sidebarProviderCounts(providers),
     [providers]
+  );
+
+  const filteredGroups = useMemo(
+    () => filterNavGroups(navGroups, admin),
+    [admin]
   );
 
   const liveBadges = useMemo<Record<string, LiveBadge>>(() => {
@@ -184,10 +70,10 @@ export function AdminSidebar() {
   }, [pathname]);
 
   const activeGroup = useMemo(() => {
-    return navGroups.find(group =>
+    return filteredGroups.find(group =>
       group.items.some(item => pathname === item.href || pathname.startsWith(`${item.href}/`))
     )?.label;
-  }, [pathname]);
+  }, [pathname, filteredGroups]);
 
   useEffect(() => {
     if (!activeGroup) return;
@@ -238,7 +124,7 @@ export function AdminSidebar() {
 
         <nav aria-label="Admin navigation" className="flex-1 overflow-y-auto px-3 py-4">
           <div className="space-y-5">
-            {navGroups.map(group => {
+            {filteredGroups.map(group => {
               const isGroupActive = group.label === activeGroup;
               const isOpen = group.collapsible === false || openGroups[group.label] || isGroupActive;
 
@@ -266,6 +152,7 @@ export function AdminSidebar() {
                       <span>{group.label}</span>
                       <AtlasIcon
                         name="chevron-down"
+                        aria-hidden="true"
                         className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "-rotate-90")}
                       />
                     </button>
@@ -305,6 +192,7 @@ export function AdminSidebar() {
                               >
                                 <AtlasIcon
                                   name={item.icon}
+                                  aria-hidden="true"
                                   className={cn(
                                     "h-[18px] w-[18px] shrink-0",
                                     active

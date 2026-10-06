@@ -5,6 +5,7 @@ import type {
 } from "../types/commission";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const COMMISSION_STATUS_LABEL: Record<CommissionStatus, string> = {
   pending: "Pending",
@@ -13,7 +14,10 @@ export const COMMISSION_STATUS_LABEL: Record<CommissionStatus, string> = {
   reversed: "Reversed",
 };
 
-export const COMMISSION_STATUS_VARIANT: Record<CommissionStatus, Variant> = {
+export const COMMISSION_STATUS_VARIANT: Record<
+  CommissionStatus,
+  StatusVariant
+> = {
   pending: "warning",
   paid: "success",
   cancelled: "neutral",

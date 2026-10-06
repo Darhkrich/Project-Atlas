@@ -1,5 +1,6 @@
 // lib/admin/notifications/constants.ts
 
+import type { AtlasIconName } from "@/components/atlas/icons";
 import type {
   NotificationAudience,
   NotificationChannel,
@@ -38,7 +39,7 @@ export const CHANNEL_LABEL: Record<NotificationChannel, string> = {
   push: "Push",
 };
 
-export const CHANNEL_ICON: Record<NotificationChannel, string> = {
+export const CHANNEL_ICON: Record<NotificationChannel, AtlasIconName> = {
   in_app: "bell",
   email: "mail",
   sms: "message-square",

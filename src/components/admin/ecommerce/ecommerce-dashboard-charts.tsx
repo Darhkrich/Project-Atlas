@@ -1,3 +1,4 @@
+// components/admin/ecommerce/ecommerce-dashboard-charts.tsx
 "use client";
 
 import {
@@ -19,6 +20,7 @@ import type {
 } from "@/lib/admin/ecommerce/dashboard-projection";
 import { ResellerDashboardChartCard } from "@/components/admin/resellers/reseller-dashboard-chart-card";
 import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import {
   PLAN_PIE_COLORS,
 } from "@/lib/admin/ecommerce/dashboard-labels";
@@ -95,8 +97,8 @@ export function EcommerceDashboardCharts({
               ))}
             </Pie>
             <Tooltip
-              formatter={(value: number, _name: string, payload) => {
-                const point = payload?.payload as
+              formatter={chartFormatter((value, _name, entry) => {
+                const point = entry.payload as
                   | PlanDistributionPoint
                   | undefined;
                 return [
@@ -105,7 +107,7 @@ export function EcommerceDashboardCharts({
                     (value === 1 ? "" : "s"),
                   point ? point.plan : "Plan",
                 ];
-              }}
+              })}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -157,10 +159,10 @@ export function EcommerceDashboardCharts({
               {...AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number) => [
+              formatter={chartFormatter((value) => [
                 formatCurrency(value),
                 "Revenue",
-              ]}
+              ])}
             />
             <Bar
               dataKey="revenue"
@@ -197,15 +199,15 @@ export function EcommerceDashboardCharts({
               {...AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number, _name: string, payload) => {
-                const row = payload?.payload as
+              formatter={chartFormatter((value, _name, entry) => {
+                const row = entry.payload as
                   | TemplateRevenuePoint
                   | undefined;
                 const suffix = row
-                  ? " · " + row.merchantCount + " merchants"
+                  ? " \u00B7 " + row.merchantCount + " merchants"
                   : "";
                 return [formatCurrency(value) + suffix, "Revenue"];
-              }}
+              })}
             />
             <Bar dataKey="revenue" barSize={24} radius={[0, 4, 4, 0]}>
               {revenueByTemplate.map((row) => (

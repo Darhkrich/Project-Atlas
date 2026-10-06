@@ -1,14 +1,13 @@
-/* eslint-disable react/no-unescaped-entities */
 // components/admin/support/support-detail-drawer.tsx
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   SupportConversation,
   SupportPriority,
   SupportStatus,
 } from "@/lib/admin/types/support";
-import { mockCannedResponses } from "@/lib/admin/mock/support";
+import { mockCannedResponses } from "@/lib/admin/mock/support-base";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { Input } from "@/components/admin/ui/input";
@@ -20,6 +19,10 @@ import { useFocusTrap } from "@/lib/admin/hooks/use-focus-trap";
 import { useNow } from "@/lib/admin/hooks/use-now";
 import { formatAbsolute, formatRelative } from "@/lib/admin/support/format";
 import {
+  MIDDOT,
+  ELLIPSIS,
+  EM_DASH,
+  COMMAND_KEY,
   channelLabel,
   priorityLabel,
   priorityVariant,
@@ -43,6 +46,8 @@ export interface SupportDetailDrawerProps {
   onStatusChange: (conversationId: string, status: SupportStatus) => void;
   onPriorityChange: (conversationId: string, priority: SupportPriority) => void;
   onAssign: (conversationId: string, adminId: string) => void;
+  onUnassign?: (conversationId: string) => void;
+  onViewUser?: (conversation: SupportConversation) => void;
   onAddInternalNote: (conversationId: string, note: string) => void;
   onRetryFulfillment: (conversationId: string, transactionId: string) => void;
   onEscalateToProvider: (conversationId: string, transactionId: string) => void;
@@ -67,6 +72,18 @@ export function SupportDetailDrawer({
   const trapRef = useFocusTrap<HTMLDivElement>(isOpen, onClose);
   const titleId = useId();
   const now = useNow();
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      returnFocusRef.current?.focus?.();
+    };
+  }, [isOpen]);
 
   if (!conversation) return null;
 
@@ -115,6 +132,8 @@ function SupportDetailDrawerBody({
   onStatusChange,
   onPriorityChange,
   onAssign,
+  onUnassign,
+  onViewUser,
   onAddInternalNote,
   onRetryFulfillment,
   onEscalateToProvider,
@@ -128,6 +147,9 @@ function SupportDetailDrawerBody({
 }: SupportDetailDrawerBodyProps) {
   const [reply, setReply] = useState("");
   const [internalNote, setInternalNote] = useState("");
+  const [composerMode, setComposerMode] = useState<"reply" | "internal">(
+    "reply"
+  );
   const [showCanned, setShowCanned] = useState(false);
   const [compensationOpen, setCompensationOpen] = useState(false);
 
@@ -202,11 +224,21 @@ function SupportDetailDrawerBody({
 
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <div className="text-sm text-neutral-500">
-            <p className="font-medium text-neutral-900 dark:text-neutral-100">
-              {conversation.userName}
-            </p>
+            {onViewUser ? (
+              <button
+                type="button"
+                onClick={() => onViewUser(conversation)}
+                className="font-medium text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+              >
+                {conversation.userName}
+              </button>
+            ) : (
+              <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                {conversation.userName}
+              </p>
+            )}
             <p>
-              {conversation.userType} · {conversation.userId}
+              {conversation.userType} {MIDDOT} {conversation.userId}
             </p>
             {conversation.contactName &&
               conversation.contactName !== conversation.userName && (
@@ -259,6 +291,16 @@ function SupportDetailDrawerBody({
               />
             </div>
 
+            {conversation.assigneeId && onUnassign && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onUnassign(conversation.id)}
+              >
+                Unassign
+              </Button>
+            )}
+
             {assignedToMe ? (
               <Badge variant="success" size="sm">
                 Assigned to you
@@ -302,10 +344,9 @@ function SupportDetailDrawerBody({
             onRefund={() => setCompensationOpen(true)}
             onEscalate={(txId) => onEscalateToProvider(conversation.id, txId)}
             onViewProvider={onViewProvider}
-            onCreditCommission={(orderId) => {
-              onCreditCommission(conversation.id, orderId);
-              setCompensationOpen(true);
-            }}
+            onCreditCommission={(orderId) =>
+              onCreditCommission(conversation.id, orderId)
+            }
             onHoldPayout={(orderId) => onHoldPayout(conversation.id, orderId)}
             onChangePlan={(merchantId) =>
               onChangePlan(conversation.id, merchantId)
@@ -368,12 +409,16 @@ function SupportDetailDrawerBody({
                         key={att.id}
                         className="flex items-center gap-2 rounded bg-neutral-200/50 p-1 text-xs dark:bg-neutral-700/50"
                       >
-                        <AtlasIcon name="file-text" className="h-4 w-4" />
+                        <AtlasIcon
+                          name="file-text"
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                        />
                         <span>{att.fileName}</span>
                         <span className="text-neutral-500">
                           {att.size
-                            ? `(${Math.round(att.size / 1024)}KB)`
-                            : "(—)"}
+                            ? "(" + Math.round(att.size / 1024) + "KB)"
+                            : "(" + EM_DASH + ")"}
                         </span>
                       </div>
                     ))}
@@ -402,7 +447,7 @@ function SupportDetailDrawerBody({
             conversation.internalNotes.map((note) => (
               <div
                 key={note.id}
-                className="rounded bg-neutral-50 p-2 text-xs dark:bg-neutral-900"
+                className="rounded bg-warning-50 p-2 text-xs dark:bg-warning-900/20"
               >
                 <p className="font-medium">{note.admin}</p>
                 <p>{note.content}</p>
@@ -419,27 +464,42 @@ function SupportDetailDrawerBody({
             <p className="text-xs text-neutral-400">No internal notes.</p>
           )}
         </div>
-        <div className="mt-2 flex gap-2">
-          <Input
-            aria-label="Add internal note"
-            className="h-8 text-xs"
-            placeholder="Add internal note..."
-            value={internalNote}
-            onChange={(e) => setInternalNote(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleAddNote();
-              }
-            }}
-          />
-          <Button variant="outline" size="sm" onClick={handleAddNote}>
-            Add Note
-          </Button>
-        </div>
       </div>
 
       <div className="border-t border-neutral-200 p-4 dark:border-neutral-800">
+        <div
+          role="group"
+          aria-label="Composer mode"
+          className="mb-2 inline-flex rounded-md border border-neutral-200 p-0.5 dark:border-neutral-800"
+        >
+          <button
+            type="button"
+            aria-pressed={composerMode === "reply"}
+            onClick={() => setComposerMode("reply")}
+            className={cn(
+              "rounded px-2 py-1 text-xs",
+              composerMode === "reply"
+                ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+                : "text-neutral-500 dark:text-neutral-400"
+            )}
+          >
+            Reply to user
+          </button>
+          <button
+            type="button"
+            aria-pressed={composerMode === "internal"}
+            onClick={() => setComposerMode("internal")}
+            className={cn(
+              "rounded px-2 py-1 text-xs",
+              composerMode === "internal"
+                ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+                : "text-neutral-500 dark:text-neutral-400"
+            )}
+          >
+            Internal note
+          </button>
+        </div>
+
         <div className="mb-2 flex items-center justify-between gap-2">
           <Button
             variant="ghost"
@@ -455,7 +515,7 @@ function SupportDetailDrawerBody({
           <div className="mb-2 max-h-48 space-y-1 overflow-y-auto">
             {relevantCanned.length === 0 ? (
               <p className="rounded bg-neutral-50 p-2 text-xs text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
-                No canned responses match this ticket's category and user type.
+                No canned responses match this ticket.
               </p>
             ) : (
               relevantCanned.map((canned) => (
@@ -475,26 +535,56 @@ function SupportDetailDrawerBody({
           </div>
         )}
 
-        <textarea
-          aria-label="Reply to conversation"
-          className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-          rows={3}
-          placeholder="Type your reply… (⌘/Ctrl + Enter to send)"
-          value={reply}
-          onChange={(e) => setReply(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              handleSendReply();
-            }
-          }}
-        />
-
-        <div className="mt-2 flex justify-end gap-2">
-          <Button size="sm" onClick={handleSendReply}>
-            Send Reply
-          </Button>
-        </div>
+        {composerMode === "reply" ? (
+          <>
+            <textarea
+              aria-label="Reply to conversation"
+              className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              rows={3}
+              placeholder={
+                "Type your reply" +
+                ELLIPSIS +
+                " (" +
+                COMMAND_KEY +
+                "/Ctrl + Enter to send)"
+              }
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleSendReply();
+                }
+              }}
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <Button size="sm" onClick={handleSendReply}>
+                Send Reply
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <Input
+              aria-label="Add internal note"
+              className="h-8 text-xs"
+              placeholder="Add internal note"
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAddNote();
+                }
+              }}
+            />
+            <div className="mt-2 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={handleAddNote}>
+                Add Note
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
       <CompensationDialog

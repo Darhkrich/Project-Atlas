@@ -75,9 +75,10 @@ export function SecuritySummaryCards({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card) => {
-        const isFilterActive =
+        const isFilterActive = Boolean(
           (card.filterType && activeFilterType === card.filterType) ||
-          (card.filterSeverity && activeFilterSeverity === card.filterSeverity);
+          (card.filterSeverity && activeFilterSeverity === card.filterSeverity)
+        );
 
         return (
           <button
@@ -116,7 +117,7 @@ export function SecuritySummaryCards({
                     {card.label}
                   </p>
                   <AtlasIcon
-                    name={card.icon}
+                    name= "alert"
                     className={cn("h-5 w-5", card.color)}
                   />
                 </div>

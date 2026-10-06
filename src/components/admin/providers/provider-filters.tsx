@@ -1,3 +1,4 @@
+// components/admin/providers/provider-filters.tsx
 "use client";
 
 import type { RefObject } from "react";
@@ -30,7 +31,7 @@ interface ProviderFiltersProps {
   onChange: (patch: Partial<ProviderFilterValues>) => void;
   onClear: () => void;
   hasActive: boolean;
-  searchInputRef: RefObject<HTMLInputElement>;
+  searchInputRef: RefObject<HTMLInputElement | null>;
 }
 
 export function ProviderFilters({

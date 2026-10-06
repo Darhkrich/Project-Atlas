@@ -70,9 +70,6 @@ const PLAN_MONTHLY: Record<PlanCode, number> = {
   enterprise: 2500,
 };
 
-// Merchants who get a large main wallet top-up so the admin pending
-// withdrawal queue has entries. Every other merchant only gets base
-// funding plus customer payments.
 const MAIN_TOP_UP: Record<string, number> = {
   "MER-008": 9000,
   "MER-020": 8000,
@@ -87,6 +84,7 @@ function buildConfig(referenceNowMs: number): WalletAutoApproveConfig {
     thresholdGHS: 5000,
     feeRatePercent: 0.5,
     dailyCap: 2,
+    refundAutoApproveThreshold: 5000,
     updatedAt: new Date(referenceNowMs - 30 * DAY).toISOString(),
     updatedBy: "System",
   };
@@ -172,7 +170,7 @@ function buildSavedMethods(
       methodId: "card",
       provider: seed % 2 === 0 ? "Visa" : "Mastercard",
       maskedLabel: "**** " + String(4000 + (seed % 900)).slice(-4),
-      tokenRef: "tok_saved_" + merchantId.toLowerCase(),
+      tokenRef: "tok_" + merchantId.toLowerCase() + "_saved",
       label: "Primary card",
       isDefault: true,
       createdAt: new Date(referenceNowMs - 90 * DAY).toISOString(),
@@ -203,8 +201,6 @@ function buildMerchantLedger(
   const plan = pickPlan(seed);
   const planAmount = PLAN_MONTHLY[plan];
 
-  // Billing wallet: fund three months of the merchant's own plan charge
-  // so the three successful plan charges in the ledger never overdraw it.
   const billingFundingAmount = planAmount * 3 + 50;
   const billingFunding: MerchantFundingLedgerEntry = {
     id: "ML-BF-" + merchant.id + "-01",
@@ -222,9 +218,7 @@ function buildMerchantLedger(
     transactionRef: "TXN-BF-" + merchant.id,
   };
 
-  // Main wallet: base funding plus optional top-up.
-  const baseMainFunding =
-    seed % 2 === 0 ? 200 + (seed % 4) * 100 : 0;
+  const baseMainFunding = seed % 2 === 0 ? 200 + (seed % 4) * 100 : 0;
   const topUp = MAIN_TOP_UP[merchant.id] ?? 0;
   const mainFundingAmount = baseMainFunding + topUp;
   const mainFunding: MerchantFundingLedgerEntry | null =
@@ -248,7 +242,6 @@ function buildMerchantLedger(
         }
       : null;
 
-  // Customer payments.
   const customerPaymentCount = 3 + (seed % 4);
   const customerPayments: MerchantCustomerPaymentLedgerEntry[] = [];
   for (let i = 0; i < customerPaymentCount; i++) {
@@ -287,7 +280,6 @@ function buildMerchantLedger(
     0
   );
 
-  // Plan charges. All three succeed because billing funding covers them.
   const planCharges: MerchantPlanChargeLedgerEntry[] = [];
   for (let i = 0; i < 3; i++) {
     const monthAgo = 30 * (i + 1);
@@ -313,10 +305,8 @@ function buildMerchantLedger(
     });
   }
 
-  // Refunds: only if main credits can cover them.
   const refunds: MerchantRefundLedgerEntry[] = [];
-  let mainRunning =
-    mainFundingAmount + customerPaymentTotal;
+  let mainRunning = mainFundingAmount + customerPaymentTotal;
 
   if (seed % 5 === 0) {
     const refundAmount = 40 + (seed % 80);
@@ -341,7 +331,6 @@ function buildMerchantLedger(
     }
   }
 
-  // Transfers: only if main can spare them.
   const transfers: MerchantTransferLedgerEntry[] = [];
   if (seed % 6 === 0) {
     const amount = 100 + (seed % 3) * 50;
@@ -378,12 +367,10 @@ function buildMerchantLedger(
     }
   }
 
-  // Withdrawals.
   const withdrawalRequests: MerchantWithdrawalRequest[] = [];
   const withdrawalHistory: MerchantWithdrawalHistoryEntry[] = [];
   const withdrawalLedger: MerchantWithdrawalLedgerEntry[] = [];
 
-  // Completed withdrawal: only if main can spare it.
   const desiredCompleted = 200 + (seed % 5) * 100;
   const { fee: completedFee, total: completedTotal } = computeWithdrawalTotal(
     desiredCompleted,
@@ -435,8 +422,6 @@ function buildMerchantLedger(
     mainRunning -= completedTotal;
   }
 
-  // Pending withdrawal: only if main has enough left over after the
-  // completed one. Only top-up merchants can pass this check.
   if (topUp > 0) {
     const pendingAmount = 5100 + (seed % 5) * 100;
     const { fee: pendingFee, total: pendingTotal } = computeWithdrawalTotal(

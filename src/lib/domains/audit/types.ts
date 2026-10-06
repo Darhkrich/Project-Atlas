@@ -20,7 +20,9 @@ export type AuditResourceType =
   | "catalog_category"
   | "catalog_plan"
   | "catalog_network"
-  | "subscription_plan";
+  | "subscription_plan"
+  | "support_conversation"
+  | "customer";
 
 export type AuditAction =
   // Wallet, storefront user
@@ -87,6 +89,17 @@ export type AuditAction =
   | "payout_run.fail"
   // Order
   | "order.cancel"
+  // Order, merchant storefront
+  | "order.merchant.status_change"
+  | "order.merchant.ship"
+  | "order.merchant.cancel"
+  | "order.merchant.note_add"
+  | "order.merchant.payment_confirm"
+  | "order.merchant.payment_fail"
+  | "order.merchant.refund_create"
+  // Report, merchant
+  | "report.merchant.customer_create"
+  | "report.merchant.customer_withdraw"
   // Treasury
   | "treasury.fund"
   | "treasury.transfer_to_bank"
@@ -117,7 +130,27 @@ export type AuditAction =
   | "subscription.plan.update"
   | "subscription.plan.delete"
   | "subscription.plan.toggle"
-  | "subscription.plan.reorder";
+  | "subscription.plan.reorder"
+  // Support
+  | "support.ticket.status_change"
+  | "support.ticket.priority_change"
+  | "support.ticket.assign"
+  | "support.ticket.reply"
+  | "support.ticket.note"
+  | "support.ticket.tag"
+  | "support.ticket.snooze"
+  | "support.ticket.escalate"
+  | "support.ticket.incident_set"
+  | "support.ticket.merge"
+  | "support.ticket.bulk"
+  // Support, cross-domain stubs (wired in a follow-up batch)
+  | "support.ticket.retry_fulfillment"
+  | "support.ticket.credit_commission"
+  | "support.ticket.hold_payout"
+  | "support.ticket.change_plan"
+  | "support.ticket.extend_trial"
+  | "support.ticket.reset_template"
+  | "support.ticket.compensation";
 
 export interface AuditEntry {
   id: string;

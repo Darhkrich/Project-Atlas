@@ -1,5 +1,6 @@
 // lib/admin/security/constants.ts
 
+import type { AtlasIconName } from "@/components/atlas/icons";
 import type {
   SecurityEventType,
   SecurityResourceKind,
@@ -29,18 +30,18 @@ export const EVENT_TYPE_LABEL: Record<SecurityEventType, string> = {
   ip_unblocked: "IP unblocked",
 };
 
-export const EVENT_TYPE_ICON: Record<SecurityEventType, string> = {
+export const EVENT_TYPE_ICON: Record<SecurityEventType, AtlasIconName> = {
   login_success: "check-circle",
   login_failure: "x-circle",
-  logout: "log-out",
-  password_change: "key",
+  logout: "disconnect",
+  password_change: "lock",
   role_change: "shield",
   permission_change: "shield",
   wallet_adjustment: "wallet",
-  api_key_change: "key",
+  api_key_change: "lock",
   suspicious_activity: "alert-triangle",
   ip_blocked: "lock",
-  ip_unblocked: "unlock",
+  ip_unblocked: "shield",
 };
 
 export const SEVERITY_LABEL: Record<SecuritySeverity, string> = {

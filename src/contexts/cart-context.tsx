@@ -1,18 +1,38 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useMemo,
+} from "react";
 
-type CartItem = {
+export type CartItem = {
   id: string;
+  productId: string;
+  variantId?: string;
+  variantLabel?: string;
   name: string;
   price: number;
   image: string;
   quantity: number;
 };
 
+export type AddItemInput = {
+  id: string;
+  productId?: string;
+  variantId?: string;
+  variantLabel?: string;
+  name: string;
+  price: number;
+  image: string;
+  quantity?: number;
+};
+
 type CartContextType = {
   items: CartItem[];
-  addItem: (item: Omit<CartItem, "quantity">) => void;
+  addItem: (item: AddItemInput) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -25,15 +45,30 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addItem = (item: Omit<CartItem, "quantity">) => {
+  const addItem = (input: AddItemInput) => {
+    const addQty = input.quantity ?? 1;
+    if (addQty <= 0) return;
+
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find((i) => i.id === input.id);
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.id === input.id
+            ? { ...i, quantity: i.quantity + addQty }
+            : i
         );
       }
-      return [...prev, { ...item, quantity: 1 }];
+      const newItem: CartItem = {
+        id: input.id,
+        productId: input.productId ?? input.id,
+        variantId: input.variantId,
+        variantLabel: input.variantLabel,
+        name: input.name,
+        price: input.price,
+        image: input.image,
+        quantity: addQty,
+      };
+      return [...prev, newItem];
     });
   };
 

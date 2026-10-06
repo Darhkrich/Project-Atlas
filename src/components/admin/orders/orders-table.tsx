@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useMemo, useState } from "react";
-import { AdminDataTable } from "@/components/admin/ui/admin-data-table";
+import {
+  AdminDataTable,
+  type Column,
+} from "@/components/admin/ui/admin-data-table";
 import { Badge } from "@/components/admin/ui/badge";
 import { Button } from "@/components/admin/ui/button";
 import { formatCurrency } from "@/lib/admin/formatters";
@@ -50,7 +54,7 @@ export function OrdersTable({
     return copy;
   }, [rows, sortKey, sortDir]);
 
-  const columns = useMemo(
+  const columns = useMemo<Column<HistoryRow>[]>(
     () => [
       {
         key: "id",
@@ -81,7 +85,7 @@ export function OrdersTable({
         cell: (row: HistoryRow) => (
           <div className="text-sm">
             <div>{row.serviceLabel}</div>
-            {row.networkLabel !== "—" && (
+            {row.networkLabel !== "\u2014" && (
               <div className="text-xs text-neutral-500">{row.networkLabel}</div>
             )}
           </div>
@@ -91,6 +95,7 @@ export function OrdersTable({
         key: "amount",
         header: "Amount",
         sortable: true,
+        dataIndex: "amount",
         cell: (row: HistoryRow) => (
           <span className="text-sm font-medium">
             {formatCurrency(row.amount)}
@@ -110,12 +115,13 @@ export function OrdersTable({
         key: "createdAt",
         header: "Created",
         sortable: true,
+        dataIndex: "createdAt",
         cell: (row: HistoryRow) => (
           <span
             className="text-xs text-neutral-500"
             title={formatAbsolute(row.createdAt)}
           >
-            {now ? formatRelative(row.createdAt, now) : "—"}
+            {now ? formatRelative(row.createdAt, now) : "\u2014"}
           </span>
         ),
       },
@@ -150,14 +156,6 @@ export function OrdersTable({
       pageSize={pageSize}
       currentPage={page}
       onPageChange={onPageChange}
-      onSortChange={(key, dir) => {
-        if (key === "amount" || key === "createdAt") {
-          setSortKey(key);
-          setSortDir(dir);
-        }
-      }}
-      sortKey={sortKey}
-      sortDirection={sortDir}
       emptyMessage="No orders match the current filters."
       caption="Orders ledger"
     />

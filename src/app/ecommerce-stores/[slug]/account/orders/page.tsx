@@ -1,31 +1,26 @@
 "use client";
 
 import { use } from "react";
-import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { StorefrontLayout } from "@/components/storefront/storefront-layout";
-import { CustomerOrderDetailPage } from "@/components/storefront/customer-order-detail-page";
+import { CustomerOrdersPage } from "@/components/storefront/customer-orders-page";
+import { StoreNotFound } from "@/components/storefront/shared/store-not-found";
 import { storesWithProducts } from "@/lib/public-store";
 
-export default function OrderDetailPage({
+export default function OrdersPage({
   params,
 }: {
-  params: Promise<{ slug: string; orderId: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { slug, orderId } = use(params);
-  const { storefrontConfig } = useStorefrontConfig();
+  const { slug } = use(params);
 
-  const store =
-    storefrontConfig.slug === slug
-      ? storefrontConfig
-      : storesWithProducts.find((s) => s.store.slug === slug)?.store;
-
-  if (!store) {
-    return <div>Store not found.</div>;
+  const entry = storesWithProducts.find((s) => s.store.slug === slug);
+  if (!entry) {
+    return <StoreNotFound variant="store" />;
   }
 
   return (
-    <StorefrontLayout store={store}>
-      <CustomerOrderDetailPage store={store} orderId={orderId} />
+    <StorefrontLayout store={entry.store}>
+      <CustomerOrdersPage store={entry.store} />
     </StorefrontLayout>
   );
 }

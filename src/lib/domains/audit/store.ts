@@ -17,6 +17,7 @@ import type {
   AuditEntry,
   AuditResourceType,
 } from "./types";
+import { domainAuditSeed } from "./seed";
 
 type Listener = () => void;
 
@@ -24,7 +25,7 @@ let entries: AuditEntry[] | null = null;
 const listeners = new Set<Listener>();
 
 function ensureLoaded(): AuditEntry[] {
-  if (entries === null) entries = [];
+  if (entries === null) entries = [...domainAuditSeed];
   return entries;
 }
 
@@ -58,7 +59,7 @@ export function subscribeToAuditStore(listener: Listener): () => void {
 }
 
 export function resetAuditForTest(): void {
-  entries = [];
+  entries = [...domainAuditSeed];
   notifyAudit();
 }
 

@@ -1,3 +1,4 @@
+// components/admin/ecommerce/ecommerce-analytics-charts.tsx
 "use client";
 
 import {
@@ -16,6 +17,7 @@ import type {
 } from "@/lib/admin/ecommerce/analytics-projection";
 import { ResellerDashboardChartCard } from "@/components/admin/resellers/reseller-dashboard-chart-card";
 import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import {
   ALL_SUBSCRIPTION_STATUSES,
   SUBSCRIPTION_STATUS_COLOR,
@@ -72,8 +74,8 @@ export function EcommerceAnalyticsCharts({
             <XAxis dataKey="label" {...AXIS_PROPS} />
             <YAxis allowDecimals={false} {...AXIS_PROPS} />
             <Tooltip
-              formatter={(value: number, _name: string, payload) => {
-                const point = payload?.payload as CohortPoint | undefined;
+              formatter={chartFormatter((value, _name, entry) => {
+                const point = entry.payload as CohortPoint | undefined;
                 const revenue = point
                   ? formatCurrency(point.lifetimeRevenue)
                   : "";
@@ -81,10 +83,10 @@ export function EcommerceAnalyticsCharts({
                   formatNumber(value) +
                     " merchant" +
                     (value === 1 ? "" : "s") +
-                    (revenue ? " · " + revenue + " lifetime" : ""),
+                    (revenue ? " \u00B7 " + revenue + " lifetime" : ""),
                   "Signups",
                 ];
-              }}
+              })}
             />
             <Bar
               dataKey="count"
@@ -128,12 +130,12 @@ export function EcommerceAnalyticsCharts({
               {...AXIS_PROPS}
             />
             <Tooltip
-              formatter={(value: number, name: string) => [
+              formatter={chartFormatter((value, name) => [
                 formatNumber(value) +
                   " merchant" +
                   (value === 1 ? "" : "s"),
                 name,
-              ]}
+              ])}
             />
             {ALL_SUBSCRIPTION_STATUSES.map((status) => (
               <Bar

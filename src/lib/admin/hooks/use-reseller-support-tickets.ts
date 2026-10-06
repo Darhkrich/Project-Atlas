@@ -1,9 +1,15 @@
 /* eslint-disable react-hooks/purity */
+/* eslint-disable react-hooks/exhaustive-deps */
+// lib/admin/hooks/use-reseller-support-tickets.ts
+//
+// Reseller-scoped support read. Joins the shared support store to the
+// reseller store so live business names resolve.
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useResellers } from "./use-resellers";
-import { mockSupportConversations } from "@/lib/admin/mock/support";
+import { mockSupportConversations } from "@/lib/admin/mock/support-base";
 import {
   getSupportOverlays,
   subscribeToSupportStore,
@@ -14,6 +20,7 @@ import {
   type SupportSummary,
 } from "@/lib/admin/resellers/support-projection";
 import type { SupportConversation } from "@/lib/admin/types/support";
+import { useNow } from "@/lib/admin/hooks/use-now";
 
 export interface UseResellerSupportTicketsResult {
   tickets: SupportConversation[];
@@ -24,6 +31,7 @@ export interface UseResellerSupportTicketsResult {
 export function useResellerSupportTickets(): UseResellerSupportTicketsResult {
   const { resellers, loading: resellersLoading } = useResellers();
   const [tick, setTick] = useState(0);
+  const now = useNow();
 
   useEffect(() => {
     const unsub = subscribeToSupportStore(() => setTick((x) => x + 1));
@@ -37,12 +45,12 @@ export function useResellerSupportTickets(): UseResellerSupportTicketsResult {
       overlays,
       resellers
     );
+    const summaryNow = now ?? Date.now();
     return {
       tickets,
-      summary: projectSupportSummary(tickets, Date.now()),
+      summary: projectSupportSummary(tickets, summaryNow),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, resellers]);
+  }, [tick, resellers, now]);
 
   return { ...value, loading: resellersLoading };
 }

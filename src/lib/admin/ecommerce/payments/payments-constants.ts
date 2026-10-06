@@ -4,6 +4,7 @@ export const DEFAULT_AUTO_APPROVE_CONFIG: AutoApproveConfig = {
   thresholdGHS: 5000,
   feeRatePercent: 0.5,
   dailyCap: 2,
+  refundAutoApproveThreshold: 5000,
   updatedAt: "2025-01-15T10:00:00.000Z",
   updatedBy: "system",
 };

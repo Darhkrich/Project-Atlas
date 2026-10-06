@@ -4,25 +4,25 @@ export const fashionModernThemeStyles: Record<
   MerchantStorefrontTheme,
   { heroBg: string; heroText: string; button: string; card: string }
 > = {
-  modern: {
+  airy: {
     heroBg: "bg-neutral-950",
     heroText: "text-white",
     button: "rounded-none uppercase tracking-wider",
     card: "rounded-none border border-neutral-200",
   },
-  classic: {
+  editorial: {
     heroBg: "bg-neutral-100",
     heroText: "text-neutral-950",
     button: "rounded-lg",
     card: "rounded-lg border border-neutral-200",
   },
-  minimal: {
+  studio: {
     heroBg: "bg-white",
     heroText: "text-neutral-950",
     button: "rounded-full",
     card: "rounded-none shadow-none border-0",
   },
-  bold: {
+  statement: {
     heroBg: "bg-neutral-950",
     heroText: "text-white",
     button: "rounded-none uppercase tracking-wider",

@@ -2,13 +2,17 @@
 // components/admin/support/merge-dialog.tsx
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ModalShell } from "@/components/admin/ui/model-shell";
 import { Button } from "@/components/admin/ui/button";
 import { Badge } from "@/components/admin/ui/badge";
 import { cn } from "@/lib/utils";
-import { useFocusTrap } from "@/lib/admin/hooks/use-focus-trap";
 import { formatAbsolute, formatRelative } from "@/lib/admin/support/format";
-import { statusLabel, statusVariant, userTypeLabel } from "@/lib/admin/support/constants";
+import {
+  statusLabel,
+  statusVariant,
+  userTypeLabel,
+} from "@/lib/admin/support/constants";
 import type { SupportConversation } from "@/lib/admin/types/support";
 
 interface MergeDialogProps {
@@ -26,10 +30,6 @@ export function MergeDialog({
   onCancel,
   onConfirm,
 }: MergeDialogProps) {
-  const trapRef = useFocusTrap<HTMLDivElement>(open, onCancel);
-  const titleId = useId();
-  const descriptionId = useId();
-
   const [primaryId, setPrimaryId] = useState<string>("");
 
   useEffect(() => {
@@ -53,41 +53,38 @@ export function MergeDialog({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      aria-describedby={descriptionId}
+    <ModalShell
+      open={open}
+      onClose={onCancel}
+      title={"Merge " + conversations.length + " conversations"}
+      description="Choose the conversation to keep. All messages and notes from the others will fold into it, and the others will close with a link to the primary."
+      size="lg"
+      footer={
+        <>
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            disabled={!primaryId}
+            onClick={() => primaryId && onConfirm(primaryId)}
+          >
+            Merge
+          </Button>
+        </>
+      }
     >
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onCancel}
-        aria-hidden="true"
-      />
-
-      <div
-        ref={trapRef}
-        className="relative w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900"
-      >
-        <h3 id={titleId} className="text-lg font-semibold">
-          Merge {conversations.length} conversations
-        </h3>
-        <p
-          id={descriptionId}
-          className="mt-1 text-sm text-neutral-600 dark:text-neutral-400"
-        >
-          Choose the conversation to keep. All messages and notes from the
-          others will fold into it, and the others will close with a link to
-          the primary.
-        </p>
-
-        <div className="mt-4">
+      <div className="space-y-4">
+        <div>
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Primary conversation
           </p>
 
-          <ul role="radiogroup" aria-label="Primary conversation" className="mt-2 space-y-2">
+          <ul
+            role="radiogroup"
+            aria-label="Primary conversation"
+            className="mt-2 space-y-2"
+          >
             {conversations.map((c) => {
               const isPrimary = primaryId === c.id;
               return (
@@ -123,12 +120,19 @@ export function MergeDialog({
                       <Badge variant="brand" size="sm">
                         {userTypeLabel[c.userType]}
                       </Badge>
-                      {isPrimary && <Badge variant="success" size="sm">Primary</Badge>}
+                      {isPrimary && (
+                        <Badge variant="success" size="sm">
+                          Primary
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
                       <span>{c.userName}</span>
-                      <span>{c.messages.length} message{c.messages.length === 1 ? "" : "s"}</span>
+                      <span>
+                        {c.messages.length} message
+                        {c.messages.length === 1 ? "" : "s"}
+                      </span>
                       {(c.internalNotes?.length ?? 0) > 0 && (
                         <span>
                           {c.internalNotes?.length} note
@@ -149,25 +153,13 @@ export function MergeDialog({
           </ul>
         </div>
 
-        <div className="mt-4 rounded-md bg-neutral-50 p-3 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
-          Result: <span className="font-medium">{totalMessages} messages</span>{" "}
-          in the primary conversation. The other{" "}
-          {conversations.length - 1} will be closed and point to the primary.
-        </div>
-
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            disabled={!primaryId}
-            onClick={() => primaryId && onConfirm(primaryId)}
-          >
-            Merge
-          </Button>
+        <div className="rounded-md bg-neutral-50 p-3 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
+          Result:{" "}
+          <span className="font-medium">{totalMessages} messages</span> in the
+          primary conversation. The other {conversations.length - 1} will be
+          closed and point to the primary.
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

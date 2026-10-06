@@ -40,6 +40,7 @@ export interface PlatformNotification {
   message: string;
   audience: NotificationAudience;
   targetSection: NotificationSection;
+  specificUserIds?: string[];
   channels: NotificationChannel[];
   scheduledFor?: string;
   sentChannels?: NotificationChannel[];
@@ -49,6 +50,7 @@ export interface PlatformNotification {
   createdById: string;
   createdByName: string;
   createdAt: string;
+  updatedAt?: string;
   estimatedRecipients: number;
   deliveryStats?: NotificationDeliveryStats;
   failedRecipientBreakdown?: FailedRecipientBreakdown[];

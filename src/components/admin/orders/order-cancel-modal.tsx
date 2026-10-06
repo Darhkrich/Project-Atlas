@@ -1,4 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/orders/order-cancel-modal.tsx
 "use client";
 
 import { useEffect, useId, useState } from "react";
@@ -41,16 +42,18 @@ export function OrderCancelModal({
     onConfirm(order.id, trimmed);
   };
 
+  const description = order.walletDebit
+    ? "This releases the wallet hold of " +
+      formatCurrency(order.walletDebit.amount) +
+      " and cannot be undone."
+    : "This cancels the order and cannot be undone.";
+
   return (
     <ModalShell
       open={order !== null}
       onClose={onClose}
       title="Cancel order"
-      description={
-        "This releases the wallet hold of " +
-        formatCurrency(order.walletDebit.amount) +
-        " and cannot be undone."
-      }
+      description={description}
     >
       <div className="space-y-4">
         <div className="rounded-lg bg-neutral-50 p-3 text-sm dark:bg-neutral-900">

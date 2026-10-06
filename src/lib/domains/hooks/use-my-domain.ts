@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addCustomDomain as addCustomDomainMutation,
   changeSubdomainSlug,
+  ensureDomainFor,
   getDomainFor,
   removeCustomDomain as removeCustomDomainMutation,
   setCustomDomainMethod,
@@ -30,25 +31,26 @@ export function useMyDomain(params: {
   storefrontId: string | undefined;
   ownerName: string;
   ownerEmail: string;
+  storefrontName?: string;
 }): UseMyDomainResult {
-  const { storefrontId, ownerName, ownerEmail } = params;
+  const { storefrontId, ownerName, ownerEmail, storefrontName } = params;
   const [tick, setTick] = useState(0);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = window.setTimeout(() => setLoading(false), 150);
     const unsub = subscribeToDomainStore(() => setTick((x) => x + 1));
-    return () => {
-      window.clearTimeout(t);
-      unsub();
-    };
+    return unsub;
   }, []);
 
-  const domain = useMemo(
-    () => (storefrontId ? getDomainFor(storefrontId) ?? null : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storefrontId, tick]
-  );
+  useEffect(() => {
+    if (!storefrontId) return;
+    ensureDomainFor(storefrontId, storefrontName);
+  }, [storefrontId, storefrontName]);
+
+  const domain = useMemo<StorefrontDomain | null>(() => {
+    if (!storefrontId) return null;
+    void tick;
+    return getDomainFor(storefrontId) ?? null;
+  }, [storefrontId, tick]);
 
   const actor: DomainActor = useMemo(
     () => ({
@@ -103,8 +105,8 @@ export function useMyDomain(params: {
 
   return {
     domain,
-    loading,
-    missing: !loading && !domain,
+    loading: false,
+    missing: !storefrontId,
     changeSlug,
     addCustomDomain,
     removeCustomDomain,

@@ -1,4 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/providers/provider-transactions.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -230,7 +231,7 @@ function FragmentRow({
 }: {
   tx: ProviderTransaction;
   expanded: boolean;
-  now: Date | null;
+  now: number | null;
   onToggle: () => void;
 }) {
   return (
@@ -285,7 +286,7 @@ function FragmentRow({
               : "text-danger-600"
           )}
         >
-          {tx.responseTime === 0 ? "—" : `${tx.responseTime}ms`}
+          {tx.responseTime === 0 ? "\u2014" : `${tx.responseTime}ms`}
         </td>
       </tr>
       {expanded && (

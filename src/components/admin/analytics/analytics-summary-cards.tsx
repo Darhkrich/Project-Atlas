@@ -2,7 +2,7 @@
 "use client";
 
 import { Card } from "@/components/admin/ui/card";
-import { AtlasIcon } from "@/components/atlas/icons";
+import { AtlasIcon, type AtlasIconName } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
 import { COMPARISON_LABEL } from "@/lib/admin/analytics/contants";
 import type { AnalyticsSummary, DateRangeKey } from "@/lib/admin/types/analytics";
@@ -18,7 +18,7 @@ interface CardConfig {
   key: string;
   label: string;
   value: string;
-  icon: string;
+  icon: AtlasIconName;
   color: string;
   bg: string;
   change: number;

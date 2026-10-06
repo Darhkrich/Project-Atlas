@@ -25,7 +25,6 @@ export interface BulkSelectionSummary {
 
 interface BulkActionsBarProps {
   summary: BulkSelectionSummary;
-  currentAdminId: string;
   currentAdminName: string;
   onAssign: (adminId: string) => void;
   onAssignToMe: () => void;
@@ -70,8 +69,17 @@ export function BulkActionsBar({
 
   const label = useMemo(() => {
     const noun = summary.count === 1 ? "conversation" : "conversations";
-    if (summary.unreadCount === 0) return `${summary.count} ${noun} selected`;
-    return `${summary.count} ${noun} selected · ${summary.unreadCount} unread`;
+    if (summary.unreadCount === 0) {
+      return summary.count + " " + noun + " selected";
+    }
+    return (
+      summary.count +
+      " " +
+      noun +
+      " selected \u00B7 " +
+      summary.unreadCount +
+      " unread"
+    );
   }, [summary]);
 
   const mergeEnabled = summary.count >= 2;
@@ -147,7 +155,7 @@ export function BulkActionsBar({
           </Button>
 
           <Button variant="outline" size="sm" onClick={onClose}>
-            Close
+            Close tickets
           </Button>
 
           <Button variant="ghost" size="sm" onClick={onClear}>

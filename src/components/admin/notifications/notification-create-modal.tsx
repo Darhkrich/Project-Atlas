@@ -233,6 +233,7 @@ export function NotificationCreateModal({
       createdByName: currentAdmin.name,
       createdAt: nowIso,
       estimatedRecipients: 1,
+      targetSection: "resellers"
     });
   };
 
@@ -297,7 +298,7 @@ export function NotificationCreateModal({
                       <div className="border-b border-neutral-200 p-2 dark:border-neutral-800">
                         <Input
                           aria-label="Search templates"
-                          placeholder="Search templates…"
+                          placeholder={"Search templates\u2026"}
                           className="h-8 text-xs"
                           value={templateSearch}
                           onChange={(e) => setTemplateSearch(e.target.value)}
@@ -354,7 +355,7 @@ export function NotificationCreateModal({
                   aria-invalid={validationError?.includes("message") ? true : undefined}
                 />
                 <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">
-                  {"{firstName}"} or {"{name]"} is replaced with the recipient's name at send time.
+                  {"{firstName}"} or {"{name}"} is replaced with the recipient's name at send time.
                 </span>
               </label>
 
@@ -450,6 +451,7 @@ export function NotificationCreateModal({
                           <span className="flex items-center gap-1.5 text-sm font-medium text-neutral-900 dark:text-neutral-100">
                             <AtlasIcon
                               name={CHANNEL_ICON[channel]}
+                              aria-hidden="true"
                               className="h-4 w-4"
                             />
                             {CHANNEL_LABEL[channel]}
@@ -574,6 +576,7 @@ export function NotificationCreateModal({
                     <Badge key={c} variant="brand" size="sm">
                       <AtlasIcon
                         name={CHANNEL_ICON[c]}
+                        aria-hidden="true"
                         className="mr-1 h-3 w-3"
                       />
                       {CHANNEL_LABEL[c]}

@@ -1,3 +1,4 @@
+// components/admin/providers/provider-performance.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -20,6 +21,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 
 interface ProviderPerformanceProps {
   provider: Provider;
@@ -154,7 +156,10 @@ export function ProviderPerformance({ provider }: ProviderPerformanceProps) {
                   }}
                 />
                 <Tooltip
-                  formatter={(v: number) => [formatNumber(v), "Transactions"]}
+                  formatter={chartFormatter((v) => [
+                    formatNumber(v),
+                    "Transactions",
+                  ])}
                 />
                 <Area
                   type="monotone"
@@ -195,7 +200,7 @@ export function ProviderPerformance({ provider }: ProviderPerformanceProps) {
                   }}
                 />
                 <Tooltip
-                  formatter={(v: number) => [`${v}ms`, "Latency"]}
+                  formatter={chartFormatter((v) => [v + "ms", "Latency"])}
                 />
                 <Area
                   type="monotone"

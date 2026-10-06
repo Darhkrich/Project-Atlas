@@ -2,6 +2,8 @@
 
 import type { NotificationChannel } from "./notification";
 
+export type { NotificationChannel } from "./notification";
+
 export type PlatformEnvironment = "development" | "staging" | "production";
 
 export type AtlasSection =

@@ -139,7 +139,7 @@ export function PaymentsLedgerTable({
       caption="Merchant payments ledger"
       pageSize={pageSize}
       currentPage={currentPage}
-      totalRows={totalRows}
+      totalCount={totalRows}
       onPageChange={onPageChange}
     />
   );

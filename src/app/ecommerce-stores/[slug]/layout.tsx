@@ -11,4 +11,4 @@ export default function StorefrontSlugLayout({
       <CustomerAuthProvider>{children}</CustomerAuthProvider>
     </CartProvider>
   );
-}
+} 

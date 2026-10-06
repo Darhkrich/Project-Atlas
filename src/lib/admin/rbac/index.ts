@@ -28,18 +28,16 @@ export {
   hasAllPermissions,
   diffPermissions,
   isPrivilegeEscalation,
-  pagesForPermissions,
-  pagesForRole,
-  ADMIN_PAGES,
   type RbacSubject,
   type PermissionDiff,
-  type AdminPageDefinition,
 } from "./access";
 
 export {
   CurrentAdminProvider,
   useCurrentAdmin,
   useCurrentAdminReady,
+  useSetCurrentAdminRole,
+  useResetCurrentAdminRole,
   type CurrentAdmin,
 } from "./context";
 

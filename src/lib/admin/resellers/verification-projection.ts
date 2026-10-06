@@ -1,5 +1,19 @@
+// lib/admin/resellers/verification-projection.ts
+
 import type { Reseller } from "@/lib/admin/types/reseller";
 import type { VerificationDocument } from "@/lib/admin/types/verification-document";
+
+export interface VerificationSlice {
+  id: string;
+  verificationStatus: Reseller["verificationStatus"];
+  lastVerifiedAt?: string;
+  verificationRejectionReason?: string;
+  verificationSubmittedAt?: string;
+}
+
+export interface VerificationSnapshot {
+  slices: Record<string, VerificationSlice>;
+}
 
 export interface QueueSummary {
   pending: number;

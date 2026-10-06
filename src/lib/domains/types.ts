@@ -2,6 +2,8 @@ export type DomainVerificationMethod = "cname" | "txt";
 
 export type DomainVerificationStatus = "pending" | "verified" | "failed";
 
+export type DomainPrimaryAddress = "subdomain" | "custom";
+
 export interface SubdomainRecord {
   slug: string;
   root: string;
@@ -25,6 +27,7 @@ export interface StorefrontDomain {
   storefrontId: string;
   subdomain: SubdomainRecord;
   customDomain?: CustomDomainRecord;
+  primaryAddress?: DomainPrimaryAddress;
   createdAt: string;
   updatedAt: string;
 }

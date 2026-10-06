@@ -81,7 +81,7 @@ export function SecurityEventsTable({
   };
 
   const sortIndicator = (key: SortKey) =>
-    sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+    sortKey === key ? (sortDir === "asc" ? " \u2191" : " \u2193") : "";
 
   return (
     <>
@@ -160,7 +160,8 @@ export function SecurityEventsTable({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <AtlasIcon
-                          name={EVENT_TYPE_ICON[event.type] ?? "alert-circle"}
+                          name={EVENT_TYPE_ICON[event.type] ?? "alert"}
+                          aria-hidden="true"
                           className="h-4 w-4 text-neutral-500 dark:text-neutral-400"
                         />
                         <span className="text-neutral-900 dark:text-neutral-100">
@@ -250,7 +251,7 @@ export function SecurityEventsTable({
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-between">
           <span className="text-xs text-neutral-500 dark:text-neutral-400">
-            Page {page} of {totalPages} · {events.length} events
+            Page {page} of {totalPages} \u00B7 {events.length} events
           </span>
           <div className="flex gap-1">
             <Button
@@ -274,4 +275,4 @@ export function SecurityEventsTable({
       )}
     </>
   );
-}
+}  

@@ -64,10 +64,6 @@ export function storefrontStateTone(state: StorefrontState): StatusTone {
   }
 }
 
-/**
- * Dot background classes. Uses the -500 shade across all tones so dots
- * read with equal visual weight against neutral backgrounds.
- */
 export const dotClassByTone: Record<StatusTone, string> = {
   success: "bg-success-500",
   warning: "bg-warning-500",
@@ -76,9 +72,6 @@ export const dotClassByTone: Record<StatusTone, string> = {
   neutral: "bg-neutral-400",
 };
 
-/**
- * Inline text classes for status values shown inside field lists.
- */
 export const textClassByTone: Record<StatusTone, string> = {
   success: "text-success-700 dark:text-success-300",
   warning: "text-warning-700 dark:text-warning-300",
@@ -88,7 +81,7 @@ export const textClassByTone: Record<StatusTone, string> = {
 };
 
 export interface EntitySummary {
-  dotClass: string;
+  tone: StatusTone;
   label: string;
 }
 
@@ -96,19 +89,30 @@ export function summarizeEntity(entity: LinkedEntity): EntitySummary {
   switch (entity.kind) {
     case "digital_transaction":
       return {
-        dotClass: dotClassByTone[digitalStatusTone(entity.status)],
-        label: `${entity.service} · GHS ${entity.amount}`,
+        tone: digitalStatusTone(entity.status),
+        label: entity.service + " \u00B7 GHS " + entity.amount,
       };
     case "reseller_order":
       return {
-        dotClass: dotClassByTone[payoutStateTone(entity.payoutState)],
-        label: `${entity.orderId} · GHS ${entity.commission} commission`,
+        tone: payoutStateTone(entity.payoutState),
+        label:
+          entity.orderId +
+          " \u00B7 GHS " +
+          entity.commission +
+          " commission",
       };
     case "merchant_account":
       return {
-        dotClass:
-          dotClassByTone[subscriptionStateTone(entity.subscriptionState)],
-        label: `${entity.merchantName} · ${entity.plan}`,
+        tone: subscriptionStateTone(entity.subscriptionState),
+        label: entity.merchantName + " \u00B7 " + entity.plan,
       };
+    case "merchant_storefront":
+      return { tone: "info", label: entity.label };
+    case "merchant_order":
+      return { tone: "info", label: entity.label };
+    case "merchant_subscription":
+      return { tone: "info", label: entity.label };
+    case "merchant_template":
+      return { tone: "neutral", label: entity.label };
   }
 }

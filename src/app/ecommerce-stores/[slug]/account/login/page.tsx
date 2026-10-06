@@ -1,9 +1,9 @@
 "use client";
 
 import { use } from "react";
-import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { StorefrontLayout } from "@/components/storefront/storefront-layout";
 import { CustomerLoginPage } from "@/components/storefront/customer-login-page";
+import { StoreNotFound } from "@/components/storefront/shared/store-not-found";
 import { storesWithProducts } from "@/lib/public-store";
 
 export default function LoginPage({
@@ -12,20 +12,15 @@ export default function LoginPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const { storefrontConfig } = useStorefrontConfig();
 
-  const store =
-    storefrontConfig.slug === slug
-      ? storefrontConfig
-      : storesWithProducts.find((s) => s.store.slug === slug)?.store;
-
-  if (!store) {
-    return <div>Store not found.</div>;
+  const entry = storesWithProducts.find((s) => s.store.slug === slug);
+  if (!entry) {
+    return <StoreNotFound variant="store" />;
   }
 
   return (
-    <StorefrontLayout store={store}>
-      <CustomerLoginPage store={store} />
+    <StorefrontLayout store={entry.store}>
+      <CustomerLoginPage store={entry.store} />
     </StorefrontLayout>
   );
 }

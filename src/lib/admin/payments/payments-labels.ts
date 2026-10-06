@@ -10,6 +10,7 @@ import type {
 } from "@/lib/admin/types/payment";
 
 type Variant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+type StatusVariant = Exclude<Variant, "brand">;
 
 export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   pending: "Pending",
@@ -19,7 +20,10 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   refunded: "Refunded",
 };
 
-export const PAYMENT_STATUS_VARIANT: Record<PaymentStatus, Variant> = {
+export const PAYMENT_STATUS_VARIANT: Record<
+  PaymentStatus,
+  StatusVariant
+> = {
   pending: "warning",
   processing: "info",
   successful: "success",
@@ -65,12 +69,14 @@ export const WALLET_CREDIT_STATUS_LABEL: Record<WalletCreditStatus, string> = {
   failed: "Wallet credit failed",
 };
 
-export const WALLET_CREDIT_STATUS_VARIANT: Record<WalletCreditStatus, Variant> =
-  {
-    credited: "success",
-    pending: "warning",
-    failed: "danger",
-  };
+export const WALLET_CREDIT_STATUS_VARIANT: Record<
+  WalletCreditStatus,
+  StatusVariant
+> = {
+  credited: "success",
+  pending: "warning",
+  failed: "danger",
+};
 
 export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
   none: "No refund",
@@ -80,7 +86,7 @@ export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
   failed: "Refund failed",
 };
 
-export const REFUND_STATUS_VARIANT: Record<RefundStatus, Variant> = {
+export const REFUND_STATUS_VARIANT: Record<RefundStatus, StatusVariant> = {
   none: "neutral",
   pending: "warning",
   partial: "info",

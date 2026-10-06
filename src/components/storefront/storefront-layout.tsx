@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { AtlasIcon } from "@/components/atlas/icons";
@@ -8,13 +8,12 @@ import { useCart } from "@/contexts/cart-context";
 import { useCustomerAuth } from "@/contexts/customer-auth-context";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
 
-export function StorefrontLayout({
-  store,
-  children,
-}: {
+interface StorefrontLayoutProps {
   store: MerchantStorefrontConfig;
-  children: React.ReactNode;
-}) {
+  children: ReactNode;
+}
+
+export function StorefrontLayout({ store, children }: StorefrontLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { totalItems } = useCart();
   const { isAuthenticated, setStoreSlug } = useCustomerAuth();
@@ -31,26 +30,37 @@ export function StorefrontLayout({
     { label: "Contact", href: `/ecommerce-stores/${slug}/contact` },
   ];
 
-  // ... rest of component remains same, but replace any `store.slug` in link hrefs with `slug`
+  const font = store.font ?? "atlas";
+  const radius = store.cornerRadius ?? "soft";
+  const isDark = Boolean(store.darkStorefront);
+  const gridCols = String(store.gridDensity ?? 3);
+
+  const rootStyle = {
+    "--atlas-grid-cols": gridCols,
+  } as CSSProperties;
+
   return (
-    <div className="min-h-screen bg-white text-neutral-950 overflow-x-hidden">
-      {/* Announcement bar */}
+    <div
+      data-font={font}
+      data-radius={radius}
+      data-dark={isDark ? "true" : "false"}
+      style={rootStyle}
+      className="atlas-storefront min-h-screen overflow-x-hidden"
+    >
       {store.showAnnouncement && store.announcement && (
         <div
-          className="px-3 py-2 text-center text-xs font-medium text-white"
+          className="atlas-storefront-announcement px-3 py-2 text-center text-xs font-medium text-white"
           style={{ backgroundColor: store.accentColor }}
         >
           {store.announcement}
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between px-3 sm:px-6 lg:px-8">
-          {/* Logo & store name */}
+      <header className="atlas-storefront-header sticky top-0 z-30 border-b backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-3 sm:h-16 sm:px-6 lg:px-8">
           <Link
             href={`/ecommerce-stores/${slug}`}
-            className="flex items-center gap-2 min-w-0"
+            className="flex min-w-0 items-center gap-2"
           >
             {store.logo ? (
               <Image
@@ -58,53 +68,50 @@ export function StorefrontLayout({
                 alt={store.storeName}
                 width={32}
                 height={32}
-                className="rounded-lg object-contain shrink-0"
+                className="shrink-0 rounded-lg object-contain"
               />
             ) : (
               <div
-                className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white sm:h-9 sm:w-9"
                 style={{ backgroundColor: store.primaryColor }}
               >
                 {store.storeName.charAt(0).toUpperCase()}
               </div>
             )}
-            <span className="text-base sm:text-lg font-bold tracking-tight truncate">
+            <span className="truncate text-base font-bold tracking-tight sm:text-lg">
               {store.storeName}
             </span>
           </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden lg:flex items-center gap-8">
+          <nav className="hidden items-center gap-8 lg:flex">
             {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
-                className="text-sm font-medium text-neutral-600 transition-colors hover:text-neutral-950"
+                className="atlas-storefront-nav-link text-sm font-medium"
               >
                 {item.label}
               </Link>
             ))}
           </nav>
 
-          {/* Actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Account */}
             <Link
               href={
                 isAuthenticated
                   ? `/ecommerce-stores/${slug}/account`
                   : `/ecommerce-stores/${slug}/account/login`
               }
-              className="rounded-lg p-2 text-neutral-700 hover:bg-neutral-100"
+              className="atlas-storefront-icon-button rounded-lg p-2"
               aria-label="Account"
             >
               <AtlasIcon name="user" className="h-5 w-5" />
             </Link>
 
-            {/* Cart */}
             <Link
               href={`/ecommerce-stores/${slug}/cart`}
-              className="relative rounded-lg p-2 text-neutral-700 hover:bg-neutral-100"
+              className="atlas-storefront-icon-button relative rounded-lg p-2"
+              aria-label="Cart"
             >
               <AtlasIcon name="cart" className="h-5 w-5" />
               {totalItems > 0 && (
@@ -117,11 +124,12 @@ export function StorefrontLayout({
               )}
             </Link>
 
-            {/* Mobile menu toggle */}
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-lg p-2 text-neutral-700 hover:bg-neutral-100 lg:hidden"
+              className="atlas-storefront-icon-button rounded-lg p-2 lg:hidden"
               aria-label="Menu"
+              aria-expanded={mobileMenuOpen}
             >
               <AtlasIcon
                 name={mobileMenuOpen ? "x-circle" : "menu"}
@@ -131,16 +139,15 @@ export function StorefrontLayout({
           </div>
         </div>
 
-        {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="border-t border-neutral-200 bg-white px-4 py-3 lg:hidden">
-            <nav className="flex flex-col gap-1 text-sm font-medium text-neutral-700">
+          <div className="atlas-storefront-mobile-menu border-t px-4 py-3 lg:hidden">
+            <nav className="flex flex-col gap-1 text-sm font-medium">
               {navItems.map((item) => (
                 <Link
                   key={item.label}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="py-2 border-b border-neutral-100 last:border-0"
+                  className="atlas-storefront-mobile-link border-b py-2 last:border-0"
                 >
                   {item.label}
                 </Link>
@@ -152,7 +159,7 @@ export function StorefrontLayout({
                     : `/ecommerce-stores/${slug}/account/login`
                 }
                 onClick={() => setMobileMenuOpen(false)}
-                className="py-2"
+                className="atlas-storefront-mobile-link py-2"
               >
                 {isAuthenticated ? "My Account" : "Sign In"}
               </Link>
@@ -163,7 +170,7 @@ export function StorefrontLayout({
 
       <main>{children}</main>
 
-      <footer className="bg-neutral-950 px-4 py-10 text-white sm:px-6 lg:px-8">
+      <footer className="atlas-storefront-footer px-4 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="flex items-center gap-2">
@@ -185,22 +192,80 @@ export function StorefrontLayout({
               )}
               <span className="font-semibold">{store.storeName}</span>
             </div>
-            <p className="mt-3 text-sm leading-6 text-neutral-400">{store.description}</p>
+            <p className="mt-3 text-sm leading-6">{store.description}</p>
           </div>
 
           <div>
             <p className="mb-3 text-sm font-semibold">Quick Links</p>
-            <ul className="space-y-2 text-sm text-neutral-400">
-              <li><Link href={`/ecommerce-stores/${slug}`} className="hover:text-white">Home</Link></li>
-              <li><Link href={`/ecommerce-stores/${slug}/products`} className="hover:text-white">Products</Link></li>
-              <li><Link href={`/ecommerce-stores/${slug}/about`} className="hover:text-white">About</Link></li>
-              <li><Link href={`/ecommerce-stores/${slug}/contact`} className="hover:text-white">Contact</Link></li>
+            <ul className="space-y-2 text-sm">
+              <li>
+                <Link
+                  href={`/ecommerce-stores/${slug}`}
+                  className="atlas-storefront-footer-link"
+                >
+                  Home
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/ecommerce-stores/${slug}/products`}
+                  className="atlas-storefront-footer-link"
+                >
+                  Products
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/ecommerce-stores/${slug}/about`}
+                  className="atlas-storefront-footer-link"
+                >
+                  About
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href={`/ecommerce-stores/${slug}/contact`}
+                  className="atlas-storefront-footer-link"
+                >
+                  Contact
+                </Link>
+              </li>
+              {store.returnsPolicy && store.returnsPolicy.trim().length > 0 && (
+                <li>
+                  <Link
+                    href={`/ecommerce-stores/${slug}/returns`}
+                    className="atlas-storefront-footer-link"
+                  >
+                    Returns
+                  </Link>
+                </li>
+              )}
+              {store.privacyPolicy && store.privacyPolicy.trim().length > 0 && (
+                <li>
+                  <Link
+                    href={`/ecommerce-stores/${slug}/privacy`}
+                    className="atlas-storefront-footer-link"
+                  >
+                    Privacy
+                  </Link>
+                </li>
+              )}
+              {store.termsPolicy && store.termsPolicy.trim().length > 0 && (
+                <li>
+                  <Link
+                    href={`/ecommerce-stores/${slug}/terms`}
+                    className="atlas-storefront-footer-link"
+                  >
+                    Terms
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 
           <div>
             <p className="mb-3 text-sm font-semibold">Contact</p>
-            <ul className="space-y-2 text-sm text-neutral-400">
+            <ul className="space-y-2 text-sm">
               {store.contactPhone && <li>{store.contactPhone}</li>}
               {store.contactEmail && <li>{store.contactEmail}</li>}
               {store.address && <li>{store.address}</li>}
@@ -211,17 +276,35 @@ export function StorefrontLayout({
             <p className="mb-3 text-sm font-semibold">Follow Us</p>
             <div className="flex gap-4">
               {store.socialLinks.facebook && (
-                <a href={store.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-white">
+                <a
+                  href={store.socialLinks.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="atlas-storefront-footer-link"
+                  aria-label="Facebook"
+                >
                   <AtlasIcon name="facebook" className="h-5 w-5" />
                 </a>
               )}
               {store.socialLinks.instagram && (
-                <a href={store.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-white">
+                <a
+                  href={store.socialLinks.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="atlas-storefront-footer-link"
+                  aria-label="Instagram"
+                >
                   <AtlasIcon name="instagram" className="h-5 w-5" />
                 </a>
               )}
               {store.socialLinks.tiktok && (
-                <a href={store.socialLinks.tiktok} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-white">
+                <a
+                  href={store.socialLinks.tiktok}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="atlas-storefront-footer-link"
+                  aria-label="TikTok"
+                >
                   <AtlasIcon name="tiktok" className="h-5 w-5" />
                 </a>
               )}
@@ -229,8 +312,10 @@ export function StorefrontLayout({
           </div>
         </div>
 
-        <div className="mt-8 border-t border-white/10 pt-6 text-center text-xs text-neutral-500">
-          © {new Date().getFullYear()} {store.storeName}. All rights reserved. Powered by Atlas.
+        <div className="atlas-storefront-footer-meta mt-8 border-t pt-6 text-center text-xs">
+          {"\u00A9 "}
+          {new Date().getFullYear()} {store.storeName}. All rights reserved.
+          Powered by Atlas.
         </div>
       </footer>
     </div>

@@ -1,3 +1,5 @@
+// lib/admin/payments/payments-constants.ts
+
 import type { PaymentStatus } from "@/lib/admin/types/payment";
 import type { PaymentSource } from "@/lib/admin/types/payment";
 import type { PaymentMethodId } from "@/lib/admin/types/payment";
@@ -6,7 +8,13 @@ export const PAYMENTS_PAGE_SIZE = 20;
 
 export const PAYMENTS_VIEWS_STORAGE_KEY = "atlas-payments-views-v1";
 
-export type PaymentsSortKey = "newest" | "oldest" | "amount_largest" | "amount_smallest";
+export type PaymentsTabKey = "ledger" | "wallets";
+
+export type PaymentsSortKey =
+  | "newest"
+  | "oldest"
+  | "amount_largest"
+  | "amount_smallest";
 
 export const PAYMENTS_SORT_LABELS: Record<PaymentsSortKey, string> = {
   newest: "Newest first",

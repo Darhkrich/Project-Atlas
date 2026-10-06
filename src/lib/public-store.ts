@@ -16,12 +16,10 @@ export const storesWithProducts: StoreWithProducts[] = [
       primaryColor: "#14532d",
       accentColor: "#c89c1e",
       tagline: "Natural beauty, radiant you.",
-      description:
-        "We offer high-quality natural beauty products that make you look and feel your best.",
+      description: "We offer high-quality natural beauty products that make you look and feel your best.",
       heroTitle: "Discover Your Natural Glow",
-      heroDescription:
-        "Shop our curated collection of organic skincare, cosmetics, and wellness essentials.",
-      theme: "modern",
+      heroDescription: "Shop our curated collection of organic skincare, cosmetics, and wellness essentials.",
+      theme: "airy",
       templateId: "tpl-cosmetics-luxe",
       templateCategory: "cosmetics",
       announcement: "Free shipping on orders over GH₵ 200!",
@@ -40,6 +38,7 @@ export const storesWithProducts: StoreWithProducts[] = [
       showFeaturedProducts: true,
       status: "live",
       paymentMethodIds: ["momo", "card"],
+      storefrontId: ""
     },
     products: [
       {
@@ -148,12 +147,10 @@ export const storesWithProducts: StoreWithProducts[] = [
       primaryColor: "#0f172a",
       accentColor: "#f59e0b",
       tagline: "Style that speaks.",
-      description:
-        "Trendy fashion for every occasion. Quality fabrics, timeless designs.",
+      description: "Trendy fashion for every occasion. Quality fabrics, timeless designs.",
       heroTitle: "New Season, New You",
-      heroDescription:
-        "Discover the latest styles in clothing and accessories.",
-      theme: "modern",
+      heroDescription: "Discover the latest styles in clothing and accessories.",
+      theme: "airy",
       templateId: "tpl-fashion-modern",
       templateCategory: "clothing",
       announcement: "Free returns within 14 days",
@@ -172,6 +169,7 @@ export const storesWithProducts: StoreWithProducts[] = [
       showFeaturedProducts: true,
       status: "live",
       paymentMethodIds: ["momo", "card"],
+      storefrontId: ""
     },
     products: [
       {

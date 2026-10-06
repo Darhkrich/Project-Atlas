@@ -1,4 +1,6 @@
-import type { Order } from "@/lib/admin/types/orders";
+// lib/admin/orders/orders-helpers.ts
+
+import type { Order, OrderWalletOwner } from "@/lib/admin/types/orders";
 
 export function isSameUtcDay(isoA: string, isoB: string): boolean {
   const a = new Date(isoA);
@@ -43,7 +45,7 @@ export function orderDetailQuery(orderId: string): string {
   return "?order=" + encodeURIComponent(orderId);
 }
 
-export function walletOwnerLabel(owner: Order["walletDebit"]["walletOwner"]): string {
+export function walletOwnerLabel(owner: OrderWalletOwner): string {
   if (owner === "customer") return "Atlas customer wallet";
   if (owner === "reseller") return "Reseller commission wallet";
   return "Storefront user wallet";

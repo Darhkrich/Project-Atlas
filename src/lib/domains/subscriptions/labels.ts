@@ -54,11 +54,14 @@ export const PAYMENT_METHOD_LABEL: Record<StorefrontPaymentMethod, string> = {
   wallet: "Atlas Wallet",
 };
 
+// Theme labels live in lib/merchant/storefront/themes via themeLabel(id).
+// This map is retained only for consumers that render a label from the
+// union without importing the theme module. Values must match themeLabel.
 export const THEME_LABEL: Record<StorefrontTheme, string> = {
-  minimal: "Minimal",
-  classic: "Classic",
-  modern: "Modern",
-  bold: "Bold",
+  airy: "Airy",
+  editorial: "Editorial",
+  studio: "Studio",
+  statement: "Statement",
 };
 
 export const DOMAIN_SUBDOMAIN_LABEL = "Atlas subdomain";

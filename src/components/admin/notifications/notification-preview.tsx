@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AtlasIcon } from "@/components/atlas/icons";
 import {
+  CHANNEL_ICON,
   CHANNEL_LABEL,
 } from "@/lib/admin/notifications/constants";
 import {
@@ -79,7 +80,11 @@ export function NotificationPreview({
                   : "text-neutral-500 hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
               )}
             >
-              <AtlasIcon name={channelIcon(channel)} className="h-3.5 w-3.5" />
+              <AtlasIcon
+                name={CHANNEL_ICON[channel]}
+                aria-hidden="true"
+                className="h-3.5 w-3.5"
+              />
               {CHANNEL_LABEL[channel]}
             </button>
           );
@@ -112,7 +117,7 @@ export function NotificationPreview({
               <p className="whitespace-pre-wrap">{preview.data.body || "(empty message)"}</p>
             </div>
             <p className="mt-1 text-[10px] text-neutral-500 dark:text-neutral-400">
-              {preview.data.sender} · {preview.data.charCount} characters · {preview.data.segments} segment
+              {preview.data.sender} \u00B7 {preview.data.charCount} characters \u00B7 {preview.data.segments} segment
               {preview.data.segments === 1 ? "" : "s"}
             </p>
             {preview.data.segments > 1 && (
@@ -127,11 +132,11 @@ export function NotificationPreview({
           <div className="mx-auto max-w-xs rounded-xl bg-white p-3 shadow-sm dark:bg-neutral-800">
             <div className="flex items-start gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
-                <AtlasIcon name="bell" className="h-4 w-4" />
+                <AtlasIcon name="bell" aria-hidden="true" className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                  {preview.data.appName} · now
+                  {preview.data.appName} \u00B7 now
                 </p>
                 <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                   {preview.data.title || "(no title)"}
@@ -148,7 +153,7 @@ export function NotificationPreview({
           <div className="mx-auto max-w-xs rounded-lg border border-neutral-200 bg-white p-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-800">
             <div className="flex items-start gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200">
-                <AtlasIcon name="bell" className="h-4 w-4" />
+                <AtlasIcon name="bell" aria-hidden="true" className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -168,18 +173,4 @@ export function NotificationPreview({
       </p>
     </div>
   );
-}
-
-function channelIcon(channel: NotificationChannel): string {
-  switch (channel) {
-    case "email":
-      return "mail";
-    case "sms":
-      return "message-square";
-    case "push":
-      return "smartphone";
-    case "in_app":
-    default:
-      return "bell";
-  }
 }

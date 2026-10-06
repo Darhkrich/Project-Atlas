@@ -2,15 +2,20 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { Button } from "@/components/atlas/button";
 import { AtlasCard } from "@/components/atlas/card";
 import { subscriptionPlans, getPlanByCode } from "@/config/subscription-plans";
+import { derivePlanDisplayPrices } from "@/lib/domains/subscriptions";
 import { useSubscription } from "@/contexts/subscription-context";
 import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { PaymentFlowModal } from "@/components/payments/PaymentFlowModal";
 import { allPaymentMethods } from "@/lib/payment-methods";
+
+function priceValueOf(plan: ReturnType<typeof getPlanByCode>, cycle: "monthly" | "annual"): number {
+  const raw = cycle === "monthly" ? plan.monthlyPriceGHS : plan.annualPriceGHS;
+  return typeof raw === "number" ? raw : 0;
+}
 
 export default function MerchantBillingPage() {
   const {
@@ -25,7 +30,10 @@ export default function MerchantBillingPage() {
   } = useSubscription();
   const { updateStorefrontConfig } = useStorefrontConfig();
   const plan = getPlanByCode(currentPlan);
-  const [selectedPlan, setSelectedPlan] = useState(currentPlan);
+  const planPrices = derivePlanDisplayPrices(plan);
+  const currentCyclePrice =
+    billingCycle === "monthly" ? planPrices.monthly : planPrices.annual;
+  const [selectedPlan, setSelectedPlan] = useState<string>(currentPlan);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [salesContactOpen, setSalesContactOpen] = useState(false);
@@ -40,26 +48,31 @@ export default function MerchantBillingPage() {
     const oldPlan = getPlanByCode(currentPlan);
     const newPlan = getPlanByCode(selectedPlan);
 
-    const oldPrice = parseFloat(
-      (billingCycle === "monthly" ? oldPlan.monthlyPrice : oldPlan.annualPrice).replace(/[^0-9.]/g, "")
-    );
-    const newPrice = parseFloat(
-      (billingCycle === "monthly" ? newPlan.monthlyPrice : newPlan.annualPrice).replace(/[^0-9.]/g, "")
-    );
+    const oldPrice = priceValueOf(oldPlan, billingCycle);
+    const newPrice = priceValueOf(newPlan, billingCycle);
 
     const now = Date.now();
     const remainingMs = Math.max(0, subscriptionEndDate - now);
     const totalDurationMs = subscriptionEndDate - subscriptionStartDate;
-    const remainingFraction = totalDurationMs > 0 ? remainingMs / totalDurationMs : 1;
+    const remainingFraction =
+      totalDurationMs > 0 ? remainingMs / totalDurationMs : 1;
 
     const priceDifference = Math.max(0, newPrice - oldPrice);
     return priceDifference * remainingFraction;
-  }, [selectedPlan, currentPlan, billingCycle, subscriptionStartDate, subscriptionEndDate]);
+  }, [
+    selectedPlan,
+    currentPlan,
+    billingCycle,
+    subscriptionStartDate,
+    subscriptionEndDate,
+  ]);
 
-  const remainingDays = Math.ceil((subscriptionEndDate - Date.now()) / (24 * 60 * 60 * 1000));
+  const remainingDays = Math.ceil(
+    (subscriptionEndDate - Date.now()) / (24 * 60 * 60 * 1000)
+  );
 
   const handlePlanSelect = (planCode: string) => {
-    setSelectedPlan(planCode as "starter" | "growth" | "pro" | "enterprise");
+    setSelectedPlan(planCode);
     if (planCode === currentPlan) {
       setUpgradeModalOpen(false);
       return;
@@ -103,8 +116,7 @@ export default function MerchantBillingPage() {
               {plan.name}
             </p>
             <p className="mt-1 text-sm text-neutral-500">
-              {billingCycle === "monthly" ? plan.monthlyPrice : plan.annualPrice} /{" "}
-              {billingCycle}
+              {currentCyclePrice} / {billingCycle}
             </p>
             <p className="text-xs text-neutral-500">
               Next billing date:{" "}
@@ -177,7 +189,12 @@ export default function MerchantBillingPage() {
         {subscriptionPlans.map((p) => {
           const isSelected = selectedPlan === p.code;
           const isCurrent = p.code === currentPlan;
-          const price = billingCycle === "monthly" ? p.monthlyPrice : p.annualPrice;
+          const prices = derivePlanDisplayPrices(p);
+          const price = billingCycle === "monthly" ? prices.monthly : prices.annual;
+          const productsLabel =
+            p.maxProducts === "unlimited"
+              ? "Unlimited products"
+              : "Up to " + p.maxProducts + " products";
 
           return (
             <div
@@ -188,7 +205,7 @@ export default function MerchantBillingPage() {
                   : "border-neutral-200 bg-white hover:border-neutral-300 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
               }`}
             >
-              {p.code === "pro" && (
+              {p.highlighted && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
                   Most Popular
                 </span>
@@ -197,7 +214,9 @@ export default function MerchantBillingPage() {
               <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                 {p.name}
               </h3>
-              <p className="mt-1 text-sm text-neutral-500">{p.supportLevel}</p>
+              {p.description && (
+                <p className="mt-1 text-sm text-neutral-500">{p.description}</p>
+              )}
               <div className="mt-4">
                 <p className="text-3xl font-bold text-neutral-900 dark:text-neutral-100">
                   {price}
@@ -210,7 +229,7 @@ export default function MerchantBillingPage() {
               <ul className="mt-5 space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
                 <li className="flex items-start gap-2">
                   <AtlasIcon name="check" className="mt-0.5 h-4 w-4 text-brand-600" />
-                  {p.maxProducts === Infinity ? "Unlimited products" : `Up to ${p.maxProducts} products`}
+                  {productsLabel}
                 </li>
                 <li className="flex items-start gap-2">
                   <AtlasIcon name="check" className="mt-0.5 h-4 w-4 text-brand-600" />
@@ -218,7 +237,8 @@ export default function MerchantBillingPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <AtlasIcon name="check" className="mt-0.5 h-4 w-4 text-brand-600" />
-                  {p.paymentMethods.length} payment method{p.paymentMethods.length !== 1 ? "s" : ""}
+                  {p.paymentMethods.length} payment method
+                  {p.paymentMethods.length !== 1 ? "s" : ""}
                 </li>
                 <li className="flex items-start gap-2">
                   <AtlasIcon name="check" className="mt-0.5 h-4 w-4 text-brand-600" />
@@ -251,10 +271,30 @@ export default function MerchantBillingPage() {
         <div className="mt-4 flex flex-wrap gap-4">
           {plan.paymentMethods.map((methodId) => {
             const methodName =
-              methodId === "momo" ? "Mobile Money" : methodId === "card" ? "Card" : methodId === "bank" ? "Bank Transfer" : methodId;
+              methodId === "momo"
+                ? "Mobile Money"
+                : methodId === "card"
+                ? "Card"
+                : methodId === "bank"
+                ? "Bank Transfer"
+                : methodId;
             return (
-              <div key={methodId} className="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300">
-                <AtlasIcon name={methodId === "momo" ? "mobile" : methodId === "card" ? "card" : methodId === "bank" ? "bank" : "wallet"} className="h-4 w-4 text-neutral-500" />
+              <div
+                key={methodId}
+                className="flex items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-700 dark:border-neutral-700 dark:text-neutral-300"
+              >
+                <AtlasIcon
+                  name={
+                    methodId === "momo"
+                      ? "mobile"
+                      : methodId === "card"
+                      ? "card"
+                      : methodId === "bank"
+                      ? "bank"
+                      : "wallet"
+                  }
+                  className="h-4 w-4 text-neutral-500"
+                />
                 {methodName}
               </div>
             );
@@ -262,40 +302,48 @@ export default function MerchantBillingPage() {
         </div>
       </div>
 
-      {upgradeModalOpen && selectedPlan !== currentPlan && selectedPlan !== "enterprise" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setUpgradeModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
-                <AtlasIcon name="info" className="h-5 w-5" />
+      {upgradeModalOpen &&
+        selectedPlan !== currentPlan &&
+        selectedPlan !== "enterprise" && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setUpgradeModalOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
+                  <AtlasIcon name="info" className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                    Upgrade to {getPlanByCode(selectedPlan).name}
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                    You have {remainingDays} days remaining in your current{" "}
+                    {plan.name} plan. You will be charged a prorated amount of{" "}
+                    <span className="font-bold">
+                      GH\u20B5 {proratedAmount.toFixed(2)}
+                    </span>{" "}
+                    now. After payment, your new plan will be active
+                    immediately, and your billing cycle will reset.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-                  Upgrade to {getPlanByCode(selectedPlan).name}
-                </h3>
-                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  You have {remainingDays} days remaining in your current {plan.name} plan.
-                  You will be charged a prorated amount of{" "}
-                  <span className="font-bold">GH₵ {proratedAmount.toFixed(2)}</span> now.
-                  After payment, your new plan will be active immediately, and your billing cycle will reset.
-                </p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  onClick={() => setUpgradeModalOpen(false)}
+                  className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                >
+                  Cancel
+                </button>
+                <Button onClick={handleConfirmUpgrade}>
+                  Pay GH\u20B5 {proratedAmount.toFixed(2)}
+                </Button>
               </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setUpgradeModalOpen(false)}
-                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-              >
-                Cancel
-              </button>
-              <Button onClick={handleConfirmUpgrade}>
-                Pay GH₵ {proratedAmount.toFixed(2)}
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       <PaymentFlowModal
         open={paymentOpen}
@@ -311,7 +359,10 @@ export default function MerchantBillingPage() {
 
       {salesContactOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSalesContactOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSalesContactOpen(false)}
+          />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
@@ -322,7 +373,8 @@ export default function MerchantBillingPage() {
                   Enterprise Plan
                 </h3>
                 <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  Our Enterprise plan is customized to your business needs. Please contact our sales team for a personalized quote.
+                  Our Enterprise plan is customized to your business needs.
+                  Please contact our sales team for a personalized quote.
                 </p>
                 <div className="mt-4 flex gap-3">
                   <a

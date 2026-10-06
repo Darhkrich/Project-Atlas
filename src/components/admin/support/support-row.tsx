@@ -6,6 +6,7 @@ import { StatusDot } from "@/components/admin/ui/status-dot";
 import { SlaIndicator } from "@/components/admin/ui/sla-indicator";
 import { cn } from "@/lib/utils";
 import {
+  MIDDOT,
   priorityLabel,
   priorityVariant,
   statusLabel,
@@ -21,6 +22,7 @@ interface SupportRowProps {
   selected: boolean;
   focused: boolean;
   now: number | null;
+  selectable?: boolean;
   onToggleSelect: (id: string) => void;
   onOpen: (id: string) => void;
   onFocus: (id: string) => void;
@@ -31,6 +33,7 @@ export function SupportRow({
   selected,
   focused,
   now,
+  selectable = true,
   onToggleSelect,
   onOpen,
   onFocus,
@@ -50,15 +53,17 @@ export function SupportRow({
         focused && !selected && "ring-1 ring-brand-300 dark:ring-brand-800"
       )}
     >
-      <div className="flex items-center">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(c.id)}
-          className="h-4 w-4 shrink-0"
-          aria-label={`Select conversation: ${c.subject}`}
-        />
-      </div>
+      {selectable && (
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(c.id)}
+            className="h-4 w-4 shrink-0"
+            aria-label={"Select conversation: " + c.subject}
+          />
+        </div>
+      )}
 
       <button
         type="button"
@@ -82,21 +87,19 @@ export function SupportRow({
             <Badge variant="brand" size="sm">
               {userTypeLabel[c.userType]}
             </Badge>
-            {c.ticketRef && (
-              <span className="truncate text-neutral-400 dark:text-neutral-500">
-                {c.ticketRef}
-              </span>
-            )}
+            <span className="truncate font-mono text-neutral-400 dark:text-neutral-500">
+              {c.id}
+            </span>
           </div>
 
           <div className="flex min-w-0 items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
             {summary && (
               <>
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <StatusDot tone={toneFromDot(summary.dotClass)} size="sm" />
+                  <StatusDot tone={summary.tone} size="sm" />
                   <span className="truncate">{summary.label}</span>
                 </span>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true">{MIDDOT}</span>
               </>
             )}
             <time
@@ -132,14 +135,4 @@ export function SupportRow({
       </button>
     </li>
   );
-}
-
-function toneFromDot(
-  dotClass: string
-): "success" | "warning" | "danger" | "info" | "neutral" {
-  if (dotClass.includes("success")) return "success";
-  if (dotClass.includes("warning")) return "warning";
-  if (dotClass.includes("danger")) return "danger";
-  if (dotClass.includes("info")) return "info";
-  return "neutral";
 }

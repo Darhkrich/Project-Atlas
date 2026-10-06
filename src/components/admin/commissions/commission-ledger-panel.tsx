@@ -244,8 +244,8 @@ export function CommissionLedgerPanel({
     });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
 
   const columns = useMemo<Column<CommissionRow>[]>(() => {

@@ -17,7 +17,10 @@ import { useAuth } from "@/contexts/auth-context";
 
 interface StorefrontConfigContextType {
   storefrontConfig: MerchantStorefrontConfig;
-  updateStorefrontConfig: (updates: Partial<MerchantStorefrontConfig>) => void;
+  updateStorefrontConfig: (
+    updates: Partial<MerchantStorefrontConfig>,
+    ownerEmail?: string
+  ) => void;
 }
 
 const StorefrontConfigContext = createContext<
@@ -35,18 +38,18 @@ export function StorefrontConfigProvider({ children }: { children: ReactNode }) 
     useState<MerchantStorefrontConfig>(defaultMerchantStorefront);
   const [loaded, setLoaded] = useState(false);
 
-  // Load all configs from storage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = window.localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         setAllConfigs(JSON.parse(stored));
-      } catch {}
+      } catch {
+        window.localStorage.removeItem(STORAGE_KEY);
+      }
     }
     setLoaded(true);
   }, []);
 
-  // When user changes, set current config from that user's saved config
   useEffect(() => {
     if (!user) {
       setCurrentConfig(defaultMerchantStorefront);
@@ -60,22 +63,26 @@ export function StorefrontConfigProvider({ children }: { children: ReactNode }) 
     }
   }, [user, allConfigs]);
 
-  // Persist all configs whenever they change
   useEffect(() => {
     if (loaded) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allConfigs));
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(allConfigs));
+      } catch {
+        // Quota exceeded. Config stays in memory.
+      }
     }
   }, [allConfigs, loaded]);
 
-  const updateStorefrontConfig = (updates: Partial<MerchantStorefrontConfig>) => {
-    if (!user) return;
+  const updateStorefrontConfig = (
+    updates: Partial<MerchantStorefrontConfig>,
+    ownerEmail?: string
+  ) => {
+    const key = ownerEmail ?? user?.email;
+    if (!key) return;
     setAllConfigs((prev) => {
-      const existing = prev[user.email] || defaultMerchantStorefront;
+      const existing = prev[key] || defaultMerchantStorefront;
       const updated = normalizeMerchantStorefront({ ...existing, ...updates });
-      return {
-        ...prev,
-        [user.email]: updated,
-      };
+      return { ...prev, [key]: updated };
     });
     setCurrentConfig((prev) =>
       normalizeMerchantStorefront({ ...prev, ...updates })

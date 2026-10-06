@@ -1,11 +1,12 @@
+// components/admin/payments/payments-tabs.tsx
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { TabKey } from "@/lib/admin/payments/payments-constants";
+import type { PaymentsTabKey } from "@/lib/admin/payments/payments-constants";
 
 interface Props {
-  value: TabKey;
-  onChange: (tab: TabKey) => void;
+  value: PaymentsTabKey;
+  onChange: (tab: PaymentsTabKey) => void;
   walletPendingCount: number;
 }
 

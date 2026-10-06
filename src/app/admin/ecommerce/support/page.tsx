@@ -1,40 +1,49 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-// app/admin/ecommerce/support/page.tsx
+// src/app/admin/ecommerce/support/page.tsx
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { Input } from "@/components/admin/ui/input";
 import { AtlasIcon } from "@/components/atlas/icons";
-import { SupportSummaryCards } from "@/components/admin/ecommerce/support-summary-cards";
-import { SupportTicketRow } from "@/components/admin/ecommerce/support-ticket-row";
-import { SupportTicketDetailDrawer } from "@/components/admin/ecommerce/support-ticket-detail-drawer";
 import { Can, PERMISSIONS, useCurrentAdmin } from "@/lib/admin/rbac";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
-import { useEcommerceSupportTickets } from "@/lib/admin/hooks/use-ecommerce-support-tickets";
+import { useNow } from "@/lib/admin/hooks/use-now";
+import { useSupport } from "@/lib/admin/hooks/use-support";
+import { SupportRow } from "@/components/admin/support/support-row";
+import { SupportDetailDrawer } from "@/components/admin/support/support-detail-drawer";
 import {
+  SupportSummaryCards,
+  type SupportSummaryFilterView,
+} from "@/components/admin/support/support-summary-cards";
+import {
+  addInternalNote,
   assignTicket,
-  appendInternalNote,
-  respondToTicket,
-  setTicketPriority,
-  setTicketStatus,
+  changeTicketPriority,
+  changeTicketStatus,
+  sendTicketReply,
   unassignTicket,
-} from "@/lib/admin/mock/ecommerce-support-mutations";
-import {
-  ECOMMERCE_SUPPORT_FILTER_DEFAULTS,
-  merchantPath,
-} from "@/lib/admin/ecommerce/support/support-constants.ts";
+  type SupportActor,
+} from "@/lib/admin/support/support-mutations";
+import { MIDDOT } from "@/lib/admin/support/constants";
+import { findAdminById } from "@/lib/admin/mock/admin-users";
 import {
   isLive,
-  paginate,
+  projectSupportDeltas,
+  projectSupportSummaryData,
   slaState,
-  sortTickets,
-} from "@/lib/admin/ecommerce/support/support-projection";
+} from "@/lib/admin/support/support-projection";
 import {
   SUPPORT_CATEGORIES,
   SUPPORT_PRIORITIES,
@@ -43,24 +52,41 @@ import {
   priorityLabel,
   statusLabel,
 } from "@/lib/admin/support/constants";
-import type { EcommerceSupportActor } from "@/lib/admin/types/ecommerce-support";
 import type {
+  SupportConversation,
   SupportPriority,
   SupportStatus,
 } from "@/lib/admin/types/support";
-import { useNow } from "@/lib/shared/hooks/use-now";
 import { cn } from "@/lib/utils";
 
-type View = "all" | "open" | "pending" | "sla-risk";
+type View = SupportSummaryFilterView;
 
-interface Filters {
+interface Filters extends Record<string, string> {
   q: string;
   status: string;
   priority: string;
   category: string;
   assignee: string;
   view: string;
-  page: string;
+}
+
+const FILTER_DEFAULTS: Filters = {
+  q: "",
+  status: "",
+  priority: "",
+  category: "",
+  assignee: "",
+  view: "all",
+};
+
+const SYSTEM_ACTOR: SupportActor = {
+  id: "system",
+  name: "System",
+  email: "system@atlas.com",
+};
+
+function merchantPath(merchantId: string): string {
+  return "/admin/ecommerce/merchants/" + merchantId;
 }
 
 interface Toast {
@@ -104,16 +130,31 @@ function EcommerceSupportPageInner() {
   const router = useRouter();
   const admin = useCurrentAdmin();
   const now = useNow();
-  const { tickets, summary, deltas } = useEcommerceSupportTickets();
+  const { conversations } = useSupport();
+
+  const actor: SupportActor = useMemo(() => {
+    if (!admin) return SYSTEM_ACTOR;
+    return {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    };
+  }, [admin]);
+
+  const merchantConversations = useMemo(
+    () => conversations.filter((c) => c.userType === "merchant"),
+    [conversations]
+  );
 
   const { filters, setFilters, clearFilters, hasActive } =
-    useUrlFilters<Filters>(ECOMMERCE_SUPPORT_FILTER_DEFAULTS as Filters);
+    useUrlFilters<Filters>(FILTER_DEFAULTS);
 
   const debouncedSearch = useDebouncedValue(filters.q, 300);
 
   const [openTicketId, setOpenTicketId] = useState<string | null>(null);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -125,49 +166,52 @@ function EcommerceSupportPageInner() {
     setToast({ kind, text });
   };
 
-  const adminActor: EcommerceSupportActor | null = useMemo(() => {
-    if (!admin) return null;
-    return { id: admin.id, name: admin.name, email: admin.email };
-  }, [admin]);
-
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
-    return tickets.filter((t) => {
+    return merchantConversations.filter((t) => {
       if (q) {
-        const hay = t.subject + " " + t.merchantName + " " + t.id;
+        const hay = t.subject + " " + t.userName + " " + t.id;
         if (!hay.toLowerCase().includes(q)) return false;
       }
       if (filters.status && t.status !== filters.status) return false;
       if (filters.priority && t.priority !== filters.priority) return false;
       if (filters.category && t.category !== filters.category) return false;
-      if (filters.assignee === "unassigned" && t.assignedToId) return false;
-      if (filters.assignee === "me" && (!admin || t.assignedToId !== admin.id))
+      if (filters.assignee === "unassigned" && t.assigneeId) return false;
+      if (filters.assignee === "me" && (!admin || t.assigneeId !== admin.id))
         return false;
       if (filters.view === "open" && t.status !== "open") return false;
       if (filters.view === "pending" && t.status !== "pending") return false;
       if (filters.view === "sla-risk") {
         if (!isLive(t.status)) return false;
+        if (now === null) return false;
         const state = slaState(t.slaDueAt, now);
         if (state !== "at_risk" && state !== "breached") return false;
       }
       return true;
     });
-  }, [tickets, debouncedSearch, filters, admin, now]);
+  }, [merchantConversations, debouncedSearch, filters, admin, now]);
 
   const sorted = useMemo(
-    () => sortTickets(filtered, "updatedAt", "desc"),
+    () =>
+      [...filtered].sort((a, b) => {
+        const aT = new Date(a.updatedAt ?? a.lastMessageAt).getTime();
+        const bT = new Date(b.updatedAt ?? b.lastMessageAt).getTime();
+        if (aT !== bT) return bT - aT;
+        return a.id.localeCompare(b.id);
+      }),
     [filtered]
   );
 
-  const pageNumber = Number.parseInt(filters.page, 10) || 1;
-  const pagination = useMemo(
-    () => paginate(sorted, pageNumber),
-    [sorted, pageNumber]
+  const visibleIds = useMemo(() => sorted.map((t) => t.id), [sorted]);
+
+  const summary = useMemo(
+    () => projectSupportSummaryData(merchantConversations, now),
+    [merchantConversations, now]
   );
 
-  const visibleIds = useMemo(
-    () => pagination.slice.map((t) => t.id),
-    [pagination.slice]
+  const deltas = useMemo(
+    () => projectSupportDeltas(merchantConversations, now, 1),
+    [merchantConversations, now]
   );
 
   useEffect(() => {
@@ -182,57 +226,50 @@ function EcommerceSupportPageInner() {
     enabled: openTicketId === null,
     onFocusChange: setFocusedId,
     onOpen: setOpenTicketId,
-    onFocusSearch: () => {
-      const el = document.querySelector<HTMLInputElement>(
-        "input[aria-label='Search ecommerce tickets']"
-      );
-      el?.focus();
-    },
+    onFocusSearch: () => searchInputRef.current?.focus(),
   });
 
   const openTicket = useMemo(
-    () => tickets.find((t) => t.id === openTicketId) ?? null,
-    [tickets, openTicketId]
+    () =>
+      merchantConversations.find((t) => t.id === openTicketId) ?? null,
+    [merchantConversations, openTicketId]
   );
 
   const relatedTicketCount = useMemo(() => {
     if (!openTicket) return undefined;
-    return tickets.filter(
+    return merchantConversations.filter(
       (t) =>
         t.id !== openTicket.id &&
-        t.merchantId === openTicket.merchantId &&
+        t.userId === openTicket.userId &&
         isLive(t.status)
     ).length;
-  }, [tickets, openTicket]);
+  }, [merchantConversations, openTicket]);
 
-  const requireActor = (): EcommerceSupportActor | null => {
-    if (!adminActor) {
+  const requireActor = (): SupportActor | null => {
+    if (!admin) {
       showToast("error", "No admin session. Sign in to make changes.");
       return null;
     }
-    return adminActor;
+    return actor;
   };
 
   const handleSendReply = (ticketId: string, message: string) => {
-    const actor = requireActor();
-    if (!actor) return;
-    const result = respondToTicket(ticketId, message, actor);
+    if (!requireActor()) return;
+    const result = sendTicketReply(ticketId, message, actor);
     if (result.ok) showToast("success", "Reply sent.");
     else showToast("error", result.error ?? "Could not send reply.");
   };
 
   const handleAddInternalNote = (ticketId: string, note: string) => {
-    const actor = requireActor();
-    if (!actor) return;
-    const result = appendInternalNote(ticketId, note, actor);
+    if (!requireActor()) return;
+    const result = addInternalNote(ticketId, note, actor);
     if (result.ok) showToast("success", "Internal note added.");
     else showToast("error", result.error ?? "Could not add note.");
   };
 
   const handleStatusChange = (ticketId: string, status: SupportStatus) => {
-    const actor = requireActor();
-    if (!actor) return;
-    const result = setTicketStatus(ticketId, status, actor);
+    if (!requireActor()) return;
+    const result = changeTicketStatus(ticketId, status, actor);
     if (result.ok)
       showToast("success", "Status set to " + statusLabel[status] + ".");
     else showToast("error", result.error ?? "Could not change status.");
@@ -242,36 +279,38 @@ function EcommerceSupportPageInner() {
     ticketId: string,
     priority: SupportPriority
   ) => {
-    const actor = requireActor();
-    if (!actor) return;
-    const result = setTicketPriority(ticketId, priority, actor);
+    if (!requireActor()) return;
+    const result = changeTicketPriority(ticketId, priority, actor);
     if (result.ok)
       showToast("success", "Priority set to " + priorityLabel[priority] + ".");
     else showToast("error", result.error ?? "Could not change priority.");
   };
 
-  const handleAssign = (
-    ticketId: string,
-    adminId: string,
-    adminName: string
-  ) => {
-    const actor = requireActor();
-    if (!actor) return;
-    const result = assignTicket(ticketId, adminId, adminName, actor);
+  const handleAssign = (ticketId: string, adminId: string) => {
+    if (!requireActor()) return;
+    const adminUser = findAdminById(adminId);
+    if (!adminUser) return;
+    const result = assignTicket(
+      ticketId,
+      adminUser.id,
+      adminUser.name,
+      adminUser.email,
+      actor
+    );
     if (result.ok) showToast("success", "Ticket assigned.");
     else showToast("error", result.error ?? "Could not assign.");
   };
 
   const handleUnassign = (ticketId: string) => {
-    const actor = requireActor();
-    if (!actor) return;
+    if (!requireActor()) return;
     const result = unassignTicket(ticketId, actor);
     if (result.ok) showToast("success", "Ticket unassigned.");
     else showToast("error", result.error ?? "Could not unassign.");
   };
 
-  const handleViewMerchant = (merchantId: string) => {
-    router.push(merchantPath(merchantId));
+  const handleViewUser = (conversation: SupportConversation) => {
+    if (conversation.userType !== "merchant") return;
+    router.push(merchantPath(conversation.userId));
   };
 
   const activeView: View =
@@ -286,13 +325,13 @@ function EcommerceSupportPageInner() {
   const headerMeta = (
     <>
       <span>{summary.total} tickets</span>
-      <span aria-hidden="true"> · </span>
+      <span aria-hidden="true"> {MIDDOT} </span>
       <span>{summary.open} open</span>
-      <span aria-hidden="true"> · </span>
+      <span aria-hidden="true"> {MIDDOT} </span>
       <span>{summary.pending} pending</span>
       {summary.slaAtRisk > 0 ? (
         <>
-          <span aria-hidden="true"> · </span>
+          <span aria-hidden="true"> {MIDDOT} </span>
           <span className="text-danger-700 dark:text-danger-300">
             {summary.slaAtRisk} SLA at risk
           </span>
@@ -326,23 +365,18 @@ function EcommerceSupportPageInner() {
           deltas={deltas}
           loading={false}
           activeFilter={activeView}
-          onFilterAll={() => setFilters({ view: "all", page: "1" })}
+          onFilterAll={() => setFilters({ view: "all" })}
           onFilterOpen={() =>
-            setFilters({
-              view: filters.view === "open" ? "all" : "open",
-              page: "1",
-            })
+            setFilters({ view: filters.view === "open" ? "all" : "open" })
           }
           onFilterPending={() =>
             setFilters({
               view: filters.view === "pending" ? "all" : "pending",
-              page: "1",
             })
           }
           onFilterSlaRisk={() =>
             setFilters({
               view: filters.view === "sla-risk" ? "all" : "sla-risk",
-              page: "1",
             })
           }
         />
@@ -355,11 +389,12 @@ function EcommerceSupportPageInner() {
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
             />
             <Input
+              ref={searchInputRef}
               aria-label="Search ecommerce tickets"
               placeholder="Search by subject, merchant, or ticket ID"
               className="pl-9"
               value={filters.q}
-              onChange={(e) => setFilters({ q: e.target.value, page: "1" })}
+              onChange={(e) => setFilters({ q: e.target.value })}
             />
           </div>
 
@@ -367,7 +402,7 @@ function EcommerceSupportPageInner() {
             aria-label="Filter by status"
             className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             value={filters.status}
-            onChange={(e) => setFilters({ status: e.target.value, page: "1" })}
+            onChange={(e) => setFilters({ status: e.target.value })}
           >
             <option value="">All statuses</option>
             {SUPPORT_STATUSES.map((s) => (
@@ -381,7 +416,7 @@ function EcommerceSupportPageInner() {
             aria-label="Filter by priority"
             className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             value={filters.priority}
-            onChange={(e) => setFilters({ priority: e.target.value, page: "1" })}
+            onChange={(e) => setFilters({ priority: e.target.value })}
           >
             <option value="">All priorities</option>
             {SUPPORT_PRIORITIES.map((p) => (
@@ -395,7 +430,7 @@ function EcommerceSupportPageInner() {
             aria-label="Filter by category"
             className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             value={filters.category}
-            onChange={(e) => setFilters({ category: e.target.value, page: "1" })}
+            onChange={(e) => setFilters({ category: e.target.value })}
           >
             <option value="">All categories</option>
             {SUPPORT_CATEGORIES.map((c) => (
@@ -409,7 +444,7 @@ function EcommerceSupportPageInner() {
             aria-label="Filter by assignee"
             className="h-10 rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
             value={filters.assignee}
-            onChange={(e) => setFilters({ assignee: e.target.value, page: "1" })}
+            onChange={(e) => setFilters({ assignee: e.target.value })}
           >
             <option value="">Anyone</option>
             <option value="me">Assigned to me</option>
@@ -423,7 +458,7 @@ function EcommerceSupportPageInner() {
           ) : null}
         </div>
 
-        {tickets.length === 0 ? (
+        {merchantConversations.length === 0 ? (
           <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
             <EmptyState
               variant="no_data"
@@ -431,7 +466,7 @@ function EcommerceSupportPageInner() {
               description="Tickets opened by merchants will appear here."
             />
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
             <EmptyState
               variant="no_results"
@@ -445,74 +480,66 @@ function EcommerceSupportPageInner() {
             />
           </div>
         ) : (
-          <>
-            <ul role="list" className="space-y-3">
-              {pagination.slice.map((ticket) => (
-                <li key={ticket.id}>
-                  <SupportTicketRow
-                    ticket={ticket}
-                    isFocused={focusedId === ticket.id}
-                    now={now}
-                    onOpen={() => setOpenTicketId(ticket.id)}
-                    onFocus={() => setFocusedId(ticket.id)}
-                  />
-                </li>
-              ))}
-            </ ul>
-
-            {pagination.totalPages > 1 ? (
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Page {pagination.page} of {pagination.totalPages}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page <= 1}
-                    onClick={() =>
-                      setFilters({
-                        page: String(Math.max(1, pagination.page - 1)),
-                      })
-                    }
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pagination.page >= pagination.totalPages}
-                    onClick={() =>
-                      setFilters({
-                        page: String(
-                          Math.min(
-                            pagination.totalPages,
-                            pagination.page + 1
-                          )
-                        ),
-                      })
-                    }
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </>
+          <ul role="list" className="space-y-3">
+            {sorted.map((ticket) => (
+              <SupportRow
+                key={ticket.id}
+                conversation={ticket}
+                selected={false}
+                focused={focusedId === ticket.id}
+                now={now}
+                selectable={false}
+                onToggleSelect={() => {
+                  /* selection disabled on scoped view */
+                }}
+                onOpen={setOpenTicketId}
+                onFocus={setFocusedId}
+              />
+            ))}
+          </ul>
         )}
 
         {openTicket ? (
-          <SupportTicketDetailDrawer
-            ticket={openTicket}
+          <SupportDetailDrawer
+            conversation={openTicket}
+            currentAdminId={actor.id}
+            currentAdminName={actor.name}
             relatedTicketCount={relatedTicketCount}
             onClose={() => setOpenTicketId(null)}
             onSendReply={handleSendReply}
-            onAddInternalNote={handleAddInternalNote}
             onStatusChange={handleStatusChange}
             onPriorityChange={handlePriorityChange}
             onAssign={handleAssign}
             onUnassign={handleUnassign}
-            onViewMerchant={handleViewMerchant}
+            onViewUser={handleViewUser}
+            onAddInternalNote={handleAddInternalNote}
+            onRetryFulfillment={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onEscalateToProvider={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onViewProvider={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onCreditCommission={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onHoldPayout={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onChangePlan={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onExtendTrial={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onResetTemplate={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
+            onApplyCompensation={() => {
+              /* cross-domain action not wired on scoped view */
+            }}
           />
         ) : null}
 

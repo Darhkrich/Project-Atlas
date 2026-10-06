@@ -571,8 +571,8 @@ function ReportedAccountsPageInner() {
     setFilters({ ...DEFAULT_FILTERS, ...view.filters, page: "1" });
   };
 
-  const handleDeleteView = (view: SavedView) => {
-    setSavedViews((prev) => prev.filter((v) => v.name !== view.name));
+ const handleDeleteView = (name: string) => {
+    setSavedViews((prev) => prev.filter((v) => v.name !== name));
   };
 
   const headerMeta = (
@@ -759,8 +759,13 @@ function ReportedAccountsPageInner() {
           onReactivate={handleReactivate}
           onSendNotification={handleSendNotification}
           onRevealPII={handleRevealPII}
-          onResetPassword={handleResetPassword}
-        />
+          onResetPassword={handleResetPassword} walletBalance={0} walletFrozen={false} onAdjustWallet={function (userId: string, storefrontId: string, amount: number, reason: string): void {
+            throw new Error("Function not implemented.");
+          } } onFreezeWallet={function (userId: string, storefrontId: string, reason: string): void {
+            throw new Error("Function not implemented.");
+          } } onUnfreezeWallet={function (userId: string, storefrontId: string): void {
+            throw new Error("Function not implemented.");
+          } }        />
       )}
 
       {selectedUser?.storefrontType === "merchant" && (

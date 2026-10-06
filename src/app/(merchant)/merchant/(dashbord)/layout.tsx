@@ -1,10 +1,14 @@
 import { MerchantLayout } from "@/components/merchant/merchant-layout";
+import { CategoriesProvider } from "@/contexts/categories-context";
 
 export default function MerchantDashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <MerchantLayout>{children}</MerchantLayout>;
+  return (
+    <CategoriesProvider>
+      <MerchantLayout>{children}</MerchantLayout>
+    </CategoriesProvider>
+  );
 }
-

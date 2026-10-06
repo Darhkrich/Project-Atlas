@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// components/admin/resellers/reseller-dashboard-charts.tsx
 "use client";
 
 import { useState } from "react";
@@ -29,6 +31,7 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import { ResellerDashboardChartCard } from "./reseller-dashboard-chart-card";
 
 interface ResellerDashboardChartsProps {
@@ -118,10 +121,10 @@ export function ResellerDashboardCharts({
               allowDecimals={false}
             />
             <Tooltip
-              formatter={(value: number) => [
+              formatter={chartFormatter((value) => [
                 formatNumber(value),
                 "New resellers",
-              ]}
+              ])}
             />
             <Area
               type="monotone"
@@ -203,10 +206,10 @@ export function ResellerDashboardCharts({
                 tickFormatter={(v: number) => formatNumber(v)}
               />
               <Tooltip
-                formatter={(value: number, name: string) => [
+                formatter={chartFormatter((value, name) => [
                   formatCurrency(value),
                   name === "paid" ? "Paid" : "Pending",
-                ]}
+                ])}
               />
               <Bar
                 dataKey="paid"
@@ -245,10 +248,10 @@ export function ResellerDashboardCharts({
                 reversed
               />
               <Tooltip
-                formatter={(value: number) => [
+                formatter={chartFormatter((value) => [
                   formatCurrency(value),
                   "Pending",
-                ]}
+                ])}
               />
               <Bar
                 dataKey="pending"
@@ -340,25 +343,21 @@ function buildGrowthSummary(growth: ResellerGrowthPoint[]): string {
   const max = Math.max(...values);
   const peak = growth.find((p) => p.newResellers === max);
   const total = values.reduce((a, b) => a + b, 0);
-  return `Reseller growth over ${growth.length} months. ${total} new resellers total. Range ${min} to ${max} per month, peaking in ${peak?.month} ${peak?.year}.`;
+  return "Reseller growth over " + growth.length + " months. " + total + " new resellers total. Range " + min + " to " + max + " per month, peaking in " + peak?.month + " " + peak?.year + ".";
 }
 
 function buildTierSummary(points: TierCommissionPoint[]): string {
   if (points.length === 0) return "No commission data.";
   const parts = points.map(
     (p) =>
-      `${p.tier}: ${formatCurrency(p.paid)} paid, ${formatCurrency(
-        p.pending
-      )} pending`
+      p.tier + ": " + formatCurrency(p.paid) + " paid, " + formatCurrency(p.pending) + " pending"
   );
-  return `Commissions by tier. ${parts.join(". ")}.`;
+  return "Commissions by tier. " + parts.join(". ") + ".";
 }
 
 function buildPendingSummary(points: PendingCommissionPoint[]): string {
   if (points.length === 0) return "No pending commissions.";
   const top = points[0];
   const total = points.reduce((sum, p) => sum + p.pending, 0);
-  return `Top ${points.length} resellers by pending commissions. ${formatCurrency(
-    total
-  )} owed in total. Highest: ${top.name} at ${formatCurrency(top.pending)}.`;
+  return "Top " + points.length + " resellers by pending commissions. " + formatCurrency(total) + " owed in total. Highest: " + top.name + " at " + formatCurrency(top.pending) + ".";
 }

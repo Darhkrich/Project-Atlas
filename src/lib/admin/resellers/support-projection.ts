@@ -1,3 +1,5 @@
+// lib/admin/resellers/support-projection.ts
+
 import type { SupportConversation } from "@/lib/admin/types/support";
 import type { Reseller } from "@/lib/admin/types/reseller";
 import type { SupportOverlay } from "@/lib/admin/mock/support-store";
@@ -12,12 +14,6 @@ export interface SupportSummary {
   slaAtRisk: number;
 }
 
-/**
- * Joins a frozen SupportConversation with its overlay and resolves the
- * reseller's current name from the reseller store. The support mock's
- * userName is treated as a fallback for the case where the reseller no
- * longer exists.
- */
 export function overlayConversation(
   base: SupportConversation,
   overlay: SupportOverlay | undefined,
@@ -54,13 +50,18 @@ export function projectResellerTickets(
   return conversations
     .filter((c) => c.userType === "reseller")
     .map((c) => overlayConversation(c, overlays[c.id], byId.get(c.userId)))
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
+    .sort((a, b) => {
+      const aT = new Date(a.updatedAt ?? a.lastMessageAt).getTime();
+      const bT = new Date(b.updatedAt ?? b.lastMessageAt).getTime();
+      if (aT !== bT) return bT - aT;
+      return a.id.localeCompare(b.id);
+    });
 }
 
-export function slaState(dueAt: string | undefined, now: number): SlaState {
+export function slaState(
+  dueAt: string | undefined,
+  now: number
+): SlaState {
   if (!dueAt) return "on_track";
   const diff = new Date(dueAt).getTime() - now;
   if (diff < 0) return "breach";

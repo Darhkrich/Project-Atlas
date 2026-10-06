@@ -1,0 +1,7 @@
+export const VIP_ORDER_THRESHOLD = 5;
+export const VIP_SPEND_THRESHOLD = 2000;
+export const RETURNING_MIN_ORDERS = 2;
+
+export const CUSTOMER_NAME_MAX_LENGTH = 80;
+export const CUSTOMER_REPORT_NOTE_MAX_LENGTH = 500;
+export const CUSTOMER_SEARCH_MIN_LENGTH = 1;

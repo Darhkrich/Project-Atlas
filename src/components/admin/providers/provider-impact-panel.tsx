@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+// components/admin/providers/provider-impact-panel.tsx
 "use client";
 
 import Link from "next/link";
 import { useMemo } from "react";
 import type { Provider } from "@/lib/admin/types/provider";
-import { servicesCategories } from "@/lib/services-page-data";
 import {
   Card,
   CardContent,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/admin/providers/impact";
 import { computeMargin } from "@/lib/admin/data-plans/helpers";
 import { marginBand, MARGIN_BAND_LABEL } from "@/lib/admin/data-plans/constants";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
 
 interface ProviderImpactPanelProps {
   provider: Provider;
@@ -30,18 +32,20 @@ interface ProviderImpactPanelProps {
 const RISES = [5, 10, 20];
 
 export function ProviderImpactPanel({ provider }: ProviderImpactPanelProps) {
+  const { categories: catalog } = useCatalog();
+
   const impact = useMemo(
-    () => providerImpact(provider, servicesCategories),
-    [provider]
+    () => providerImpact(provider, catalog),
+    [provider, catalog]
   );
 
   const rises = useMemo(
     () =>
       RISES.map((percent) => ({
         percent,
-        results: providerCostRiseImpact(provider, servicesCategories, percent),
+        results: providerCostRiseImpact(provider, catalog, percent),
       })),
-    [provider]
+    [provider, catalog]
   );
 
   const impactedByPlan = useMemo(() => {
@@ -85,7 +89,7 @@ export function ProviderImpactPanel({ provider }: ProviderImpactPanelProps) {
                 <li key={s.id}>
                   <Badge variant="neutral" size="sm">
                     {PROVIDER_CAPABILITY_LABEL[s.capability]}
-                    {s.network ? ` · ${s.network}` : ""}
+                    {s.network ? " \u00B7 " + s.network : ""}
                   </Badge>
                 </li>
               ))}
@@ -100,7 +104,7 @@ export function ProviderImpactPanel({ provider }: ProviderImpactPanelProps) {
                 Plans depending on this provider
               </p>
               <Link
-                href={`/admin/data-plans?provider=${provider.id}`}
+                href={"/admin/data-plans?provider=" + provider.id}
                 className="rounded-sm text-xs font-medium text-brand-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-400"
               >
                 View all in Data Plans
@@ -115,14 +119,15 @@ export function ProviderImpactPanel({ provider }: ProviderImpactPanelProps) {
                 const band = margin ? marginBand(margin.percent) : null;
                 return (
                   <li
-                    key={`${plan.id}-${categoryName}-${network ?? ""}`}
+                    key={plan.id + "-" + categoryName + "-" + (network ?? "")}
                     className="flex items-center justify-between gap-2"
                   >
                     <span className="truncate">
                       {plan.name}
                       <span className="ml-1 text-neutral-400 dark:text-neutral-500">
-                        {network ? `· ${network} ` : ""}
-                        · {categoryName}
+                        {network ? "\u00B7 " + network + " " : ""}
+                        {"\u00B7 "}
+                        {categoryName}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">

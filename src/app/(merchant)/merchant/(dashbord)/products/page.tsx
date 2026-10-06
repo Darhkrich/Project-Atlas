@@ -1,359 +1,164 @@
-/* eslint-disable @next/next/no-img-element */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { useStoreProducts } from "@/contexts/store-products-context";
-import { getProductsForStore as getStaticProducts } from "@/lib/store-products";
-import { cn } from "@/lib/utils";
+import { useCategories } from "@/contexts/categories-context";
+import { useEnsuredCategories } from "@/lib/merchant/categories/use-ensured-categories";
+import { useProductFilters } from "@/lib/merchant/products/use-product-filters";
+import { useMerchantProducts } from "@/lib/merchant/products/use-merchant-products";
+import { getStarterCatalog } from "@/lib/merchant/products/starter-catalog";
+import type { MerchantProductRow } from "@/lib/merchant/products/types";
+import { ProductToolbar } from "@/components/merchant/products/product-toolbar";
+import { ProductList } from "@/components/merchant/products/product-list";
+import { ProductEmptyState } from "@/components/merchant/products/product-empty-state";
+import { ProductDeleteModal } from "@/components/merchant/products/product-delete-modal";
 
 export default function MerchantProductsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { storefrontConfig } = useStorefrontConfig();
-  const { getProductsForStore, seedProducts, deleteProduct } = useStoreProducts();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { updateProduct, deleteProduct, seedProducts } = useStoreProducts();
+  const { getCategoriesForStore } = useCategories();
 
   const storeSlug = storefrontConfig.slug || "my-store";
-  const products = getProductsForStore(storeSlug);
+  const templateCategory = storefrontConfig.templateCategory;
+
+  const ensuredCategories = useEnsuredCategories(storeSlug, templateCategory);
+  const categories =
+    ensuredCategories.length > 0
+      ? ensuredCategories
+      : getCategoriesForStore(storeSlug);
+
+  const filtersApi = useProductFilters();
+  const snapshot = useMerchantProducts(filtersApi.filters);
+
+  const [deleteTarget, setDeleteTarget] = useState<MerchantProductRow | null>(
+    null
+  );
+  const [seeding, setSeeding] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
-    if (products.length === 0) {
-      const defaults = getStaticProducts(storefrontConfig.templateCategory);
-      if (defaults.length > 0) {
-        seedProducts(storeSlug, defaults);
-      }
+    const saved = searchParams.get("saved");
+    if (saved) {
+      setFlash(
+        saved === "created"
+          ? "Product created."
+          : "Changes saved."
+      );
+      const url = new URL(window.location.href);
+      url.searchParams.delete("saved");
+      window.history.replaceState({}, "", url.toString());
+      const timer = window.setTimeout(() => setFlash(null), 4000);
+      return () => window.clearTimeout(timer);
     }
-  }, [storeSlug, products.length, storefrontConfig.templateCategory, seedProducts]);
+  }, [searchParams]);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesSearch =
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.sku || "").toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus =
-        statusFilter === "All" || (product.status || "Active") === statusFilter;
-      const matchesCategory =
-        categoryFilter === "All" || product.categoryId === categoryFilter;
-      return matchesSearch && matchesStatus && matchesCategory;
-    });
-  }, [products, searchTerm, statusFilter, categoryFilter]);
-
-  const categories = useMemo(() => {
-    const cats = new Set(products.map((p) => p.categoryId));
-    return ["All", ...Array.from(cats)];
-  }, [products]);
-
-  const handleDelete = () => {
-    if (deleteTarget) {
-      deleteProduct(storeSlug, deleteTarget);
-      setDeleteTarget(null);
-      setShowDeleteModal(false);
-    }
+  const handleSeedSamples = () => {
+    setSeeding(true);
+    const catalog = getStarterCatalog(templateCategory);
+    seedProducts(storeSlug, catalog);
+    window.setTimeout(() => {
+      setSeeding(false);
+      setFlash("Sample products added. Edit or remove them any time.");
+    }, 0);
   };
+
+  const handleArchive = (product: MerchantProductRow) => {
+    updateProduct(storeSlug, product.id, { status: "Archived" });
+    setDeleteTarget(null);
+  };
+
+  const handleDeletePermanently = (product: MerchantProductRow) => {
+    deleteProduct(storeSlug, product.id);
+    setDeleteTarget(null);
+  };
+
+  const showNoProducts =
+    snapshot.totalCount === 0 && !filtersApi.hasActiveFilters;
+  const showNoMatches =
+    snapshot.rows.length === 0 && filtersApi.hasActiveFilters;
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-            Products
-          </h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Manage your product catalog and inventory.
-          </p>
-        </div>
-        <Link
-          href="/merchant/products/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 transition-colors"
+      <div className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100 sm:text-3xl">
+          Products
+        </h1>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+          {snapshot.totalCount === 0
+            ? "Add your first product to open the shop."
+            : snapshot.totalCount +
+              (snapshot.totalCount === 1 ? " product" : " products")}
+        </p>
+      </div>
+
+      {flash && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-lg border border-success-200 bg-success-50 px-4 py-3 text-sm text-success-800 dark:border-success-900 dark:bg-success-900/30 dark:text-success-200"
         >
-          <AtlasIcon name="plus" className="h-5 w-5" />
-          Add Product
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <input
-            type="search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search products..."
-            className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-2 pl-10 text-sm text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder-neutral-500"
-          />
           <AtlasIcon
-            name="search"
-            className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400"
+            name="check-circle"
+            className="h-4 w-4"
+            aria-hidden="true"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
-          >
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Draft">Draft</option>
-            <option value="Archived">Archived</option>
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
-          >
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === "All" ? "All Categories" : cat}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Desktop table */}
-      <div className="hidden lg:block overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-        <table className="w-full text-left">
-          <thead className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950">
-            <tr>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Product
-              </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                SKU
-              </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Category
-              </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Price
-              </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Stock
-              </th>
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Status
-              </th>
-              <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-            {filteredProducts.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-8 text-center text-sm text-neutral-500">
-                  No products found.
-                </td>
-              </tr>
-            ) : (
-              filteredProducts.map((product) => (
-                <tr
-                  key={product.id}
-                  className="hover:bg-neutral-50 dark:hover:bg-neutral-950/50"
-                >
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-100 overflow-hidden dark:bg-neutral-800">
-                        <img
-                          src={product.images[0]}
-                          alt={product.name}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                      <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                        {product.name}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-sm text-neutral-500">
-                    {product.sku || "—"}
-                  </td>
-                  <td className="px-5 py-4 text-sm text-neutral-500">
-                    {product.categoryId}
-                  </td>
-                  <td className="px-5 py-4 text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                    GH₵ {(product.salePrice || product.price).toFixed(2)}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        !product.inStock
-                          ? "text-danger-600"
-                          : "text-neutral-700 dark:text-neutral-300"
-                      )}
-                    >
-                      {product.inStock ? "In Stock" : "Out of Stock"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1",
-                        (product.status || "Active") === "Active"
-                          ? "bg-success-50 text-success-700 ring-success-200 dark:bg-success-900/30 dark:text-success-200 dark:ring-success-800"
-                          : (product.status || "Active") === "Draft"
-                          ? "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/30 dark:text-warning-200 dark:ring-warning-800"
-                          : "bg-neutral-100 text-neutral-600 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700"
-                      )}
-                    >
-                      {product.status || "Active"}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        href={`/merchant/products/${product.id}`}
-                        className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800"
-                        title="Edit product"
-                      >
-                        <AtlasIcon name="edit" className="h-4 w-4" />
-                      </Link>
-                      <button
-                        onClick={() => {
-                          setDeleteTarget(product.id);
-                          setShowDeleteModal(true);
-                        }}
-                        className="rounded-md p-1.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800"
-                        title="Delete product"
-                      >
-                        <AtlasIcon name="trash" className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile card list */}
-      <div className="space-y-3 lg:hidden">
-        {filteredProducts.length === 0 ? (
-          <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900">
-            No products found.
-          </div>
-        ) : (
-          filteredProducts.map((product) => (
-            <div
-              key={product.id}
-              className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-neutral-100 overflow-hidden dark:bg-neutral-800">
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                      {product.name}
-                    </p>
-                    <p className="text-xs text-neutral-500">{product.sku || "—"}</p>
-                  </div>
-                </div>
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1",
-                    (product.status || "Active") === "Active"
-                      ? "bg-success-50 text-success-700 ring-success-200 dark:bg-success-900/30 dark:text-success-200 dark:ring-success-800"
-                      : (product.status || "Active") === "Draft"
-                      ? "bg-warning-50 text-warning-700 ring-warning-200 dark:bg-warning-900/30 dark:text-warning-200 dark:ring-warning-800"
-                      : "bg-neutral-100 text-neutral-600 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:ring-neutral-700"
-                  )}
-                >
-                  {product.status || "Active"}
-                </span>
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                    GH₵ {(product.salePrice || product.price).toFixed(2)}
-                  </p>
-                  <p className="text-xs text-neutral-500">{product.categoryId}</p>
-                </div>
-                <p
-                  className={cn(
-                    "text-sm font-medium",
-                    !product.inStock
-                      ? "text-danger-600"
-                      : "text-neutral-700 dark:text-neutral-300"
-                  )}
-                >
-                  {product.inStock ? "In Stock" : "Out of Stock"}
-                </p>
-              </div>
-              <div className="mt-3 flex gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
-                <Link
-                  href={`/merchant/products/${product.id}`}
-                  className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 text-center"
-                >
-                  Edit
-                </Link>
-                <button
-                  onClick={() => {
-                    setDeleteTarget(product.id);
-                    setShowDeleteModal(true);
-                  }}
-                  className="flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Delete confirmation modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowDeleteModal(false)}
-          />
-          <div className="relative z-10 w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-800 dark:bg-neutral-900">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-danger-100 text-danger-600 dark:bg-danger-900/30 dark:text-danger-200">
-                <AtlasIcon name="alert" className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-                  Delete product?
-                </h3>
-                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                  This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="rounded-lg bg-danger-600 px-4 py-2 text-sm font-semibold text-white hover:bg-danger-700 focus:outline-none focus:ring-2 focus:ring-danger-500 focus:ring-offset-2"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+          {flash}
         </div>
       )}
+
+      {!showNoProducts && (
+        <ProductToolbar
+          search={filtersApi.filters.search}
+          onSearchChange={filtersApi.setSearch}
+          status={filtersApi.filters.status}
+          onStatusChange={filtersApi.setStatus}
+          categoryId={filtersApi.filters.categoryId}
+          onCategoryChange={filtersApi.setCategoryId}
+          sort={filtersApi.filters.sort}
+          onSortChange={filtersApi.setSort}
+          categories={categories}
+        />
+      )}
+
+      {showNoProducts && (
+        <ProductEmptyState
+          variant="no-products"
+          onSeedSamples={handleSeedSamples}
+          seeding={seeding}
+        />
+      )}
+
+      {showNoMatches && (
+        <ProductEmptyState
+          variant="no-matches"
+          onClearFilters={filtersApi.clearFilters}
+        />
+      )}
+
+      {!showNoProducts && !showNoMatches && (
+        <ProductList
+          rows={snapshot.rows}
+          onDelete={(product) => setDeleteTarget(product)}
+        />
+      )}
+
+      <ProductDeleteModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        productName={deleteTarget?.name ?? ""}
+        onArchive={() => {
+          if (deleteTarget) handleArchive(deleteTarget);
+        }}
+        onDeletePermanently={() => {
+          if (deleteTarget) handleDeletePermanently(deleteTarget);
+        }}
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// lib/domains/orders/use-reseller-orders.ts
 "use client";
 
 import { useSyncExternalStore } from "react";
@@ -36,6 +37,7 @@ function toRow(order: Order): ResellerOrderRow | null {
     commission: order.commission,
     status: order.status,
     createdAt: order.createdAt,
+    paymentMethodId: order.paymentMethodId,
   };
 }
 

@@ -1,3 +1,4 @@
+// components/admin/transactions/transaction-analytics.tsx
 "use client";
 
 import { useState } from "react";
@@ -9,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/
 import { Button } from "@/components/admin/ui/button";
 import { allPaymentMethods } from "@/lib/payment-methods";
 import { formatCurrency } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import { cn } from "@/lib/utils";
 
 const trendData = [
@@ -37,7 +39,6 @@ export function TransactionAnalytics() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-      {/* Trend Chart */}
       <Card className="lg:col-span-3">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Transaction Flow</CardTitle>
@@ -71,7 +72,7 @@ export function TransactionAnalytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
               <XAxis dataKey="time" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip formatter={(value: number) => trendMetric === "amount" ? formatCurrency(value) : value} />
+              <Tooltip formatter={chartFormatter((value) => trendMetric === "amount" ? formatCurrency(value) : value)} />
               <Area
                 type="monotone"
                 dataKey={trendMetric}
@@ -84,7 +85,6 @@ export function TransactionAnalytics() {
         </CardContent>
       </Card>
 
-      {/* Payment Method Donut */}
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle>Payment Methods</CardTitle>

@@ -1,3 +1,4 @@
+// components/admin/orders/order-analytics.tsx
 "use client";
 
 import { useMemo } from "react";
@@ -12,6 +13,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/admin/ui/card";
 import { formatCurrency } from "@/lib/admin/formatters";
+import { chartFormatter } from "@/lib/admin/charts/format";
 import type {
   OrdersAnalyticsView,
   OrdersAnalyticsRange,
@@ -180,11 +182,11 @@ export function OrderAnalytics({
                 width={40}
               />
               <Tooltip
-                formatter={(value: number, name: string) =>
+                formatter={chartFormatter((value, name) =>
                   name === "revenue"
                     ? [formatCurrency(value), "Revenue"]
                     : [value, name === "orders" ? "Orders" : "Failures"]
-                }
+                )}
               />
               <Bar dataKey="orders" fill={CHART_BRAND} radius={[4, 4, 0, 0]} />
             </BarChart>

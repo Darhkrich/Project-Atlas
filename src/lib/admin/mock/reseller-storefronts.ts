@@ -1,3 +1,5 @@
+// lib/admin/mock/reseller-storefronts.ts
+
 import type { UnifiedStorefront } from "../types/storefront";
 
 const now = Date.now();
@@ -666,3 +668,8 @@ export const mockStorefronts: UnifiedStorefront[] = [
     publicUrl: "https://yawhomeware.atlas.store",
   },
 ];
+
+/* ------------------------- Derived, audience-scoped --------------------- */
+
+export const mockResellerStorefronts: UnifiedStorefront[] =
+  mockStorefronts.filter((s) => s.type === "reseller");

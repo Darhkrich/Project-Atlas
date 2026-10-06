@@ -34,6 +34,13 @@ export interface WalletAutoApproveConfig {
   thresholdGHS: number;
   feeRatePercent: number;
   dailyCap: number;
+  /**
+   * Refund-specific auto-approve boundary. Independent of `thresholdGHS`
+   * because withdrawals move money out of Atlas entirely to a registered
+   * destination, while refunds move money back along the rail the
+   * customer paid with. Same threshold serves neither case well.
+   */
+  refundAutoApproveThreshold: number;
   updatedAt: string;
   updatedBy: string;
 }

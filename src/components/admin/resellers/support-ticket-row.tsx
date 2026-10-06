@@ -1,3 +1,4 @@
+// components/admin/resellers/support-ticket-row.tsx
 "use client";
 
 import Link from "next/link";
@@ -9,12 +10,14 @@ import { formatRelative } from "@/lib/admin/support/format";
 import { useNow } from "@/lib/admin/hooks/use-now";
 import { SlaIndicator } from "@/components/admin/ui/sla-indicator";
 import {
+  MIDDOT,
   channelLabel,
   priorityLabel,
   priorityVariant,
   statusLabel,
   statusVariant,
 } from "@/lib/admin/support/constants";
+import { EM_DASH } from "@/lib/admin/support/constants";
 
 interface SupportTicketRowProps {
   ticket: SupportConversation;
@@ -33,7 +36,7 @@ export function SupportTicketRow({
 
   return (
     <Card
-      data-ticket-id={ticket.id}
+      data-conversation-id={ticket.id}
       className={cn(
         "transition-colors",
         isFocused
@@ -66,15 +69,21 @@ export function SupportTicketRow({
             >
               {ticket.userName}
             </Link>
-            {" · "}
+            {" "}
+            {MIDDOT}
+            {" "}
             <span className="font-mono">{ticket.id}</span>
-            {" · "}
+            {" "}
+            {MIDDOT}
+            {" "}
             {channelLabel[ticket.channel] ?? ticket.channel}
           </p>
           <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
             Last activity{" "}
-            {now ? formatRelative(ticket.lastMessageAt, now) : "—"}
-            {ticket.assigneeName ? " · Assigned to " + ticket.assigneeName : ""}
+            {now ? formatRelative(ticket.lastMessageAt, now) : EM_DASH}
+            {ticket.assigneeName
+              ? " " + MIDDOT + " Assigned to " + ticket.assigneeName
+              : ""}
           </p>
         </button>
 

@@ -1,18 +1,32 @@
 "use client";
 
-import { MerchantNavItem, merchantNavItems } from "@/lib/merchant-navigation";
+import { useMemo } from "react";
 import { MerchantNavigation } from "./merchant-navigation";
 import { cn } from "@/lib/utils";
-
-const groupLabels: Record<MerchantNavItem["group"], string> = {
-  overview: "Overview",
-  business: "Business",
-  store: "Store",
-  billing: "Billing",
-  support: "Support",
-};
+import { useMerchantNotifications } from "@/lib/merchant/notifications/use-merchant-notifications";
+import {
+  merchantNavItems,
+  MERCHANT_NAV_GROUP_LABELS,
+  MERCHANT_NAV_GROUP_ORDER,
+} from "@/lib/merchant/nav/merchant-nav-items";
 
 export function MerchantSidebar({ className = "" }: { className?: string }) {
+  const { unreadCount } = useMerchantNotifications();
+  const groups = useMemo(
+    () =>
+      MERCHANT_NAV_GROUP_ORDER.map((group) => ({
+        group,
+        label: MERCHANT_NAV_GROUP_LABELS[group],
+        items: merchantNavItems.filter((item) => item.group === group),
+      })).filter((g) => g.items.length > 0),
+    []
+  );
+
+  const badges = useMemo(
+    () => ({ "/merchant/notifications": unreadCount }),
+    [unreadCount]
+  );
+
   return (
     <aside
       className={cn(
@@ -22,23 +36,19 @@ export function MerchantSidebar({ className = "" }: { className?: string }) {
     >
       <div className="flex h-full flex-col p-4">
         <div className="flex-1 space-y-6">
-          {Object.entries(groupLabels).map(([group, label]) => {
-            const items = merchantNavItems.filter((item) => item.group === group);
-            if (items.length === 0) return null;
-
-            return (
-              <div key={group}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                  {label}
-                </p>
-                <MerchantNavigation items={items} ariaLabel={`${label} navigation`} />
-              </div>
-            );
-          })}
+          {groups.map((group) => (
+            <div key={group.group}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                {group.label}
+              </p>
+              <MerchantNavigation
+                items={group.items}
+                ariaLabel={group.label + " navigation"}
+                badges={badges}
+              />
+            </div>
+          ))}
         </div>
-
-        {/* Optional: if you want a bottom card, we can add a neutral "Need help?" card.
-            For now, no promo card is included to keep it clean and business-focused. */}
       </div>
     </aside>
   );

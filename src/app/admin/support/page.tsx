@@ -1,14 +1,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-// app/(admin)/support/page.tsx
+// src/app/admin/support/page.tsx
 "use client";
 
-import {
-  Suspense,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
 import { Button } from "@/components/admin/ui/button";
@@ -21,12 +15,13 @@ import {
 } from "@/components/admin/support/support-filters";
 import { SupportRow } from "@/components/admin/support/support-row";
 import { BulkActionsBar } from "@/components/admin/support/bulk-actions-bar";
-import { IncidentsPanel } from "@/components/admin/support/incedents-panel";
+import { IncidentsPanel } from "@/components/admin/support/incidents-panel";
 import { MergeDialog } from "@/components/admin/support/merge-dialog";
 import type { SavedView } from "@/components/admin/support/saved-views-bar";
 import type { CompensationPayload } from "@/components/admin/support/compensation-dialog";
-import { mockSupportConversations } from "@/lib/admin/mock/support";
 import { mockAdminUsers, findAdminById } from "@/lib/admin/mock/admin-users";
+import { useSupport } from "@/lib/admin/hooks/use-support";
+import { useCurrentAdmin } from "@/lib/admin/rbac";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useNow } from "@/lib/admin/hooks/use-now";
 import { useInboxKeyboard } from "@/lib/admin/hooks/use-inbox-keyboard";
@@ -40,7 +35,29 @@ import {
   type IncidentCluster,
 } from "@/lib/admin/support/incidents";
 import { interpolateCannedResponse } from "@/lib/admin/support/interpolate";
-import { mergeConversations } from "@/lib/admin/support/merge";
+import {
+  addInternalNote,
+  applyCompensation,
+  assignTicket,
+  bulkAddTag,
+  bulkPatchTickets,
+  changePlan,
+  changeTicketPriority,
+  changeTicketStatus,
+  creditCommission,
+  escalateToProvider,
+  extendTrial,
+  holdPayout,
+  mergeTickets,
+  resetTemplate,
+  retryFulfillment,
+  sendTicketReply,
+  setTicketIncident,
+  snoozeTicket,
+  type SupportActor,
+  type SupportMutationResult,
+} from "@/lib/admin/support/support-mutations";
+import { MIDDOT } from "@/lib/admin/support/constants";
 import type {
   SupportConversation,
   SupportPriority,
@@ -59,7 +76,11 @@ const DEFAULT_FILTERS: UrlFilterValues = {
   view: "",
 };
 
-const CURRENT_ADMIN_ID = "usr-001";
+const SYSTEM_ACTOR: SupportActor = {
+  id: "system",
+  name: "System",
+  email: "system@atlas.com",
+};
 
 type SavedViewPredicate = (
   c: SupportConversation,
@@ -83,41 +104,91 @@ const savedViewPredicates: Record<string, SavedViewPredicate> = {
   },
 };
 
+function findRowElement(id: string): HTMLElement | null {
+  const selector = '[data-conversation-id="' + id + '"]';
+  const el = document.querySelector(selector);
+  if (el instanceof HTMLElement) return el;
+  return null;
+}
+
+function buildConfirmTitle(
+  pendingBulk: BulkActionKind | null,
+  count: number
+): string {
+  if (pendingBulk === null) return "";
+  const noun = count === 1 ? "conversation" : "conversations";
+  if (pendingBulk === "resolve") {
+    return "Resolve " + count + " " + noun + "?";
+  }
+  return "Close " + count + " " + noun + "?";
+}
+
+function buildConfirmDescription(
+  pendingBulk: BulkActionKind | null
+): string {
+  if (pendingBulk === "resolve") {
+    return "The selected conversations will be marked as resolved. You can undo this for a few seconds after.";
+  }
+  if (pendingBulk === "close") {
+    return "The selected conversations will be closed. You can undo this for a few seconds after.";
+  }
+  return "";
+}
+
 type BulkActionKind = "resolve" | "close";
 
 interface UndoSnapshot {
   ids: string[];
-  previous: SupportConversation[];
+  previous: {
+    status: SupportStatus;
+    priority: SupportPriority;
+    assigneeId?: string;
+    assigneeName?: string;
+    assignee?: string;
+    tags: string[];
+    snoozedUntil?: string;
+  }[];
   label: string;
 }
 
 export default function SupportPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="space-y-4">
-          <div className="h-10 w-72 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
-          <div className="h-10 w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-20 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
-              />
-            ))}
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<SupportSkeleton />}>
       <SupportPageInner />
     </Suspense>
   );
 }
 
+function SupportSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-10 w-72 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="h-10 w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-20 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-800"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SupportPageInner() {
   const router = useRouter();
-  const [conversations, setConversations] = useState<SupportConversation[]>([]);
-  const [loading, setLoading] = useState(true);
+  const admin = useCurrentAdmin();
+  const { conversations, aggregates, loading } = useSupport();
+
+  const actor: SupportActor = useMemo(() => {
+    if (!admin) return SYSTEM_ACTOR;
+    return {
+      id: admin.id ?? admin.email,
+      name: admin.name,
+      email: admin.email,
+    };
+  }, [admin]);
 
   const { filters, setFilters, clearFilters, hasActive } =
     useUrlFilters<UrlFilterValues>(DEFAULT_FILTERS);
@@ -136,22 +207,8 @@ function SupportPageInner() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const now = useNow();
 
-  const currentAdmin = findAdminById(CURRENT_ADMIN_ID);
-  const currentAdminName = currentAdmin?.name ?? "You";
-
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setConversations(mockSupportConversations);
-      setLoading(false);
-    }, 500);
-    return () => window.clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    if (!undoState) return;
-    const t = window.setTimeout(() => setUndoState(null), 8000);
-    return () => window.clearTimeout(t);
-  }, [undoState]);
+  const currentAdmin = admin ? findAdminById(admin.id ?? "") : undefined;
+  const currentAdminName = currentAdmin?.name ?? actor.name;
 
   const selected = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -173,35 +230,21 @@ function SupportPageInner() {
 
     if (filters.q) {
       const q = filters.q.toLowerCase();
-      list = list.filter((c) => {
-        if (c.subject.toLowerCase().includes(q)) return true;
-        if (c.userName.toLowerCase().includes(q)) return true;
-        if (c.contactName?.toLowerCase().includes(q)) return true;
-        if (c.linkedEntity) {
-          if (c.linkedEntity.kind === "digital_transaction") {
-            if (c.linkedEntity.transactionId.toLowerCase().includes(q))
-              return true;
-            if (c.linkedEntity.recipient.toLowerCase().includes(q)) return true;
-          }
-          if (c.linkedEntity.kind === "reseller_order") {
-            if (c.linkedEntity.orderId.toLowerCase().includes(q)) return true;
-          }
-          if (c.linkedEntity.kind === "merchant_account") {
-            if (c.linkedEntity.merchantId.toLowerCase().includes(q))
-              return true;
-          }
-        }
-        return false;
-      });
+      list = list.filter((c) => matchesSearch(c, q));
     }
 
-    if (filters.status) list = list.filter((c) => c.status === filters.status);
-    if (filters.category)
+    if (filters.status) {
+      list = list.filter((c) => c.status === filters.status);
+    }
+    if (filters.category) {
       list = list.filter((c) => c.category === filters.category);
-    if (filters.channel)
+    }
+    if (filters.channel) {
       list = list.filter((c) => c.channel === filters.channel);
-    if (filters.userType)
+    }
+    if (filters.userType) {
       list = list.filter((c) => c.userType === filters.userType);
+    }
     if (filters.assignee === "unassigned") {
       list = list.filter((c) => !c.assigneeId);
     } else if (filters.assignee) {
@@ -212,31 +255,6 @@ function SupportPageInner() {
   }, [conversations, filters, now]);
 
   const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
-
-  useEffect(() => {
-    if (focusedId && !filteredIds.includes(focusedId)) {
-      setFocusedId(filteredIds[0] ?? null);
-    }
-  }, [filteredIds, focusedId]);
-
-  useEffect(() => {
-    if (!focusedId) return;
-    const el = document.querySelector(
-      `[data-conversation-id="${focusedId}"]`
-    );
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ block: "nearest" });
-    }
-  }, [focusedId]);
-
-  useInboxKeyboard({
-    itemIds: filteredIds,
-    focusedId,
-    enabled: selectedId === null && pendingBulk === null && !mergeOpen,
-    onFocusChange: setFocusedId,
-    onOpen: setSelectedId,
-    onFocusSearch: () => searchInputRef.current?.focus(),
-  });
 
   const savedViews = useMemo<SavedView[]>(() => {
     const count = (pred: (c: SupportConversation) => boolean) =>
@@ -252,8 +270,8 @@ function SupportPageInner() {
       {
         id: "my-queue",
         label: "My queue",
-        filters: { assignee: CURRENT_ADMIN_ID },
-        count: count((c) => c.assigneeId === CURRENT_ADMIN_ID),
+        filters: { assignee: actor.id },
+        count: count((c) => c.assigneeId === actor.id),
       },
       {
         id: "unassigned",
@@ -287,23 +305,7 @@ function SupportPageInner() {
         count: count((c) => c.userType === "merchant"),
       },
     ] as SavedView[];
-  }, [conversations]);
-
-  const aggregates = useMemo(() => {
-    const unread = conversations.reduce((acc, c) => acc + c.unreadCount, 0);
-    const active = conversations.filter(
-      (c) => c.status === "open" || c.status === "pending"
-    ).length;
-    const breached =
-      now === null
-        ? 0
-        : conversations.filter((c) => {
-            if (!c.slaDueAt) return false;
-            if (c.status === "resolved" || c.status === "closed") return false;
-            return new Date(c.slaDueAt).getTime() < now;
-          }).length;
-    return { unread, active, breached };
-  }, [conversations, now]);
+  }, [conversations, actor.id]);
 
   const relatedTicketCount = useMemo(() => {
     if (
@@ -330,6 +332,42 @@ function SupportPageInner() {
     []
   );
 
+  const bulkSummary = useMemo(() => {
+    const selectedSet = new Set(selectedIds);
+    const list = conversations.filter((c) => selectedSet.has(c.id));
+    return {
+      count: list.length,
+      unreadCount: list.reduce((acc, c) => acc + c.unreadCount, 0),
+    };
+  }, [conversations, selectedIds]);
+
+  useEffect(() => {
+    if (!undoState) return;
+    const t = window.setTimeout(() => setUndoState(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [undoState]);
+
+  useEffect(() => {
+    if (focusedId && !filteredIds.includes(focusedId)) {
+      setFocusedId(filteredIds[0] ?? null);
+    }
+  }, [filteredIds, focusedId]);
+
+  useEffect(() => {
+    if (!focusedId) return;
+    const el = findRowElement(focusedId);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [focusedId]);
+
+  useInboxKeyboard({
+    itemIds: filteredIds,
+    focusedId,
+    enabled: selectedId === null && pendingBulk === null && !mergeOpen,
+    onFocusChange: setFocusedId,
+    onOpen: setSelectedId,
+    onFocusSearch: () => searchInputRef.current?.focus(),
+  });
+
   const applySavedView = (view: SavedView) => {
     setFilters({
       q: "",
@@ -346,11 +384,11 @@ function SupportPageInner() {
   const handleExport = () => {
     const csv = conversationsToCsv(filtered);
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsv(`atlas-support-${stamp}.csv`, csv);
+    downloadCsv("atlas-support-" + stamp + ".csv", csv);
   };
 
   const handleViewProvider = (providerId: string) => {
-    router.push(`/admin/providers/${providerId}`);
+    router.push("/admin/providers/" + providerId);
   };
 
   const toggleSelected = (id: string) => {
@@ -359,358 +397,248 @@ function SupportPageInner() {
     );
   };
 
-  const updateConversation = (
-    id: string,
-    patch: (c: SupportConversation) => SupportConversation
-  ) => {
-    setConversations((prev) => prev.map((c) => (c.id === id ? patch(c) : c)));
-  };
-
-  const pushSystemMessage = (
-    c: SupportConversation,
-    content: string
-  ): SupportConversation => {
-    const timestamp = new Date().toISOString();
-    return {
-      ...c,
-      updatedAt: timestamp,
-      lastMessageAt: timestamp,
-      messages: [
-        ...c.messages,
-        {
-          id: crypto.randomUUID(),
-          sender: "system",
-          content,
-          timestamp,
-          readByAdmin: true,
-        },
-      ],
-    };
-  };
-
-  const pushInternalNote = (
-    c: SupportConversation,
-    content: string
-  ): SupportConversation => {
-    return {
-      ...c,
-      internalNotes: [
-        ...(c.internalNotes ?? []),
-        {
-          id: crypto.randomUUID(),
-          admin: "current_admin@atlas.com",
-          content,
-          timestamp: new Date().toISOString(),
-        },
-      ],
-    };
-  };
-
   const handleSendReply = (conversationId: string, message: string) => {
-    const timestamp = new Date().toISOString();
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (c.id !== conversationId) return c;
-        return {
-          ...c,
-          messages: [
-            ...c.messages,
-            {
-              id: crypto.randomUUID(),
-              sender: "admin" as const,
-              content: message,
-              timestamp,
-              readByAdmin: true,
-              authorName: "You",
-            },
-          ],
-          lastMessageAt: timestamp,
-          unreadCount: 0,
-        };
-      })
-    );
+    sendTicketReply(conversationId, message, actor);
   };
 
   const handleStatusChange = (id: string, status: SupportStatus) => {
-    updateConversation(id, (c) => ({ ...c, status }));
+    changeTicketStatus(id, status, actor);
   };
 
   const handlePriorityChange = (id: string, priority: SupportPriority) => {
-    updateConversation(id, (c) => ({ ...c, priority }));
+    changeTicketPriority(id, priority, actor);
   };
 
   const handleAssign = (id: string, adminId: string) => {
-    const admin = findAdminById(adminId);
-    updateConversation(id, (c) => ({
-      ...c,
-      assigneeId: admin?.id,
-      assigneeName: admin?.name,
-      assignee: admin?.email,
-    }));
+    const adminUser = findAdminById(adminId);
+    if (!adminUser) return;
+    assignTicket(id, adminUser.id, adminUser.name, adminUser.email, actor);
   };
 
   const handleAddInternalNote = (id: string, note: string) => {
-    updateConversation(id, (c) => pushInternalNote(c, note));
+    addInternalNote(id, note, actor);
   };
 
   const handleRetryFulfillment = (id: string, transactionId: string) => {
-    updateConversation(id, (c) => {
-      if (c.linkedEntity?.kind !== "digital_transaction") return c;
-      const next: SupportConversation = {
-        ...c,
-        linkedEntity: {
-          ...c.linkedEntity,
-          retryCount: c.linkedEntity.retryCount + 1,
-        },
-      };
-      return pushSystemMessage(
-        next,
-        `Fulfillment retry initiated for ${transactionId}.`
-      );
-    });
+    retryFulfillment(id, transactionId, actor);
   };
 
   const handleEscalateToProvider = (id: string, transactionId: string) => {
-    updateConversation(id, (c) => {
-      if (c.linkedEntity?.kind !== "digital_transaction") return c;
-      const reference = `ESC-${new Date().getFullYear()}-${Math.floor(
-        Math.random() * 9000 + 1000
-      )}`;
-      const next: SupportConversation = {
-        ...c,
-        escalatedToProvider: {
-          providerId: c.linkedEntity.providerId,
-          reference,
-          at: new Date().toISOString(),
-        },
-      };
-      return pushSystemMessage(
-        next,
-        `Escalated ${transactionId} to provider. Reference: ${reference}.`
-      );
-    });
+    const conv = conversations.find((c) => c.id === id);
+    if (!conv || conv.linkedEntity?.kind !== "digital_transaction") return;
+    const year = new Date().getFullYear();
+    const suffix = transactionId.replace(/[^A-Za-z0-9]/g, "").slice(-6);
+    const reference = "ESC-" + year + "-" + suffix;
+    escalateToProvider(id, conv.linkedEntity.providerId, reference, actor);
   };
 
   const handleCreditCommission = (id: string, orderId: string) => {
-    updateConversation(id, (c) => {
-      if (c.linkedEntity?.kind !== "reseller_order") return c;
-      const next: SupportConversation = {
-        ...c,
-        linkedEntity: {
-          ...c.linkedEntity,
-          payoutState: "pending",
-        },
-      };
-      return pushSystemMessage(
-        next,
-        `Commission for ${orderId} queued for next payout cycle.`
-      );
-    });
+    creditCommission(id, orderId, actor);
   };
 
   const handleHoldPayout = (id: string, orderId: string) => {
-    updateConversation(id, (c) => {
-      if (c.linkedEntity?.kind !== "reseller_order") return c;
-      const next: SupportConversation = {
-        ...c,
-        linkedEntity: {
-          ...c.linkedEntity,
-          payoutState: "on_hold",
-        },
-      };
-      return pushSystemMessage(next, `Payout for ${orderId} placed on hold.`);
-    });
+    holdPayout(id, orderId, actor);
   };
 
   const handleChangePlan = (id: string, merchantId: string) => {
-    updateConversation(id, (c) =>
-      pushInternalNote(
-        c,
-        `Plan change requested for ${merchantId}. Awaiting merchant confirmation.`
-      )
-    );
+    changePlan(id, merchantId, actor);
   };
 
   const handleExtendTrial = (id: string, merchantId: string) => {
-    updateConversation(id, (c) =>
-      pushSystemMessage(c, `Trial extended by 14 days for ${merchantId}.`)
-    );
+    extendTrial(id, merchantId, actor);
   };
 
   const handleResetTemplate = (id: string, merchantId: string) => {
-    updateConversation(id, (c) =>
-      pushSystemMessage(
-        c,
-        `Template reset to last stable version for ${merchantId}.`
-      )
-    );
+    resetTemplate(id, merchantId, actor);
   };
 
   const handleApplyCompensation = (
     id: string,
     payload: CompensationPayload
   ) => {
-    updateConversation(id, (c) => {
-      const base = pushInternalNote(
-        c,
-        `Compensation issued: GHS ${payload.amount} via ${payload.method}. Reason: ${payload.reason}.${
-          payload.note ? ` Note: ${payload.note}` : ""
-        }`
-      );
-      const next: SupportConversation = {
-        ...base,
-        linkedEntity:
-          base.linkedEntity?.kind === "digital_transaction"
-            ? { ...base.linkedEntity, status: "refunded" }
-            : base.linkedEntity,
-      };
-      return pushSystemMessage(
-        next,
-        `Compensation of GHS ${payload.amount} issued via ${payload.method}.`
-      );
-    });
+    applyCompensation(
+      id,
+      payload.amount,
+      payload.method,
+      payload.reason,
+      payload.note,
+      actor
+    );
   };
-
-  /* ------------------------- Incident cluster actions -------------------- */
 
   const handleSendClusterReply = (
     cluster: IncidentCluster,
     message: string
   ) => {
-    const timestamp = new Date().toISOString();
-    const idSet = new Set(cluster.conversationIds);
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (!idSet.has(c.id)) return c;
-        return {
-          ...c,
-          messages: [
-            ...c.messages,
-            {
-              id: crypto.randomUUID(),
-              sender: "admin" as const,
-              content: interpolateCannedResponse(message, c),
-              timestamp,
-              readByAdmin: true,
-              authorName: "You",
-            },
-          ],
-          lastMessageAt: timestamp,
-          unreadCount: 0,
-        };
-      })
-    );
+    for (const id of cluster.conversationIds) {
+      const conv = conversations.find((c) => c.id === id);
+      if (!conv) continue;
+      const interpolated = interpolateCannedResponse(message, conv);
+      sendTicketReply(id, interpolated, actor);
+    }
   };
 
   const handleAcknowledgeCluster = (cluster: IncidentCluster) => {
-    const incidentId = `INC-${crypto.randomUUID().slice(0, 8)}`;
-    const idSet = new Set(cluster.conversationIds);
-    setConversations((prev) =>
-      prev.map((c) => {
-        if (!idSet.has(c.id)) return c;
-        const withNote = pushInternalNote(
-          c,
-          `Acknowledged as part of incident ${incidentId} (${cluster.providerName} · ${cluster.serviceCategory}).`
-        );
-        return {
-          ...withNote,
-          incidentId,
-          tags: withNote.tags.includes("incident")
-            ? withNote.tags
-            : [...withNote.tags, "incident"],
-        };
-      })
-    );
+    const incidentId = "INC-" + crypto.randomUUID().slice(0, 8);
+    const summary =
+      cluster.providerName + " " + MIDDOT + " " + cluster.serviceCategory;
+    for (const id of cluster.conversationIds) {
+      setTicketIncident(id, incidentId, summary, actor);
+    }
   };
 
   const handleViewCluster = (cluster: IncidentCluster) => {
     setSelectedIds(cluster.conversationIds);
   };
 
-  /* ------------------------------ Merge action --------------------------- */
-
   const handleMerge = (primaryId: string) => {
     const sources = selectedIds.filter((id) => id !== primaryId);
-    const result = mergeConversations(
-      conversations,
-      { primaryId, sourceIds: sources },
-      { id: CURRENT_ADMIN_ID, name: currentAdminName }
-    );
-    setConversations(result.conversations);
+    mergeTickets(primaryId, sources, actor);
     setSelectedIds([]);
     setMergeOpen(false);
   };
 
-  /* ----------------------------- Bulk actions ---------------------------- */
-
-  const bulkSummary = useMemo(() => {
-    const selectedSet = new Set(selectedIds);
-    const list = conversations.filter((c) => selectedSet.has(c.id));
-    return {
-      count: list.length,
-      unreadCount: list.reduce((acc, c) => acc + c.unreadCount, 0),
-    };
-  }, [conversations, selectedIds]);
+  const captureUndoSnapshot = (ids: string[]): UndoSnapshot => {
+    const idSet = new Set(ids);
+    const previous = conversations
+      .filter((c) => idSet.has(c.id))
+      .map((c) => ({
+        status: c.status,
+        priority: c.priority,
+        assigneeId: c.assigneeId,
+        assigneeName: c.assigneeName,
+        assignee: c.assignee,
+        tags: c.tags,
+        snoozedUntil: c.snoozedUntil,
+      }));
+    return { ids: [...ids], previous, label: "" };
+  };
 
   const runBulkMutation = (
     label: string,
-    mutate: (c: SupportConversation) => SupportConversation
+    ids: string[],
+    result: SupportMutationResult
   ) => {
-    const idSet = new Set(selectedIds);
-    const previous = conversations.filter((c) => idSet.has(c.id));
-    setConversations((prev) =>
-      prev.map((c) => (idSet.has(c.id) ? mutate(c) : c))
-    );
-    setUndoState({ ids: selectedIds, previous, label });
+    if (!result.ok) return;
+    const snapshot = captureUndoSnapshot(ids);
+    snapshot.label = label;
+    setUndoState(snapshot);
     setSelectedIds([]);
   };
 
   const handleBulkAssign = (adminId: string) => {
-    const admin = findAdminById(adminId);
-    runBulkMutation(`Assigned to ${admin?.name ?? adminId}`, (c) => ({
-      ...c,
-      assigneeId: admin?.id,
-      assigneeName: admin?.name,
-      assignee: admin?.email,
-    }));
+    const adminUser = findAdminById(adminId);
+    if (!adminUser) return;
+    const label = "Assigned to " + adminUser.name;
+    const result = bulkPatchTickets(
+      selectedIds,
+      {
+        assigneeId: adminUser.id,
+        assigneeName: adminUser.name,
+        assignee: adminUser.email,
+      },
+      actor,
+      label
+    );
+    runBulkMutation(label, selectedIds, result);
   };
 
   const handleBulkAssignToMe = () => {
-    handleBulkAssign(CURRENT_ADMIN_ID);
+    const label = "Assigned to " + actor.name;
+    const result = bulkPatchTickets(
+      selectedIds,
+      {
+        assigneeId: actor.id,
+        assigneeName: actor.name,
+        assignee: actor.email,
+      },
+      actor,
+      label
+    );
+    runBulkMutation(label, selectedIds, result);
   };
 
   const handleBulkPriority = (priority: SupportPriority) => {
-    runBulkMutation(`Priority set to ${priority}`, (c) => ({ ...c, priority }));
+    const label = "Priority set to " + priority;
+    const result = bulkPatchTickets(
+      selectedIds,
+      { priority },
+      actor,
+      label
+    );
+    runBulkMutation(label, selectedIds, result);
   };
 
   const handleBulkTag = (tag: string) => {
-    runBulkMutation(`Added tag "${tag}"`, (c) => ({
-      ...c,
-      tags: c.tags.includes(tag) ? c.tags : [...c.tags, tag],
-    }));
+    const label = "Added tag " + tag;
+    const result = bulkAddTag(selectedIds, tag, actor);
+    runBulkMutation(label, selectedIds, result);
   };
 
   const handleBulkSnooze = (untilIso: string) => {
-    runBulkMutation("Snoozed", (c) => ({ ...c, snoozedUntil: untilIso }));
+    const label = "Snoozed";
+    const result = bulkPatchTickets(
+      selectedIds,
+      { snoozedUntil: untilIso },
+      actor,
+      label
+    );
+    runBulkMutation(label, selectedIds, result);
   };
 
   const confirmBulkStatus = () => {
     if (!pendingBulk) return;
     const nextStatus: SupportStatus =
       pendingBulk === "resolve" ? "resolved" : "closed";
-    runBulkMutation(
-      pendingBulk === "resolve" ? "Resolved" : "Closed",
-      (c) => ({ ...c, status: nextStatus })
+    const label = pendingBulk === "resolve" ? "Resolved" : "Closed";
+    const result = bulkPatchTickets(
+      selectedIds,
+      { status: nextStatus },
+      actor,
+      label
     );
+    runBulkMutation(label, selectedIds, result);
     setPendingBulk(null);
   };
 
   const undoLastBulk = () => {
     if (!undoState) return;
-    const previousMap = new Map(undoState.previous.map((c) => [c.id, c]));
-    setConversations((prev) => prev.map((c) => previousMap.get(c.id) ?? c));
+    for (let i = 0; i < undoState.ids.length; i++) {
+      const id = undoState.ids[i];
+      const previous = undoState.previous[i];
+      const conv = conversations.find((c) => c.id === id);
+      if (!conv) continue;
+      if (previous.status !== conv.status) {
+        changeTicketStatus(id, previous.status, actor);
+      }
+      if (previous.priority !== conv.priority) {
+        changeTicketPriority(id, previous.priority, actor);
+      }
+      if (previous.assigneeId !== conv.assigneeId) {
+        if (previous.assigneeId && previous.assigneeName) {
+          assignTicket(
+            id,
+            previous.assigneeId,
+            previous.assigneeName,
+            previous.assignee ?? "",
+            actor
+          );
+        }
+      }
+      if (
+        previous.snoozedUntil !== conv.snoozedUntil &&
+        previous.snoozedUntil
+      ) {
+        snoozeTicket(id, previous.snoozedUntil, actor);
+      }
+    }
     setUndoState(null);
   };
+
+  const activeCount = aggregates.active;
+  const unreadCount = aggregates.unread;
+  const breachedCount = aggregates.breached;
+  const confirmCount = bulkSummary.count;
 
   return (
     <div className="space-y-6">
@@ -719,14 +647,14 @@ function SupportPageInner() {
         description="Unified inbox for customer, reseller, and merchant conversations."
         meta={
           <>
-            <span>{aggregates.active} active</span>
-            <span aria-hidden="true">·</span>
-            <span>{aggregates.unread} unread</span>
-            {aggregates.breached > 0 && (
+            <span>{activeCount} active</span>
+            <span aria-hidden="true">{MIDDOT}</span>
+            <span>{unreadCount} unread</span>
+            {breachedCount > 0 && (
               <>
-                <span aria-hidden="true">·</span>
+                <span aria-hidden="true">{MIDDOT}</span>
                 <span className="text-danger-700 dark:text-danger-300">
-                  {aggregates.breached} SLA breached
+                  {breachedCount} SLA breached
                 </span>
               </>
             )}
@@ -763,7 +691,6 @@ function SupportPageInner() {
       {selectedIds.length > 0 && (
         <BulkActionsBar
           summary={bulkSummary}
-          currentAdminId={CURRENT_ADMIN_ID}
           currentAdminName={currentAdminName}
           onAssign={handleBulkAssign}
           onAssignToMe={handleBulkAssignToMe}
@@ -783,7 +710,7 @@ function SupportPageInner() {
           role="status"
         >
           <span className="text-neutral-700 dark:text-neutral-300">
-            {undoState.label} · {undoState.ids.length} conversation
+            {undoState.label} {MIDDOT} {undoState.ids.length} conversation
             {undoState.ids.length === 1 ? "" : "s"}
           </span>
           <Button variant="ghost" size="sm" onClick={undoLastBulk}>
@@ -845,8 +772,8 @@ function SupportPageInner() {
 
       <SupportDetailDrawer
         conversation={selected}
-        currentAdminId={CURRENT_ADMIN_ID}
-        currentAdminName={currentAdminName}
+        currentAdminId={actor.id}
+        currentAdminName={actor.name}
         relatedTicketCount={relatedTicketCount}
         onClose={() => setSelectedId(null)}
         onSendReply={handleSendReply}
@@ -875,24 +802,8 @@ function SupportPageInner() {
 
       <ConfirmDialog
         open={pendingBulk !== null}
-        title={
-          pendingBulk === "resolve"
-            ? `Resolve ${bulkSummary.count} ${
-                bulkSummary.count === 1 ? "conversation" : "conversations"
-              }?`
-            : pendingBulk === "close"
-            ? `Close ${bulkSummary.count} ${
-                bulkSummary.count === 1 ? "conversation" : "conversations"
-              }?`
-            : ""
-        }
-        description={
-          pendingBulk === "resolve"
-            ? "The selected conversations will be marked as resolved. You can undo this for a few seconds after."
-            : pendingBulk === "close"
-            ? "The selected conversations will be closed. You can undo this for a few seconds after."
-            : ""
-        }
+        title={buildConfirmTitle(pendingBulk, confirmCount)}
+        description={buildConfirmDescription(pendingBulk)}
         confirmLabel={pendingBulk === "resolve" ? "Resolve" : "Close"}
         danger={pendingBulk === "close"}
         onConfirm={confirmBulkStatus}
@@ -900,4 +811,37 @@ function SupportPageInner() {
       />
     </div>
   );
+}
+
+function matchesSearch(c: SupportConversation, q: string): boolean {
+  if (c.subject.toLowerCase().includes(q)) return true;
+  if (c.userName.toLowerCase().includes(q)) return true;
+  if (c.contactName?.toLowerCase().includes(q)) return true;
+  if (c.id.toLowerCase().includes(q)) return true;
+  if (!c.linkedEntity) return false;
+
+  const linked = c.linkedEntity;
+  if (linked.kind === "digital_transaction") {
+    if (linked.transactionId.toLowerCase().includes(q)) return true;
+    if (linked.recipient.toLowerCase().includes(q)) return true;
+    return false;
+  }
+  if (linked.kind === "reseller_order") {
+    if (linked.orderId.toLowerCase().includes(q)) return true;
+    return false;
+  }
+  if (linked.kind === "merchant_account") {
+    if (linked.merchantId.toLowerCase().includes(q)) return true;
+    return false;
+  }
+  if (
+    linked.kind === "merchant_storefront" ||
+    linked.kind === "merchant_order" ||
+    linked.kind === "merchant_subscription" ||
+    linked.kind === "merchant_template"
+  ) {
+    if (linked.label.toLowerCase().includes(q)) return true;
+    return false;
+  }
+  return false;
 }

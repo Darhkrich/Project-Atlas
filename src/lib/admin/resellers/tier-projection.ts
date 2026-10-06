@@ -1,9 +1,12 @@
+// lib/admin/resellers/tier-projection.ts
+
 import type {
   ResellerTier,
   ServiceCategory,
 } from "@/lib/admin/types/commission";
 import type { Reseller } from "@/lib/admin/types/reseller";
 import { SERVICE_CATEGORY_LABEL } from "./tier-labels";
+import { UNASSIGNED_TIER_ID } from "./tier-constants";
 
 export interface TierSummary {
   tierCount: number;
@@ -20,8 +23,9 @@ export function projectTierCounts(
   const counts: Record<string, number> = {};
   for (const tier of tiers) counts[tier.id] = 0;
   for (const r of resellers) {
-    if (counts[r.tierId] === undefined) counts[r.tierId] = 0;
-    counts[r.tierId] += 1;
+    const tierId = r.tierId ?? UNASSIGNED_TIER_ID;
+    if (counts[tierId] === undefined) counts[tierId] = 0;
+    counts[tierId] += 1;
   }
   return counts;
 }
@@ -31,7 +35,9 @@ export function projectTierSummary(
   resellers: Reseller[]
 ): TierSummary {
   const counts = projectTierCounts(tiers, resellers);
-  const assigned = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const assigned = Object.entries(counts)
+    .filter(([id]) => id !== UNASSIGNED_TIER_ID)
+    .reduce((sum, [, n]) => sum + n, 0);
 
   if (tiers.length === 0) {
     return {

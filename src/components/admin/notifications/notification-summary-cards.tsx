@@ -1,8 +1,9 @@
 // components/admin/notifications/notification-summary-cards.tsx
 "use client";
 
-import { Card } from "@/components/admin/ui/card";
+import type { AtlasIconName } from "@/components/atlas/icons";
 import { AtlasIcon } from "@/components/atlas/icons";
+import { Card } from "@/components/admin/ui/card";
 import { cn } from "@/lib/utils";
 import type { NotificationStatus } from "@/lib/admin/types/notification";
 
@@ -23,7 +24,7 @@ interface CardConfig {
   key: string;
   label: string;
   value: number;
-  icon: string;
+  icon: AtlasIconName;
   color: string;
   bg: string;
   status: NotificationStatus;
@@ -97,7 +98,11 @@ export function NotificationSummaryCards({
                   <p className="text-sm font-medium text-neutral-600 dark:text-neutral-300">
                     {card.label}
                   </p>
-                  <AtlasIcon name={card.icon} className={cn("h-5 w-5", card.color)} />
+                  <AtlasIcon
+                    name={card.icon}
+                    aria-hidden="true"
+                    className={cn("h-5 w-5", card.color)}
+                  />
                 </div>
                 <p className="mt-2 text-2xl font-bold text-neutral-900 dark:text-neutral-100">
                   {card.value.toLocaleString("en-GH")}

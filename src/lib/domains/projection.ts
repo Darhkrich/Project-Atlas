@@ -1,8 +1,10 @@
 import type { UnifiedStorefront } from "@/lib/admin/types/storefront";
 import type {
+  DomainPrimaryAddress,
   DomainVerificationStatus,
   StorefrontDomain,
 } from "./types";
+import { DNS_TARGET_HOST, TXT_RECORD_NAME } from "./labels";
 
 export interface DomainRow {
   domain: StorefrontDomain;
@@ -122,11 +124,21 @@ export function subdomainFor(domain: StorefrontDomain): string {
   return domain.subdomain.slug + "." + domain.subdomain.root;
 }
 
-export function primaryHostnameFor(domain: StorefrontDomain): string {
+export function resolvePrimaryAddress(
+  domain: StorefrontDomain
+): DomainPrimaryAddress {
+  if (domain.primaryAddress) return domain.primaryAddress;
   if (
     domain.customDomain?.isPrimary &&
     domain.customDomain.verificationStatus === "verified"
   ) {
+    return "custom";
+  }
+  return "subdomain";
+}
+
+export function primaryHostnameFor(domain: StorefrontDomain): string {
+  if (resolvePrimaryAddress(domain) === "custom" && domain.customDomain) {
     return domain.customDomain.hostname;
   }
   return subdomainFor(domain);
@@ -150,14 +162,14 @@ export function dnsRecordsFor(domain: StorefrontDomain): DnsRecord[] {
     {
       type: "CNAME",
       name: nameValue,
-      value: "domains.atlasgh.com",
+      value: DNS_TARGET_HOST,
       description: isApex
         ? "Point the apex record at Atlas. Some DNS providers require an ALIAS or ANAME record instead."
         : "Point this subdomain at Atlas.",
     },
     {
       type: "TXT",
-      name: "_atlas-verification",
+      name: TXT_RECORD_NAME,
       value: "atlas-verification=" + cd.verificationToken,
       description:
         "Fallback method. Use this if your DNS provider does not allow CNAME records.",

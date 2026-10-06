@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/set-state-in-effect */
+// components/admin/providers/provider-modals.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -26,7 +28,7 @@ import {
   PROVIDER_TYPE_LABEL,
 } from "@/lib/admin/providers/constants";
 import { affectedPlans } from "@/lib/admin/providers/impact";
-import { servicesCategories } from "@/lib/services-page-data";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
 
 /* ======================================================================
    Add provider
@@ -230,7 +232,7 @@ export function AddProviderDialog({
       open={open}
       onClose={onClose}
       title="Add provider"
-      description={`Step ${draft.step} of ${STEPS.length} · ${STEPS[draft.step - 1]}`}
+      description={"Step " + draft.step + " of " + STEPS.length + " \u00B7 " + STEPS[draft.step - 1]}
       size="lg"
       footer={
         <>
@@ -527,14 +529,14 @@ export function AddProviderDialog({
             />
             <Review label="Country" value={draft.country} />
             <Review label="Currency" value={draft.currency} />
-            <Review label="Base URL" value={draft.baseUrl || "—"} />
-            <Review label="API version" value={draft.apiVersion || "—"} />
+            <Review label="Base URL" value={draft.baseUrl || "\u2014"} />
+            <Review label="API version" value={draft.apiVersion || "\u2014"} />
             <Review label="Priority" value={draft.priority} />
-            <Review label="Timeout" value={`${draft.timeout}s`} />
+            <Review label="Timeout" value={draft.timeout + "s"} />
             <Review label="Retries" value={draft.retryAttempts} />
             <Review
               label="Health interval"
-              value={`${draft.healthCheckInterval}s`}
+              value={draft.healthCheckInterval + "s"}
             />
             <Review
               label="Webhook"
@@ -546,15 +548,15 @@ export function AddProviderDialog({
             />
             <Review
               label="SLA uptime"
-              value={`${draft.slaTargetUptime}%`}
+              value={draft.slaTargetUptime + "%"}
             />
             <Review
               label="SLA latency"
-              value={`${draft.slaTargetLatencyMs}ms`}
+              value={draft.slaTargetLatencyMs + "ms"}
             />
             <Review
               label="SLA success rate"
-              value={`${draft.slaTargetSuccessRate}%`}
+              value={draft.slaTargetSuccessRate + "%"}
             />
             <div className="mt-2 rounded-md bg-info-50 p-2 text-xs text-info-800 dark:bg-info-900/20 dark:text-info-200">
               New providers start disabled. Test the connection and enable them
@@ -657,7 +659,7 @@ export function EditProviderDialog({
       }
     }
     if (envChanged && confirmEnv !== environment) {
-      next.confirmEnv = `Type "${environment}" to confirm the environment change.`;
+      next.confirmEnv = "Type " + environment + " to confirm the environment change.";
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -684,7 +686,7 @@ export function EditProviderDialog({
       open={open}
       onClose={onClose}
       title="Edit provider"
-      description={`${provider.name} · ${provider.code}`}
+      description={provider.name + " \u00B7 " + provider.code}
       size="lg"
       footer={
         <>
@@ -813,7 +815,7 @@ export function EditProviderDialog({
 
         {envChanged && (
           <SettingsField
-            label={`Type "${environment}" to confirm`}
+            label={"Type " + environment + " to confirm"}
             htmlFor="edit-env-confirm"
             required
             error={errors.confirmEnv}
@@ -887,7 +889,7 @@ export function TestProviderDialog({
       open={open}
       onClose={onClose}
       title="Test connection"
-      description={`${provider.name} · ${provider.code}`}
+      description={provider.name + " \u00B7 " + provider.code}
       size="md"
       footer={
         <Button size="sm" onClick={onClose}>
@@ -971,6 +973,7 @@ export function MaintenanceDialog({
   onClose,
   onConfirm,
 }: MaintenanceDialogProps) {
+  const { categories: catalog } = useCatalog();
   const [reason, setReason] = useState("");
   const [duration, setDuration] = useState<number>(
     MAINTENANCE_DURATION_OPTIONS[1].value
@@ -985,8 +988,8 @@ export function MaintenanceDialog({
   }, [open]);
 
   const affected = useMemo(
-    () => affectedPlans(provider, servicesCategories),
-    [provider]
+    () => affectedPlans(provider, catalog),
+    [provider, catalog]
   );
 
   if (!open) return null;
@@ -1007,7 +1010,7 @@ export function MaintenanceDialog({
       open={open}
       onClose={onClose}
       title="Set maintenance mode"
-      description={`${provider.name} will be excluded from routing for the window below.`}
+      description={provider.name + " will be excluded from routing for the window below."}
       size="md"
       footer={
         <>
@@ -1093,9 +1096,11 @@ export function DisableProviderDialog({
   onClose,
   onConfirm,
 }: DisableProviderDialogProps) {
+  const { categories: catalog } = useCatalog();
+
   const affected = useMemo(
-    () => affectedPlans(provider, servicesCategories),
-    [provider]
+    () => affectedPlans(provider, catalog),
+    [provider, catalog]
   );
 
   if (!open) return null;
@@ -1105,7 +1110,7 @@ export function DisableProviderDialog({
       open={open}
       onClose={onClose}
       title="Disable provider"
-      description={`${provider.name} will stop receiving traffic immediately.`}
+      description={provider.name + " will stop receiving traffic immediately."}
       size="md"
       footer={
         <>
@@ -1191,7 +1196,7 @@ export function RotateCredentialsDialog({
 
   const handleSubmit = () => {
     if (!matches) {
-      setError(`Type ${provider.code} to confirm.`);
+      setError("Type " + provider.code + " to confirm.");
       return;
     }
     if (!acknowledged) {
@@ -1207,7 +1212,7 @@ export function RotateCredentialsDialog({
       open={open}
       onClose={onClose}
       title="Rotate credentials"
-      description={`${provider.name} will receive new API keys immediately.`}
+      description={provider.name + " will receive new API keys immediately."}
       size="md"
       footer={
         <>
@@ -1232,7 +1237,7 @@ export function RotateCredentialsDialog({
         </div>
 
         <SettingsField
-          label={`Type ${provider.code} to confirm`}
+          label={"Type " + provider.code + " to confirm"}
           htmlFor="rotate-confirm"
           required
           error={error ?? undefined}
@@ -1335,7 +1340,7 @@ export function UpdateCredentialsDialog({
       open={open}
       onClose={onClose}
       title="Update credentials"
-      description={`${provider.name} · existing values are never displayed.`}
+      description={provider.name + " \u00B7 existing values are never displayed."}
       size="md"
       footer={
         <>
@@ -1422,6 +1427,3 @@ export function UpdateCredentialsDialog({
   );
 }
 
-/* ======================================================================
-   End of file
-   ====================================================================== */

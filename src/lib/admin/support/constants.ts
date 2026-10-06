@@ -1,6 +1,7 @@
 // lib/admin/support/constants.ts
 
 import type {
+  DigitalServiceCategory,
   SupportCategory,
   SupportChannel,
   SupportPriority,
@@ -9,7 +10,25 @@ import type {
   SupportUserType,
 } from "@/lib/admin/types/support";
 
-type BadgeVariant = "success" | "warning" | "danger" | "info" | "neutral" | "brand";
+// ASCII escape constants. Source files stay ASCII. The escape renders
+// identically at runtime. Literal non-ASCII has caused paste corruption
+// in this codebase before.
+export const MIDDOT = "\u00B7";
+export const ELLIPSIS = "\u2026";
+export const EM_DASH = "\u2014";
+export const COMMAND_KEY = "\u2318";
+export const TRIANGLE_UP = "\u25B2";
+export const TRIANGLE_DOWN = "\u25BC";
+export const CHECK_MARK = "\u2713";
+export const CROSS_MARK = "\u2715";
+
+type BadgeVariant =
+  | "success"
+  | "warning"
+  | "danger"
+  | "info"
+  | "neutral"
+  | "brand";
 
 export const statusVariant: Record<SupportStatus, BadgeVariant> = {
   open: "warning",
@@ -68,6 +87,19 @@ export const categoryLabel: Record<SupportCategory, string> = {
   other: "Other",
 };
 
+export const digitalServiceCategoryLabel: Record<
+  DigitalServiceCategory,
+  string
+> = {
+  airtime: "Airtime",
+  data: "Data",
+  bills: "Bills",
+  tv: "TV",
+  results: "Exam results",
+  gift_cards: "Gift cards",
+  other: "Other",
+};
+
 export const SUPPORT_STATUSES: SupportStatus[] = [
   "open",
   "pending",
@@ -106,8 +138,18 @@ export const SUPPORT_CATEGORIES: SupportCategory[] = [
 
 export const topicsByUserType: Record<SupportUserType, SupportTopic[]> = {
   customer: ["airtime", "data", "bills", "tv", "exam_pins", "gift_cards"],
-  reseller: ["commissions", "payouts", "downstream_pricing", "reseller_storefront"],
-  merchant: ["subscription", "merchant_storefront", "template", "merchant_billing"],
+  reseller: [
+    "commissions",
+    "payouts",
+    "downstream_pricing",
+    "reseller_storefront",
+  ],
+  merchant: [
+    "subscription",
+    "merchant_storefront",
+    "template",
+    "merchant_billing",
+  ],
 };
 
 export const topicLabel: Record<SupportTopic, string> = {

@@ -14,7 +14,10 @@ export type AtlasIconName =
   | "card"
   | "bank"
   | "mobile"
+  | "smartphone"
   | "bell"
+  | "triangle-up"
+  | "triangle-down"
   | "user"
   | "users"
   | "settings"
@@ -22,10 +25,12 @@ export type AtlasIconName =
   | "search"
   | "arrow-right"
   | "arrow-left"
-
+  | "activity"
   | "alert-triangle"
+  | "alert-circle"
   | "check-circle"
   | "copy"
+  | "refresh"
   | "arrow-up"
   | "arrow-down"
   | "chevron-down"
@@ -45,6 +50,7 @@ export type AtlasIconName =
   | "support"
   | "file-text"
   | "help-circle"
+  | "external-link"
   | "bar-chart"
   | "trending-up"
   | "menu"
@@ -53,6 +59,9 @@ export type AtlasIconName =
   | "disconnect"
   | "eye"
   | "lock"
+  | "key"
+  | "unlock"
+  | "log-out"
   | "price"
   | "status"
   | "protect"
@@ -71,6 +80,7 @@ export type AtlasIconName =
   | "moon"
   | "send"
   | "message-circle"
+  | "message-square"
   | "cart"
   | "dashboard"
   | "sales"
@@ -181,6 +191,12 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
       <line x1="12" y1="18" x2="12.01" y2="18" />
     </>
   ),
+  smartphone: (
+    <>
+      <rect x="5" y="2" width="14" height="20" rx="2" />
+      <line x1="12" y1="18" x2="12.01" y2="18" />
+    </>
+  ),
   bell: (
     <>
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -239,6 +255,24 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
       <line x1="12" y1="17" x2="12.01" y2="17" />
     </>
   ),
+  "alert-circle": (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </>
+  ),
+ 
+  "triangle-up": (
+    <>
+      <path d="M12 17l-5-5 5-5 5 5-5 5z" />
+    </>
+  ),
+  "triangle-down": (
+    <>
+      <path d="M12 7l-5 5 5 5 5-5-5-5z" />
+    </>
+  ),
   "check-circle": (
     <>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -249,6 +283,14 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
     <>
       <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </>
+  ),
+  refresh: (
+    <>
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" />
+      <path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </>
   ),
   "arrow-up": (
@@ -347,6 +389,13 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
       <line x1="12" y1="17" x2="12.01" y2="17" />
     </>
   ),
+  "external-link": (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <polyline points="15 3 21 3 21 9" />
+      <line x1="10" y1="14" x2="21" y2="3" />
+    </>
+  ),
   "bar-chart": (
     <>
       <line x1="12" y1="20" x2="12" y2="10" />
@@ -397,6 +446,26 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
     <>
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  key: (
+    <>
+      <path d="m21 2-9.6 9.6" />
+      <circle cx="7.5" cy="15.5" r="5.5" />
+      <path d="m15.5 7.5 3 3L22 7l-3-3" />
+    </>
+  ),
+  unlock: (
+    <>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </>
+  ),
+  "log-out": (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </>
   ),
   price: (
@@ -489,6 +558,9 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
   ),
   "message-circle": (
     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+  ),
+  "message-square": (
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   ),
   cart: (
     <>
@@ -630,6 +702,9 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
   twitter: (
     <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" />
   ),
+  activity: (
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  ),
   rocket: (
     <>
       <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
@@ -648,11 +723,15 @@ interface AtlasIconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   className?: string;
 }
 
-export function AtlasIcon({ name, className = "h-6 w-6", ...props }: AtlasIconProps) {
+export function AtlasIcon({
+  name,
+  className = "h-6 w-6",
+  ...props
+}: AtlasIconProps) {
   const content = ICONS[name];
 
   if (process.env.NODE_ENV !== "production" && !content) {
-    console.warn(`[AtlasIcon] Unknown icon name: "${name}"`);
+    console.warn('[AtlasIcon] Unknown icon name: "' + name + '"');
   }
 
   return (
@@ -664,8 +743,8 @@ export function AtlasIcon({ name, className = "h-6 w-6", ...props }: AtlasIconPr
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden="true"
       {...props}
+      aria-hidden="true"
     >
       {content ?? null}
     </svg>

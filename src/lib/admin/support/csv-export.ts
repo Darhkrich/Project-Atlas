@@ -6,7 +6,7 @@ function escapeCsv(value: unknown): string {
   if (value === null || value === undefined) return "";
   const s = String(value);
   if (/[",\n\r]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
+    return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
 }
@@ -20,10 +20,14 @@ function linkedRef(c: SupportConversation): string {
       return c.linkedEntity.orderId;
     case "merchant_account":
       return c.linkedEntity.merchantId;
+    default:
+      return c.linkedEntity.label;
   }
 }
 
-export function conversationsToCsv(conversations: SupportConversation[]): string {
+export function conversationsToCsv(
+  conversations: SupportConversation[]
+): string {
   const headers = [
     "id",
     "subject",

@@ -1,7 +1,9 @@
 // lib/domains/subscriptions/constants.ts
 
+import type { MerchantStorefrontTheme } from "@/types/merchant-storefront";
+
 export type StorefrontPaymentMethod = "momo" | "card" | "bank" | "wallet";
-export type StorefrontTheme = "minimal" | "classic" | "modern" | "bold";
+export type StorefrontTheme = MerchantStorefrontTheme;
 
 export const ALL_PAYMENT_METHODS: StorefrontPaymentMethod[] = [
   "momo",
@@ -11,10 +13,10 @@ export const ALL_PAYMENT_METHODS: StorefrontPaymentMethod[] = [
 ];
 
 export const ALL_THEMES: StorefrontTheme[] = [
-  "minimal",
-  "classic",
-  "modern",
-  "bold",
+  "airy",
+  "editorial",
+  "studio",
+  "statement",
 ];
 
 // Plan code rules. Lowercase, starts with a letter, dash allowed,

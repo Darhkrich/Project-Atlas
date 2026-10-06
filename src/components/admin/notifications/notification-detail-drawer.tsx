@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // components/admin/notifications/notification-detail-drawer.tsx
 "use client";
 
@@ -168,7 +169,11 @@ function NotificationDetailBody({
                 key={c}
                 className="inline-flex items-center gap-1 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300"
               >
-                <AtlasIcon name={CHANNEL_ICON[c]} className="h-3 w-3" />
+                <AtlasIcon
+                  name={CHANNEL_ICON[c]}
+                  aria-hidden="true"
+                  className="h-3 w-3"
+                />
                 {CHANNEL_LABEL[c]}
               </span>
             ))}
@@ -239,17 +244,6 @@ function NotificationDetailBody({
                     by {n.cancelledByName}
                   </span>
                 )}
-              </dd>
-            </>
-          )}
-
-          {n.approvedByName && (
-            <>
-              <dt className="text-neutral-500 dark:text-neutral-400">
-                Approved
-              </dt>
-              <dd className="text-neutral-900 dark:text-neutral-100">
-                {n.approvedByName}
               </dd>
             </>
           )}

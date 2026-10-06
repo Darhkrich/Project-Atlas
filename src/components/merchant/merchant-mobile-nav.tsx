@@ -1,104 +1,72 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { AtlasIcon } from "@/components/atlas/icons";
-import { MerchantNavItem, merchantNavItems } from "@/lib/merchant-navigation";
+import { useMemo } from "react";
+import { MerchantNavigation } from "./merchant-navigation";
+import { MerchantDrawerShell } from "./merchant-drawer-shell";
+import { useAuth } from "@/contexts/auth-context";
+import { useMerchantNotifications } from "@/lib/merchant/notifications/use-merchant-notifications";
+import {
+  merchantNavItems,
+  MERCHANT_NAV_GROUP_LABELS,
+  MERCHANT_NAV_GROUP_ORDER,
+} from "@/lib/merchant/nav/merchant-nav-items";
 
-const groupLabels: Record<MerchantNavItem["group"], string> = {
-  overview: "Overview",
-  business: "Business",
-  store: "Store",
-  billing: "Billing",
-  support: "Support",
-};
-
-export function MerchantMobileNav({
-  open,
-  onClose,
-}: {
+interface MerchantMobileNavProps {
   open: boolean;
   onClose: () => void;
-}) {
-  const pathname = usePathname();
+}
+
+export function MerchantMobileNav({ open, onClose }: MerchantMobileNavProps) {
+  const { logout } = useAuth();
+  const { unreadCount } = useMerchantNotifications();
+
+  const groups = MERCHANT_NAV_GROUP_ORDER.map((group) => ({
+    group,
+    label: MERCHANT_NAV_GROUP_LABELS[group],
+    items: merchantNavItems.filter((item) => item.group === group),
+  })).filter((g) => g.items.length > 0);
+
+  const badges = useMemo(
+    () => ({ "/merchant/notifications": unreadCount }),
+    [unreadCount]
+  );
 
   return (
-    <>
-      {/* Overlay */}
-      {open && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Drawer */}
-      <div
-        className={cn(
-          "fixed inset-y-0 left-0 z-40 w-72 max-w-[80%] transform bg-white shadow-xl transition-transform duration-300 ease-in-out dark:bg-neutral-900 lg:hidden",
-          open ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        {/* Header */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-neutral-200 dark:border-neutral-800">
-          <span className="text-xl font-bold text-brand-600">Atlas</span>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <MerchantDrawerShell
+      open={open}
+      onClose={onClose}
+      title="Menu"
+      side="left"
+    >
+      <div className="flex flex-col justify-between p-4">
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <div key={group.group}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                {group.label}
+              </p>
+              <MerchantNavigation
+                items={group.items}
+                ariaLabel={group.label + " navigation"}
+                onNavigate={onClose}
+                badges={badges}
+              />
+            </div>
+          ))}
         </div>
-
-        {/* Navigation */}
-        <nav className="p-4 space-y-6 overflow-y-auto h-[calc(100%-4rem-4rem)]">
-          {Object.entries(groupLabels).map(([group, label]) => {
-            const items = merchantNavItems.filter((item) => item.group === group);
-            if (items.length === 0) return null;
-
-            return (
-              <div key={group}>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                  {label}
-                </p>
-                <div className="space-y-1">
-                  {items.map((item) => {
-                    const isActive =
-                      pathname === item.href || pathname.startsWith(item.href + "/");
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={onClose}
-                        className={cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                          isActive
-                            ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-200"
-                            : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
-                        )}
-                      >
-                        <AtlasIcon name={item.icon} className="h-5 w-5 shrink-0" />
-                        <span>{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 p-4 dark:border-neutral-800">
-          <button className="w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 transition-colors">
+        <div className="mt-8 border-t border-neutral-200 pt-4 dark:border-neutral-800">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              logout();
+            }}
+            className="w-full rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          >
             Log out
           </button>
         </div>
       </div>
-    </>
+    </MerchantDrawerShell>
   );
 }

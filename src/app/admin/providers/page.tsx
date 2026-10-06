@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-location-assign-relative-destination */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
@@ -30,6 +31,7 @@ import {
   MaintenanceDialog,
 } from "@/components/admin/providers/provider-modals";
 import { useProviders } from "@/lib/admin/hooks/use-providers";
+import { useCatalog } from "@/lib/admin/hooks/use-catalog";
 import { useUrlFilters } from "@/lib/admin/hooks/use-url-filters";
 import { useDebouncedValue } from "@/lib/admin/hooks/use-debounced-value";
 import { useCurrentAdmin, Can, PERMISSIONS } from "@/lib/admin/rbac";
@@ -37,7 +39,6 @@ import { downloadCsv } from "@/lib/admin/support/csv-export";
 import { providersToCsv } from "@/lib/admin/providers/csv-export";
 import { providerOperationalState } from "@/lib/admin/providers/state";
 import { affectedPlans } from "@/lib/admin/providers/impact";
-import { servicesCategories } from "@/lib/services-page-data";
 import {
   addProvider,
   setProviderStatus,
@@ -105,6 +106,7 @@ function ProvidersSkeleton() {
 function ProvidersPageInner() {
   const admin = useCurrentAdmin();
   const { providers, loading, error } = useProviders();
+  const { categories: catalog } = useCatalog();
 
   const { filters, setFilters, clearFilters, hasActive } =
     useUrlFilters<ProviderListFilters>(DEFAULT_FILTERS);
@@ -167,10 +169,10 @@ function ProvidersPageInner() {
   const affectedCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of providers) {
-      map.set(p.id, affectedPlans(p, servicesCategories).length);
+      map.set(p.id, affectedPlans(p, catalog).length);
     }
     return map;
-  }, [providers]);
+  }, [providers, catalog]);
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
@@ -303,11 +305,11 @@ function ProvidersPageInner() {
     return (
       <>
         <span>{providers.length} providers</span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true">{"\u00B7"}</span>
         <span>{attention} need attention</span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true">{"\u00B7"}</span>
         <span>{paused} paused</span>
-        <span aria-hidden="true">·</span>
+        <span aria-hidden="true">{"\u00B7"}</span>
         <span>{transactions.toLocaleString()} transactions today</span>
       </>
     );

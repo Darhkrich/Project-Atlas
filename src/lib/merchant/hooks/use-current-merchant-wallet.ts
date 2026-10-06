@@ -1,10 +1,9 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable react-hooks/purity */
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { useSyncExternalStore } from "react";
+import { useMemo, useState, useEffect, useSyncExternalStore } from "react";
 import { useNow } from "@/lib/shared/hooks/use-now";
 import { useCurrentMerchant } from "./use-current-merchant";
 import {
@@ -55,6 +54,22 @@ export interface UseCurrentMerchantWalletResult {
   error: string | null;
 }
 
+const EMPTY_RESULT: UseCurrentMerchantWalletResult = {
+  wallet: null,
+  billingRows: [],
+  mainRows: [],
+  pendingWithdrawals: [],
+  withdrawalHistory: [],
+  quickStats: null,
+  billingSummary: null,
+  mainSummary: null,
+  destination: null,
+  autoPay: null,
+  config: null,
+  loading: false,
+  error: null,
+};
+
 function subscribe(onStoreChange: () => void): () => void {
   const a = subscribeToMerchantMoneyStore(onStoreChange);
   const b = subscribeToWalletConfig(onStoreChange);
@@ -86,17 +101,7 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
   const value = useMemo(() => {
     if (!merchant) {
       return {
-        wallet: null,
-        billingRows: [] as MerchantLedgerRow[],
-        mainRows: [] as MerchantLedgerRow[],
-        pendingWithdrawals: [] as MerchantPendingWithdrawalRow[],
-        withdrawalHistory: [] as MerchantWithdrawalHistoryEntry[],
-        quickStats: null,
-        billingSummary: null,
-        mainSummary: null,
-        destination: null,
-        autoPay: null,
-        config: null,
+        ...EMPTY_RESULT,
         error: "No merchant session.",
       };
     }
@@ -104,31 +109,17 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
       const state = getMerchantWalletState(merchant.id);
       if (!state) {
         return {
-          wallet: null,
-          billingRows: [] as MerchantLedgerRow[],
-          mainRows: [] as MerchantLedgerRow[],
-          pendingWithdrawals: [] as MerchantPendingWithdrawalRow[],
-          withdrawalHistory: [] as MerchantWithdrawalHistoryEntry[],
-          quickStats: null,
-          billingSummary: null,
-          mainSummary: null,
-          destination: null,
-          autoPay: null,
-          config: null,
+          ...EMPTY_RESULT,
           error: "Merchant wallet not found.",
         };
       }
       const config = getWalletConfig();
       const effectiveNow = nowMs ?? Date.now();
 
-      const wallet = projectWalletView(state);
-      const billingRows = projectLedgerRows(state, "billing");
-      const mainRows = projectLedgerRows(state, "main");
-
       return {
-        wallet,
-        billingRows,
-        mainRows,
+        wallet: projectWalletView(state),
+        billingRows: projectLedgerRows(state, "billing"),
+        mainRows: projectLedgerRows(state, "main"),
         pendingWithdrawals: projectPendingWithdrawals(state),
         withdrawalHistory: projectWithdrawalHistory(state),
         quickStats: projectQuickStats(state, effectiveNow),
@@ -143,23 +134,13 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
         destination: state.destination,
         autoPay: state.autoPay,
         config,
-        error: null as string | null,
+        loading: false,
+        error: null,
       };
     } catch (err) {
       return {
-        wallet: null,
-        billingRows: [] as MerchantLedgerRow[],
-        mainRows: [] as MerchantLedgerRow[],
-        pendingWithdrawals: [] as MerchantPendingWithdrawalRow[],
-        withdrawalHistory: [] as MerchantWithdrawalHistoryEntry[],
-        quickStats: null,
-        billingSummary: null,
-        mainSummary: null,
-        destination: null,
-        autoPay: null,
-        config: null,
-        error:
-          err instanceof Error ? err.message : "Failed to load wallet",
+        ...EMPTY_RESULT,
+        error: err instanceof Error ? err.message : "Failed to load wallet",
       };
     }
   }, [merchant, nowMs, snapshot]);

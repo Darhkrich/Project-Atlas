@@ -1,3 +1,5 @@
+// lib/domains/store.ts
+
 import type {
   DomainActor,
   DomainAuditEntry,
@@ -141,6 +143,15 @@ function storefrontName(id: string): string {
   return mockStorefronts.find((sf) => sf.id === id)?.storeName ?? id;
 }
 
+function uniqueSlug(base: string, others: string[]): string {
+  if (!others.includes(base)) return base;
+  for (let i = 2; i < 100; i += 1) {
+    const candidate = base + "-" + i;
+    if (!others.includes(candidate)) return candidate;
+  }
+  return base + "-" + Math.floor(Math.random() * 9999);
+}
+
 function pushAudit(input: {
   storefrontId: string;
   action: DomainAuditEntry["action"];
@@ -179,6 +190,53 @@ function patch(
     notify();
   }
   return next;
+}
+
+/* ------------------------------ Ensure -------------------------------- */
+
+/**
+ * Returns the StorefrontDomain for the given storefront. If none exists
+ * yet, creates one with a subdomain auto-derived from the storefront
+ * name. Idempotent. Called by useMyDomain on mount so every mutation
+ * that follows has a real record to write to.
+ */
+export function ensureDomainFor(
+  storefrontId: string,
+  storefrontName?: string
+): StorefrontDomain {
+  ensureLoaded();
+  const existing = state.domains.find(
+    (d) => d.storefrontId === storefrontId
+  );
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const source = storefrontName ?? storefrontName_for_id(storefrontId);
+  const baseSlug = normalizeSlug(source) || "store";
+  const taken = state.domains.map((d) => d.subdomain.slug);
+  const slug = uniqueSlug(baseSlug, taken);
+
+  const fresh: StorefrontDomain = {
+    storefrontId,
+    subdomain: {
+      slug,
+      root: "atlasgh.com",
+      isCustomSlug: false,
+      createdAt: now,
+      updatedAt: now,
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  state.domains = [...state.domains, fresh];
+  persist();
+  notify();
+  return fresh;
+}
+
+function storefrontName_for_id(id: string): string {
+  return mockStorefronts.find((sf) => sf.id === id)?.storeName ?? id;
 }
 
 /* ------------------------------ Mutations ----------------------------- */
@@ -220,7 +278,7 @@ export function changeSubdomainSlug(
     storefrontId,
     action: "Subdomain changed",
     actor,
-    detail: current.subdomain.slug + " → " + slug,
+    detail: current.subdomain.slug + " \u2192 " + slug,
   });
   return { ok: true, domain: next };
 }
@@ -513,4 +571,4 @@ export function forceFail(
   return { ok: true, domain: next };
 }
 
-export type { DomainVerificationStatus };
+export type { DomainActor, DomainVerificationStatus };

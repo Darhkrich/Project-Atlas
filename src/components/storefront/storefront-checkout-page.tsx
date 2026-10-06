@@ -12,6 +12,7 @@ import { useCustomerAuth } from "@/contexts/customer-auth-context";
 import { tryGetPlanByCode } from "@/config/subscription-plans";
 import { useOrders } from "@/contexts/orders-context";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
+import type { CustomerOrderPaymentStatus } from "@/lib/merchant/orders/types";
 
 interface StorefrontCheckoutPageProps {
   store: MerchantStorefrontConfig;
@@ -36,8 +37,6 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"online" | "cod">("online");
 
-  // Non-throwing lookup. A storefront whose plan code has been retired
-  // keeps all methods available rather than crashing the checkout page.
   const plan = tryGetPlanByCode(store.planId || "starter");
   const allowedMethods = plan
     ? allPaymentMethods.filter((m) =>
@@ -69,7 +68,7 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   const handlePlaceOrder = () => {
     if (!validate()) return;
     if (paymentMethod === "cod") {
-      placeOrder("Cash on Delivery", "Pending");
+      placeOrder("Cash on Delivery", "pending");
     } else {
       setPaymentOpen(true);
     }
@@ -77,7 +76,7 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
 
   const placeOrder = (
     paymentMethodName: string,
-    paymentStatus: "Paid" | "Pending"
+    paymentStatus: CustomerOrderPaymentStatus
   ) => {
     const orderItems = items.map((item) => ({
       name: item.name,
@@ -88,7 +87,18 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
 
     addOrder({
       storeSlug: store.slug,
+      storefrontId: store.storefrontId,
       customerEmail: form.email,
+      customerName: form.name,
+      customerPhone: form.phone,
+      shippingAddress: {
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        city: form.city,
+        region: form.region,
+        instructions: form.notes.trim() || undefined,
+      },
       total: subtotal,
       items: orderItems,
       paymentMethod: paymentMethodName,
@@ -104,14 +114,14 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
     status: string;
     message: string;
   }) => {
-    placeOrder("Online Payment", "Paid");
+    placeOrder("Online Payment", "paid");
   };
 
   if (orderPlaced) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-20 text-center">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-success-100 text-success-600 dark:bg-success-900/30 dark:text-success-200">
-          <AtlasIcon name="check" className="h-8 w-8" />
+          <AtlasIcon name="check" className="h-8 w-8" aria-hidden="true" />
         </div>
         <h1 className="mt-6 text-2xl font-bold text-neutral-950">
           Order Placed!
@@ -126,7 +136,7 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
           style={{ backgroundColor: store.primaryColor }}
         >
           Continue Shopping
-          <AtlasIcon name="arrow-right" className="h-4 w-4" />
+          <AtlasIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
     );
@@ -153,9 +163,7 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-3xl font-bold text-neutral-950">Checkout</h1>
-      <p className="mt-2 text-sm text-neutral-600">
-        Complete your order below.
-      </p>
+      <p className="mt-2 text-sm text-neutral-600">Complete your order below.</p>
 
       {!isAuthenticated && (
         <div className="mt-4 rounded-lg bg-neutral-100 p-4 text-sm text-neutral-600">
@@ -173,7 +181,6 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
       )}
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_400px]">
-        {/* Customer details form */}
         <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
           <h2 className="text-sm font-semibold text-neutral-950">
             Customer Details
@@ -281,14 +288,13 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
                 value={form.notes}
                 onChange={handleChange}
                 rows={2}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2.5 text-sm resize-none"
+                className="w-full resize-none rounded-lg border border-neutral-300 px-3 py-2.5 text-sm"
                 placeholder="Any special instructions?"
               />
             </div>
           </div>
         </div>
 
-        {/* Order summary and payment */}
         <div className="h-fit rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
           <h2 className="text-sm font-semibold text-neutral-950">
             Order Summary
@@ -297,22 +303,23 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
             <div className="flex justify-between text-sm">
               <span className="text-neutral-600">Items ({totalItems})</span>
               <span className="font-medium text-neutral-950">
-                GH₵ {subtotal.toFixed(2)}
+                {"GH\u20B5 "}
+                {subtotal.toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-neutral-600">Shipping</span>
               <span className="font-medium text-neutral-950">Free</span>
             </div>
-            <div className="border-t border-neutral-200 pt-2 flex justify-between text-base">
+            <div className="flex justify-between border-t border-neutral-200 pt-2 text-base">
               <span className="font-semibold text-neutral-950">Total</span>
               <span className="font-bold text-neutral-950">
-                GH₵ {subtotal.toFixed(2)}
+                {"GH\u20B5 "}
+                {subtotal.toFixed(2)}
               </span>
             </div>
           </div>
 
-          {/* Payment method selection */}
           <div className="mt-6 space-y-3">
             <p className="text-sm font-medium text-neutral-950">
               Payment Method
@@ -347,7 +354,7 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
             style={{ backgroundColor: store.primaryColor }}
           >
             Place Order
-            <AtlasIcon name="arrow-right" className="h-4 w-4" />
+            <AtlasIcon name="arrow-right" className="h-4 w-4" aria-hidden="true" />
           </Button>
           <p className="mt-3 text-center text-xs text-neutral-500">
             {paymentMethod === "cod"
@@ -357,7 +364,6 @@ export function StorefrontCheckoutPage({ store }: StorefrontCheckoutPageProps) {
         </div>
       </div>
 
-      {/* Payment modal (only for online payment) */}
       <PaymentFlowModal
         open={paymentOpen}
         mode="purchase"

@@ -31,10 +31,10 @@ export function useUrlFilters<T extends object>(
     return result;
   }, [searchParams, defaults]);
 
-  const hasActive = useMemo(
-    () => Object.keys(defaults).some((key) => filters[key] !== defaults[key]),
-    [filters, defaults]
-  );
+  const hasActive = useMemo(() => {
+    const keys = Object.keys(defaults) as Array<keyof T>;
+    return keys.some((key) => filters[key] !== defaults[key]);
+  }, [filters, defaults]);
 
   const setFilters = useCallback(
     (patch: Partial<T>) => {

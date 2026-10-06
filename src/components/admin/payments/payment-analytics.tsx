@@ -40,6 +40,13 @@ export function PaymentAnalytics() {
 
   const totalMethodValue = methodData.reduce((sum, item) => sum + item.value, 0);
 
+  const formatTrendTooltipValue = (
+    value: number | string | readonly (number | string)[] | undefined,
+  ) => {
+    const numericValue = Array.isArray(value) ? Number(value[0] ?? 0) : Number(value ?? 0);
+    return trendMetric === "volume" ? formatCurrency(numericValue) : numericValue;
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
       {/* Trend Chart */}
@@ -76,7 +83,11 @@ export function PaymentAnalytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-neutral-200 dark:text-neutral-700" />
               <XAxis dataKey="time" tickLine={false} axisLine={false} fontSize={12} />
               <YAxis tickLine={false} axisLine={false} fontSize={12} />
-              <Tooltip formatter={(value: number) => trendMetric === "volume" ? formatCurrency(value) : value} />
+              <Tooltip
+                formatter={(value) =>
+                  formatTrendTooltipValue(value)
+                }
+              />
               <Area
                 type="monotone"
                 dataKey={trendMetric}

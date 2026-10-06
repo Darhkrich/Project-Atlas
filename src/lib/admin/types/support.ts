@@ -106,10 +106,38 @@ export interface MerchantAccountLink {
   storefrontState: StorefrontState;
 }
 
+export interface MerchantStorefrontLink {
+  kind: "merchant_storefront";
+  storefrontId: string;
+  label: string;
+}
+
+export interface MerchantOrderLink {
+  kind: "merchant_order";
+  orderId: string;
+  label: string;
+}
+
+export interface MerchantSubscriptionLink {
+  kind: "merchant_subscription";
+  subscriptionId: string;
+  label: string;
+}
+
+export interface MerchantTemplateLink {
+  kind: "merchant_template";
+  templateId: string;
+  label: string;
+}
+
 export type LinkedEntity =
   | DigitalTransactionLink
   | ResellerOrderLink
-  | MerchantAccountLink;
+  | MerchantAccountLink
+  | MerchantStorefrontLink
+  | MerchantOrderLink
+  | MerchantSubscriptionLink
+  | MerchantTemplateLink;
 
 export interface SupportAttachment {
   id: string;
@@ -141,8 +169,6 @@ export interface InternalNote {
 }
 
 export interface SupportConversation {
-  ticketRef: ReactNode;
-  ticketRef: import("react").JSX.Element;
   id: string;
 
   userType: SupportUserType;
@@ -168,6 +194,7 @@ export interface SupportConversation {
   lastMessageAt: string;
   firstResponseAt?: string;
   resolvedAt?: string;
+  closedAt?: string;
 
   slaPolicyId?: string;
   slaDueAt?: string;

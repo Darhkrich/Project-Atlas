@@ -12,6 +12,7 @@ function seed(): WalletAutoApproveConfig {
     thresholdGHS: 5000,
     feeRatePercent: 0.5,
     dailyCap: 2,
+    refundAutoApproveThreshold: 5000,
     updatedAt: new Date(ANCHOR_MS - 30 * 86_400_000).toISOString(),
     updatedBy: "System",
   };

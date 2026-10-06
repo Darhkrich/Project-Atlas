@@ -17,7 +17,7 @@ function getFocusable(container: HTMLElement): HTMLElement[] {
     const rect = node.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   });
-}
+} 
 
 export function useFocusTrap<T extends HTMLElement>(
   isOpen: boolean,

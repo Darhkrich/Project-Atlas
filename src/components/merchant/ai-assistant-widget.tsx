@@ -1,11 +1,14 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { useAiAssistant } from "@/contexts/ai-assistant-context";
 import { useSubscription } from "@/contexts/subscription-context";
+import { getOnboardingPlanByCode } from "@/lib/merchant/onboarding/plans";
 import { cn } from "@/lib/utils";
+
+const DRAG_THRESHOLD = 4;
 
 export function AiAssistantWidget() {
   const { isOpen, setIsOpen, messages, sendMessage } = useAiAssistant();
@@ -13,7 +16,16 @@ export function AiAssistantWidget() {
   const [input, setInput] = useState("");
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
+  const dragStart = useRef({
+    pointerX: 0,
+    pointerY: 0,
+    startX: 0,
+    startY: 0,
+    moved: false,
+  });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const inputId = "ai-assistant-input";
+  const panelTitleId = "ai-assistant-title";
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -24,29 +36,33 @@ export function AiAssistantWidget() {
     }
   }, []);
 
-  // Hide on Starter plan, but only after hooks
-  if (currentPlan === "starter") {
-    return null;
-  }
+  const plan = getOnboardingPlanByCode(currentPlan);
+  const planCode = plan ? plan.code : "";
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  if (planCode === "starter") return null;
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
+    buttonRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
     dragStart.current = {
-      x: e.clientX,
-      y: e.clientY,
+      pointerX: e.clientX,
+      pointerY: e.clientY,
       startX: position.x,
       startY: position.y,
+      moved: false,
     };
   };
 
-  const handlePointerMove = (e: React.PointerEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (!dragging) return;
-    const dx = e.clientX - dragStart.current.x;
-    const dy = e.clientY - dragStart.current.y;
+    const dx = e.clientX - dragStart.current.pointerX;
+    const dy = e.clientY - dragStart.current.pointerY;
+    if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+      dragStart.current.moved = true;
+    }
     const newX = dragStart.current.startX + dx;
     const newY = dragStart.current.startY + dy;
-
     const maxX = window.innerWidth - 60;
     const maxY = window.innerHeight - 60;
     setPosition({
@@ -55,8 +71,12 @@ export function AiAssistantWidget() {
     });
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    buttonRef.current?.releasePointerCapture(e.pointerId);
     setDragging(false);
+    if (!dragStart.current.moved) {
+      setIsOpen(!isOpen);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -67,30 +87,38 @@ export function AiAssistantWidget() {
 
   return (
     <>
-      {/* Floating draggable button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        type="button"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        style={{
-          left: position.x,
-          top: position.y,
-        }}
-        className={`fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg hover:bg-brand-700 transition-all ${
-          dragging ? "cursor-grabbing" : "cursor-grab"
-        }`}
+        style={{ left: position.x, top: position.y }}
+        className={
+          "fixed z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition-colors hover:bg-brand-700 " +
+          (dragging ? "cursor-grabbing" : "cursor-grab")
+        }
         aria-label="AI Assistant"
+        aria-expanded={isOpen}
+        aria-controls="ai-assistant-panel"
       >
-        <AtlasIcon name={isOpen ? "x-circle" : "message-circle"} className="h-6 w-6" />
+        <AtlasIcon
+          name={isOpen ? "x-circle" : "message-circle"}
+          className="h-6 w-6"
+        />
       </button>
 
-      {/* Chat panel */}
       {isOpen && (
         <div
-          className="fixed z-50 w-80 sm:w-96 rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900"
+          id="ai-assistant-panel"
+          role="dialog"
+          aria-labelledby={panelTitleId}
+          className="fixed z-50 w-80 rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-800 dark:bg-neutral-900 sm:w-96"
           style={{
-            left: Math.max(0, Math.min(position.x - 260, window.innerWidth - 320)),
+            left: Math.max(
+              0,
+              Math.min(position.x - 260, window.innerWidth - 320)
+            ),
             top: Math.max(0, position.y - 350),
           }}
         >
@@ -98,19 +126,38 @@ export function AiAssistantWidget() {
             <div className="flex items-center gap-2">
               <AtlasIcon name="message-circle" className="h-5 w-5 text-white" />
               <div>
-                <p className="text-sm font-semibold text-white">Atlas Assistant</p>
+                <p
+                  id={panelTitleId}
+                  className="text-sm font-semibold text-white"
+                >
+                  Atlas Assistant
+                </p>
                 <p className="text-xs text-white/70">Contextual help</p>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-white/70 hover:text-white">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              aria-label="Close assistant"
+              className="text-white/70 transition-colors hover:text-white"
+            >
               <AtlasIcon name="x-circle" className="h-5 w-5" />
             </button>
           </div>
 
-          {/* Messages with hidden scrollbar */}
-          <div className="h-80 space-y-4 overflow-y-auto p-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div
+            role="log"
+            aria-live="polite"
+            className="h-80 space-y-4 overflow-y-auto p-4"
+          >
             {messages.map((msg) => (
-              <div key={msg.id} className={cn("flex", msg.from === "user" ? "justify-end" : "justify-start")}>
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex",
+                  msg.from === "user" ? "justify-end" : "justify-start"
+                )}
+              >
                 <div
                   className={cn(
                     "max-w-[80%] rounded-lg px-4 py-2 text-sm",
@@ -125,16 +172,27 @@ export function AiAssistantWidget() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+          <form
+            onSubmit={handleSubmit}
+            className="border-t border-neutral-200 p-3 dark:border-neutral-800"
+          >
             <div className="flex items-center gap-2">
+              <label htmlFor={inputId} className="sr-only">
+                Ask the assistant
+              </label>
               <input
+                id={inputId}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a question..."
+                placeholder="Ask a question"
                 className="flex-1 rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-900 placeholder-neutral-400 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
               />
-              <button type="submit" className="rounded-lg bg-brand-600 px-3 py-2 text-white hover:bg-brand-700">
+              <button
+                type="submit"
+                aria-label="Send message"
+                className="rounded-lg bg-brand-600 px-3 py-2 text-white transition-colors hover:bg-brand-700"
+              >
                 <AtlasIcon name="send" className="h-5 w-5" />
               </button>
             </div>
