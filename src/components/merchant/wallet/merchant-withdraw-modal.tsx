@@ -33,7 +33,6 @@ interface Props {
   main: MerchantWalletRecord | null;
   destination: RegisteredDestination | null;
   config: WalletAutoApproveConfig | null;
-  pendingWithdrawalTotal: number;
   onSubmit: (input: { amount: number }) => Promise<SubmitResult>;
   onRequestDestination: () => void;
 }
@@ -44,7 +43,6 @@ export function MerchantWithdrawModal({
   main,
   destination,
   config,
-  pendingWithdrawalTotal,
   onSubmit,
   onRequestDestination,
 }: Props) {
@@ -69,7 +67,7 @@ export function MerchantWithdrawModal({
 
   if (!main || !config) return null;
 
-  const available = Math.max(0, main.balance - pendingWithdrawalTotal);
+  const available = Math.max(0, main.balance);
   const parsedAmount = Number(amountInput);
   const amountValid =
     Number.isFinite(parsedAmount) &&
@@ -80,8 +78,7 @@ export function MerchantWithdrawModal({
     ? computeWithdrawalTotal(parsedAmount, config.feeRatePercent)
     : { fee: 0, total: 0 };
 
-  const exceedsThreshold =
-    amountValid && preview.total > config.thresholdGHS;
+  const exceedsThreshold = amountValid && preview.total > config.thresholdGHS;
 
   const destinationBlocked =
     destination !== null && destination.pendingChange !== undefined;
@@ -194,12 +191,6 @@ export function MerchantWithdrawModal({
                 {formatCurrency(available)}
               </span>
             </div>
-            {pendingWithdrawalTotal > 0 && (
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {formatCurrency(pendingWithdrawalTotal)} reserved for pending
-                withdrawals.
-              </p>
-            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -208,7 +199,7 @@ export function MerchantWithdrawModal({
                 key={f}
                 type="button"
                 onClick={() => setPreset(f)}
-                className="rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 hover:border-brand-400 hover:text-brand-800 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-brand-500 dark:hover:text-brand-300"
+                className="rounded-full border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 hover:border-brand-400 hover:text-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-brand-500 dark:hover:text-brand-300"
               >
                 {f === 1 ? "Full amount" : Math.round(f * 100) + "%"}
               </button>
@@ -216,7 +207,7 @@ export function MerchantWithdrawModal({
           </div>
 
           <AtlasInput
-            label="Amount (GHS)"
+            label="Amount (GH\u20B5)"
             type="number"
             placeholder="0.00"
             value={amountInput}

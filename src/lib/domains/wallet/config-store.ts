@@ -3,23 +3,25 @@ import type { WalletAutoApproveConfig } from "./enums";
 type Listener = () => void;
 
 let config: WalletAutoApproveConfig | null = null;
+let anchorMs: number | null = null;
 const listeners = new Set<Listener>();
 
-const ANCHOR_MS = Date.now();
-
-function seed(): WalletAutoApproveConfig {
+function seed(nowMs: number): WalletAutoApproveConfig {
   return {
     thresholdGHS: 5000,
     feeRatePercent: 0.5,
     dailyCap: 2,
     refundAutoApproveThreshold: 5000,
-    updatedAt: new Date(ANCHOR_MS - 30 * 86_400_000).toISOString(),
+    updatedAt: new Date(nowMs - 30 * 86_400_000).toISOString(),
     updatedBy: "System",
   };
 }
 
 function ensureLoaded(): WalletAutoApproveConfig {
-  if (config === null) config = seed();
+  if (config === null) {
+    if (anchorMs === null) anchorMs = Date.now();
+    config = seed(anchorMs);
+  }
   return config;
 }
 
@@ -44,7 +46,8 @@ export function notifyWalletConfig(): void {
 }
 
 export function resetWalletConfigForTest(): void {
-  config = seed();
+  anchorMs = Date.now();
+  config = seed(anchorMs);
   listeners.clear();
 }
 

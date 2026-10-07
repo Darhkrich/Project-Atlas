@@ -1,26 +1,66 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { MerchantStorefrontTheme } from "@/types/merchant-storefront";
-import type { ThemeDefinition } from "./types";
+
 import { airy } from "./airy";
 import { editorial } from "./editorial";
-import { studio } from "./studio";
 import { statement } from "./statement";
+import { studio } from "./studio";
 
-export type { ThemeDefinition, ThemeHeroLayout, ThemePriceColor, ThemeProductFit } from "./types";
+import type {
+  ThemeCategoryLayout,
+  ThemeDefinition,
+  ThemeFooterLayout,
+  ThemeHeroLayout,
+  ThemeNavigationLayout,
+  ThemePriceColor,
+  ThemeProductCard,
+  ThemeProductFit,
+  ThemeProductGrid,
+  ThemePromoLayout,
+} from "./types";
 
+export type {
+  ThemeCategoryLayout,
+  ThemeDefinition,
+  ThemeFooterLayout,
+  ThemeHeroLayout,
+  ThemeNavigationLayout,
+  ThemePriceColor,
+  ThemeProductCard,
+  ThemeProductFit,
+  ThemeProductGrid,
+  ThemePromoLayout,
+} from "./types";
+
+/**
+ * Central Atlas theme registry.
+ *
+ * Every supported storefront theme must be registered here.
+ */
 const THEMES: Record<MerchantStorefrontTheme, ThemeDefinition> = {
   airy,
   editorial,
-  studio,
   statement,
+  studio,
 };
 
+/**
+ * Ordered theme definitions used by theme selectors,
+ * admin interfaces, onboarding and storefront previews.
+ */
 export const ALL_THEME_DEFINITIONS: ThemeDefinition[] = [
   airy,
   editorial,
-  studio,
   statement,
+  studio,
 ];
 
+/**
+ * Safely resolve a storefront theme.
+ *
+ * Airy remains the fallback theme because it is the
+ * safest general-purpose storefront experience.
+ */
 export function getThemeDefinition(
   id: MerchantStorefrontTheme
 ): ThemeDefinition {

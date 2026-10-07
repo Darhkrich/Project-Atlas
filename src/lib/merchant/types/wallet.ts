@@ -1,11 +1,7 @@
 // lib/merchant/types/wallet.ts
 //
-// Public merchant type surface. Every shape that governs wallet money
-// now lives in the shared core at
-// lib/domains/wallet/merchant-money/types.ts. This file re-exports those
-// names under the same identifiers so existing merchant consumers keep
-// working. Local-only view helpers that the shared core does not define
-// are declared here.
+// Public merchant type surface. Re-exports from the shared merchant-money
+// type module so existing consumers keep their import path.
 
 export type {
   MerchantWalletType,

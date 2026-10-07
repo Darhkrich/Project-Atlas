@@ -1,20 +1,9 @@
 // lib/domains/wallet/merchant-money/mutations.ts
-//
-// Single write path for merchant wallet money. Public merchant UI and
-// admin payments UI both dispatch here. RBAC is enforced at the admin
-// wrapper layer, not here.
-//
-// Balance is never written directly. Every mutation writes a ledger entry
-// and the store recomputes the derived balance. Every debit is gated on
-// the running balance.
-//
-// Layer 2: cash movements emit treasury events.
-// Layer 3 A1: every mutation call writes one audit entry.
 
 import type { WalletFundingMethod } from "@/lib/domains/wallet/enums";
-import type { WalletApprovalReason } from "@/lib/domains/wallet/enums";
 import { computeWithdrawalTotal } from "@/lib/domains/wallet/fee";
 import { getWalletConfig } from "@/lib/domains/wallet/config-store";
+import { evaluateAutoApprove } from "./projection";
 import {
   getMerchantMoneyStoreState,
   getMerchantWalletState,
@@ -72,28 +61,6 @@ function poolForWalletType(
   walletType: MerchantWalletType
 ): TreasuryLiabilityPoolType {
   return walletType === "billing" ? "merchant_billing" : "merchant_main";
-}
-
-function startOfUtcDay(ms: number): number {
-  const d = new Date(ms);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-}
-
-function requestsTodayCount(merchantId: string, nowMs: number): number {
-  const state = getMerchantWalletState(merchantId);
-  if (!state) return 0;
-  const dayStart = startOfUtcDay(nowMs);
-  const dayEnd = dayStart + 86_400_000;
-  let count = 0;
-  for (const r of state.withdrawalRequests) {
-    const t = new Date(r.requestedAt).getTime();
-    if (t >= dayStart && t < dayEnd) count += 1;
-  }
-  for (const h of state.withdrawalHistory) {
-    const t = new Date(h.requestedAt).getTime();
-    if (t >= dayStart && t < dayEnd) count += 1;
-  }
-  return count;
 }
 
 /* ------------------------------ Funding -------------------------------- */
@@ -206,8 +173,6 @@ export function transferBetweenWallets(
   if (!state) return { ok: false, error: "Merchant wallet not found." };
 
   const fromWallet = input.from === "billing" ? state.billing : state.main;
-
-  // Freeze is outbound-only. Only the source wallet is gated.
   if (fromWallet.status === "frozen") {
     return { ok: false, error: "The source wallet is frozen." };
   }
@@ -255,7 +220,6 @@ export function transferBetweenWallets(
     lastCreditAt: nowIso,
   });
 
-  // Cross-pool reclassification. Money lands in `to`, leaves `from`.
   emitLedgerEvent({
     kind: "internal_reclassification",
     direction: "internal",
@@ -347,17 +311,18 @@ export function requestMerchantWithdrawal(
     };
   }
 
-  const approvalReasons: WalletApprovalReason[] = [];
-  if (total > config.thresholdGHS) {
-    approvalReasons.push("exceeds_threshold");
-  }
-  const todayCount = requestsTodayCount(actor.id, Date.now());
-  if (todayCount >= config.dailyCap) {
-    approvalReasons.push("daily_cap_reached");
-  }
-  const requiresApproval = approvalReasons.length > 0;
+  const nowMs = Date.now();
+  const evaluation = evaluateAutoApprove(
+    state,
+    input.amount,
+    fee,
+    config,
+    nowMs
+  );
+  const requiresApproval = evaluation.outcome === "requires_approval";
+  const approvalReasons = evaluation.reasons;
 
-  const nowIso = new Date().toISOString();
+  const nowIso = new Date(nowMs).toISOString();
   const requestId = "MWD-" + crypto.randomUUID().slice(0, 8).toUpperCase();
   const transactionRef = "TXN-" + crypto.randomUUID().slice(0, 8).toUpperCase();
 
@@ -401,10 +366,6 @@ export function requestMerchantWithdrawal(
 
   if (requiresApproval) {
     internalAddWithdrawalRequest(request);
-    internalPatchWalletMeta(actor.id, "main", {
-      updatedAt: nowIso,
-      lastDebitAt: nowIso,
-    });
   } else {
     const history: MerchantWithdrawalHistoryEntry = {
       ...request,
@@ -412,10 +373,6 @@ export function requestMerchantWithdrawal(
       resolvedBy: "System",
     };
     internalAddWithdrawalHistory(history);
-    internalPatchWalletMeta(actor.id, "main", {
-      updatedAt: nowIso,
-      lastDebitAt: nowIso,
-    });
 
     emitLedgerEvent({
       kind: "withdrawal_debit",
@@ -431,6 +388,11 @@ export function requestMerchantWithdrawal(
       settledAt: nowIso,
     });
   }
+
+  internalPatchWalletMeta(actor.id, "main", {
+    updatedAt: nowIso,
+    lastDebitAt: nowIso,
+  });
 
   appendAuditEntry({
     action: "wallet.merchant.withdraw_request",
@@ -535,9 +497,6 @@ export function approveMerchantWithdrawal(
     return { ok: false, error: "Withdrawal is not awaiting approval." };
   }
 
-  // Snapshot approval. The destination the merchant committed to at
-  // request time is the destination the payout ships to. Freeze state is
-  // not re-checked: the wallet was already debited at request time.
   if (state.destination && state.destination.pendingChange) {
     return {
       ok: false,
@@ -759,9 +718,7 @@ export function adjustMerchantWallet(
 }
 
 /**
- * @deprecated Use adjustMerchantWallet. Kept as a thin wrapper for the
- * admin payments wrapper that still calls this name. Defaults to main
- * wallet.
+ * @deprecated Use adjustMerchantWallet. Defaults to main wallet.
  */
 export interface AdminAdjustInput {
   merchantId: string;

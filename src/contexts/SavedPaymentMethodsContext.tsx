@@ -1,7 +1,13 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { useAuth } from "@/contexts/auth-context";
 
 type SavedPaymentMethod = {
@@ -26,7 +32,7 @@ const SavedPaymentMethodsContext = createContext<
   SavedPaymentMethodsContextType | undefined
 >(undefined);
 
-const STORAGE_KEY = "atlas-saved-payment-methods"; // will be scoped per user
+const STORAGE_KEY = "atlas-saved-payment-methods";
 
 export function SavedPaymentMethodsProvider({
   children,
@@ -34,21 +40,23 @@ export function SavedPaymentMethodsProvider({
   children: ReactNode;
 }) {
   const { user } = useAuth();
-  const [allMethods, setAllMethods] = useState<Record<string, SavedPaymentMethod[]>>({});
+  const [allMethods, setAllMethods] = useState<
+    Record<string, SavedPaymentMethod[]>
+  >({});
   const [loaded, setLoaded] = useState(false);
 
-  // Load all methods from storage on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         setAllMethods(JSON.parse(stored));
-      } catch {}
+      } catch {
+        // ignore malformed payloads
+      }
     }
     setLoaded(true);
   }, []);
 
-  // Persist whenever allMethods changes
   useEffect(() => {
     if (loaded) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(allMethods));
@@ -56,7 +64,6 @@ export function SavedPaymentMethodsProvider({
   }, [allMethods, loaded]);
 
   const userKey = user?.email || "guest";
-
   const savedMethods = allMethods[userKey] || [];
 
   const addSavedMethod = (
@@ -66,14 +73,14 @@ export function SavedPaymentMethodsProvider({
   ) => {
     setAllMethods((prev) => {
       const existingUserMethods = prev[userKey] || [];
-      // Avoid duplicate methods (same methodId)
-      const filtered = existingUserMethods.filter((m) => m.methodId !== methodId);
+      const filtered = existingUserMethods.filter(
+        (m) => m.methodId !== methodId
+      );
       const newMethod: SavedPaymentMethod = {
-        id: `spm-${Date.now()}`,
+        id: "spm-" + crypto.randomUUID(),
         methodId,
         label,
         details,
-        isDefault: undefined
       };
       return {
         ...prev,

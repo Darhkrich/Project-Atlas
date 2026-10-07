@@ -14,7 +14,6 @@ import {
 interface Props {
   open: boolean;
   destination: RegisteredDestination | null;
-  submitting: boolean;
   onSubmit: (input: {
     method: "momo" | "bank";
     provider: string;
@@ -35,10 +34,11 @@ const BANK_PROVIDERS = [
   "CalBank",
 ];
 
+const INITIAL_ADD_REASON = "Initial withdrawal account setup";
+
 export function EditDestinationModal({
   open,
   destination,
-  submitting,
   onSubmit,
   onClose,
 }: Props) {
@@ -48,6 +48,11 @@ export function EditDestinationModal({
   const [nameOnAccount, setNameOnAccount] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const hasVerifiedAccount =
+    destination !== null && destination.verifiedAt !== null;
+  const isChange = hasVerifiedAccount;
 
   useEffect(() => {
     if (!open) return;
@@ -57,41 +62,56 @@ export function EditDestinationModal({
     setNameOnAccount(destination?.nameOnAccount ?? "");
     setReason("");
     setError(null);
+    setSubmitting(false);
   }, [open, destination]);
 
   const providerList = method === "momo" ? MOMO_PROVIDERS : BANK_PROVIDERS;
   const trimmedReason = reason.trim();
+
+  const reasonValid =
+    !isChange ||
+    (trimmedReason.length >= MIN_MERCHANT_DESTINATION_REASON_LENGTH &&
+      trimmedReason.length <= MAX_MERCHANT_DESTINATION_REASON_LENGTH);
+
   const valid =
     provider.trim().length > 0 &&
     accountNumber.trim().length > 0 &&
     nameOnAccount.trim().length > 0 &&
-    trimmedReason.length >= MIN_MERCHANT_DESTINATION_REASON_LENGTH &&
-    trimmedReason.length <= MAX_MERCHANT_DESTINATION_REASON_LENGTH;
+    reasonValid;
 
   const handleSubmit = () => {
     if (!valid) {
       setError(
-        "Fill every field and explain the change in at least " +
-          MIN_MERCHANT_DESTINATION_REASON_LENGTH +
-          " characters."
+        isChange
+          ? "Fill every field and explain the change in at least " +
+              MIN_MERCHANT_DESTINATION_REASON_LENGTH +
+              " characters."
+          : "Fill every field."
       );
       return;
     }
+    setSubmitting(true);
     onSubmit({
       method,
       provider,
       accountNumber: accountNumber.trim(),
       nameOnAccount: nameOnAccount.trim(),
-      reason: trimmedReason,
+      reason: isChange ? trimmedReason : INITIAL_ADD_REASON,
     });
   };
+
+  const hasError = error !== null;
 
   return (
     <AtlasModalShell
       open={open}
       onClose={onClose}
-      title={destination ? "Change destination" : "Add destination"}
-      description="Atlas reviews every destination change before it takes effect."
+      title={isChange ? "Change withdrawal account" : "Add withdrawal account"}
+      description={
+        isChange
+          ? "Atlas reviews every change before it takes effect. You cannot cash out until the new account is verified."
+          : "Atlas reviews every new account before it can receive payouts."
+      }
     >
       <div className="space-y-4">
         <div>
@@ -99,7 +119,7 @@ export function EditDestinationModal({
             htmlFor="merchant-dest-method"
             className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
           >
-            Method
+            Account type
           </label>
           <select
             id="merchant-dest-method"
@@ -149,6 +169,8 @@ export function EditDestinationModal({
             setAccountNumber(e.target.value);
             setError(null);
           }}
+          aria-invalid={hasError ? "true" : undefined}
+          aria-describedby={hasError ? "merchant-dest-error" : undefined}
         />
 
         <AtlasInput
@@ -159,30 +181,37 @@ export function EditDestinationModal({
             setNameOnAccount(e.target.value);
             setError(null);
           }}
+          aria-invalid={hasError ? "true" : undefined}
+          aria-describedby={hasError ? "merchant-dest-error" : undefined}
         />
 
-        <div>
-          <label
-            htmlFor="merchant-dest-reason"
-            className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
-          >
-            Reason for change
-          </label>
-          <textarea
-            id="merchant-dest-reason"
-            rows={3}
-            value={reason}
-            onChange={(e) => {
-              setReason(e.target.value);
-              setError(null);
-            }}
-            className="w-full rounded-md border border-neutral-300 bg-white p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-            placeholder="Explain why this destination is being changed."
-          />
-        </div>
+        {isChange && (
+          <div>
+            <label
+              htmlFor="merchant-dest-reason"
+              className="mb-1 block text-xs font-medium text-neutral-600 dark:text-neutral-400"
+            >
+              Reason for change
+            </label>
+            <textarea
+              id="merchant-dest-reason"
+              rows={3}
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                setError(null);
+              }}
+              aria-invalid={hasError ? "true" : undefined}
+              aria-describedby={hasError ? "merchant-dest-error" : undefined}
+              className="w-full rounded-md border border-neutral-300 bg-white p-2 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+              placeholder="Explain why this account is being changed."
+            />
+          </div>
+        )}
 
         {error && (
           <p
+            id="merchant-dest-error"
             role="alert"
             className="text-xs text-danger-600 dark:text-danger-400"
           >
@@ -198,8 +227,15 @@ export function EditDestinationModal({
             className="flex-1"
             onClick={handleSubmit}
             disabled={!valid || submitting}
+            aria-busy={submitting}
           >
-            {submitting ? "Submitting" : "Submit for review"}
+            {submitting
+              ? isChange
+                ? "Submitting"
+                : "Adding"
+              : isChange
+              ? "Submit for review"
+              : "Add account"}
           </Button>
         </div>
       </div>

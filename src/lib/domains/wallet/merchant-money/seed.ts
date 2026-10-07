@@ -1,13 +1,4 @@
 // lib/domains/wallet/merchant-money/seed.ts
-//
-// Deterministic seed for the shared merchant money store. Accepts a
-// reference time so callers control the anchor. No Date.now at module
-// scope. All timestamps derive from referenceNowMs.
-//
-// Every subtraction is gated on the running balance. A wallet balance in
-// this seed is never negative. If a withdrawal or plan charge cannot be
-// covered by the credits built for that merchant, it is skipped or
-// reduced.
 
 import type { WalletAutoApproveConfig } from "@/lib/domains/wallet/enums";
 import { computeWithdrawalTotal } from "@/lib/domains/wallet/fee";
@@ -79,18 +70,7 @@ function pickPlan(seed: number): PlanCode {
   return PLAN_CODES[seed % PLAN_CODES.length];
 }
 
-function buildConfig(referenceNowMs: number): WalletAutoApproveConfig {
-  return {
-    thresholdGHS: 5000,
-    feeRatePercent: 0.5,
-    dailyCap: 2,
-    refundAutoApproveThreshold: 5000,
-    updatedAt: new Date(referenceNowMs - 30 * DAY).toISOString(),
-    updatedBy: "System",
-  };
-}
-
-function buildWalletRecord(
+export function buildWalletRecord(
   merchantId: string,
   merchantName: string,
   walletType: "billing" | "main",
@@ -111,6 +91,17 @@ function buildWalletRecord(
     lastFundingAt: null,
     lastCreditAt: null,
     lastDebitAt: null,
+  };
+}
+
+export function buildBlankAutoPayConfig(
+  referenceNowMs: number
+): MerchantAutoPayConfig {
+  return {
+    enabled: false,
+    source: "billing_wallet",
+    updatedAt: new Date(referenceNowMs).toISOString(),
+    updatedBy: "System",
   };
 }
 
@@ -532,9 +523,9 @@ function buildMerchantState(
 }
 
 export function buildMerchantMoneySeed(
-  referenceNowMs: number
+  referenceNowMs: number,
+  config: WalletAutoApproveConfig
 ): MerchantMoneyStoreState {
-  const config = buildConfig(referenceNowMs);
   const out: MerchantMoneyStoreState = {};
   for (let i = 0; i < SEED_MERCHANTS.length; i++) {
     const m = SEED_MERCHANTS[i];

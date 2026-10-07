@@ -1,8 +1,7 @@
 // lib/merchant/wallet/wallet-mutations.ts
 //
 // Public merchant dispatchers over the shared merchant money mutations.
-// Same exported names, same signatures, same actor shape. The
-// implementation moves to the shared module.
+// Same exported names, same signatures, same actor shape.
 
 import {
   fundMerchantWallet as sharedFundMerchantWallet,
@@ -14,6 +13,8 @@ import {
   updateAutoPayCard as sharedUpdateAutoPayCard,
   setAutoPayEnabled as sharedSetAutoPayEnabled,
   setAutoPaySource as sharedSetAutoPaySource,
+  addMerchantSavedMethod as sharedAddMerchantSavedMethod,
+  removeMerchantSavedMethod as sharedRemoveMerchantSavedMethod,
 } from "@/lib/domains/wallet/merchant-money/mutations";
 import type {
   FundInput,
@@ -21,6 +22,7 @@ import type {
   WithdrawInput,
   DestinationChangeInput,
   UpdateCardInput,
+  AddSavedMethodInput,
 } from "@/lib/domains/wallet/merchant-money/mutations";
 import type {
   MerchantMoneyActor,
@@ -31,7 +33,14 @@ import type {
 export type MerchantActor = MerchantMoneyActor;
 export type MerchantMutationResult = MerchantMoneyMutationResult;
 
-export type { FundInput, TransferInput, WithdrawInput, DestinationChangeInput, UpdateCardInput };
+export type {
+  FundInput,
+  TransferInput,
+  WithdrawInput,
+  DestinationChangeInput,
+  UpdateCardInput,
+  AddSavedMethodInput,
+};
 
 export function fundMerchantWallet(
   walletType: MerchantWalletType,
@@ -94,4 +103,18 @@ export function setAutoPaySource(
   actor: MerchantActor
 ): MerchantMutationResult {
   return sharedSetAutoPaySource(source, actor);
+}
+
+export function addMerchantSavedMethod(
+  input: AddSavedMethodInput,
+  actor: MerchantActor
+): MerchantMutationResult {
+  return sharedAddMerchantSavedMethod(input, actor);
+}
+
+export function removeMerchantSavedMethod(
+  methodId: string,
+  actor: MerchantActor
+): MerchantMutationResult {
+  return sharedRemoveMerchantSavedMethod(methodId, actor);
 }

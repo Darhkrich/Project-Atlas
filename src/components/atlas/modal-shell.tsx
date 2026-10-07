@@ -115,8 +115,9 @@ export function AtlasModalShell({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
         className={cn(
-          "relative flex w-full max-h-[90vh] flex-col rounded-t-2xl bg-white shadow-xl dark:bg-neutral-900 sm:max-h-[85vh] sm:rounded-2xl",
+          "relative flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl dark:bg-neutral-900 sm:mb-0 sm:max-h-[85vh] sm:rounded-2xl",
           SIZE_CLASS[size]
         )}
       >

@@ -1,19 +1,21 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable react-hooks/purity */
 /* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/purity */
 "use client";
 
-import { useMemo, useState, useEffect, useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useNow } from "@/lib/shared/hooks/use-now";
 import { useCurrentMerchant } from "./use-current-merchant";
 import {
+  getMerchantMoneyStoreVersion,
   getMerchantWalletState,
   isMerchantMoneyStoreLoaded,
   subscribeToMerchantMoneyStore,
 } from "@/lib/domains/wallet/merchant-money/store";
+import { ensureMerchantWallet } from "@/lib/domains/wallet/merchant-money/ensure";
 import {
   projectWalletView,
   projectLedgerRows,
+  projectAllLedgerRows,
   projectPendingWithdrawals,
   projectWithdrawalHistory,
   projectQuickStats,
@@ -31,6 +33,7 @@ import type {
   MerchantLedgerRow,
   MerchantMainSummary,
   MerchantPendingWithdrawalRow,
+  MerchantSavedPaymentMethod,
   MerchantWalletQuickStats,
   MerchantWalletView,
   MerchantWithdrawalHistoryEntry,
@@ -40,6 +43,7 @@ import type { WalletAutoApproveConfig } from "@/lib/domains/wallet/enums";
 
 export interface UseCurrentMerchantWalletResult {
   wallet: MerchantWalletView | null;
+  allRows: MerchantLedgerRow[];
   billingRows: MerchantLedgerRow[];
   mainRows: MerchantLedgerRow[];
   pendingWithdrawals: MerchantPendingWithdrawalRow[];
@@ -48,6 +52,7 @@ export interface UseCurrentMerchantWalletResult {
   billingSummary: MerchantBillingSummary | null;
   mainSummary: MerchantMainSummary | null;
   destination: RegisteredDestination | null;
+  savedMethods: MerchantSavedPaymentMethod[];
   autoPay: MerchantAutoPayConfig | null;
   config: WalletAutoApproveConfig | null;
   loading: boolean;
@@ -56,6 +61,7 @@ export interface UseCurrentMerchantWalletResult {
 
 const EMPTY_RESULT: UseCurrentMerchantWalletResult = {
   wallet: null,
+  allRows: [],
   billingRows: [],
   mainRows: [],
   pendingWithdrawals: [],
@@ -64,6 +70,7 @@ const EMPTY_RESULT: UseCurrentMerchantWalletResult = {
   billingSummary: null,
   mainSummary: null,
   destination: null,
+  savedMethods: [],
   autoPay: null,
   config: null,
   loading: false,
@@ -79,24 +86,18 @@ function subscribe(onStoreChange: () => void): () => void {
   };
 }
 
+function snapshot(): number {
+  const storeLoaded = isMerchantMoneyStoreLoaded();
+  const configLoaded = isWalletConfigLoaded();
+  if (!storeLoaded || !configLoaded) return -1;
+  return getMerchantMoneyStoreVersion();
+}
+
 export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
   const merchant = useCurrentMerchant();
   const nowMs = useNow();
-  const [, forceTick] = useState(0);
 
-  useEffect(() => {
-    forceTick(0);
-  }, [merchant?.id]);
-
-  const snapshot = useSyncExternalStore(
-    subscribe,
-    () => {
-      const storeLoaded = isMerchantMoneyStoreLoaded();
-      const configLoaded = isWalletConfigLoaded();
-      return storeLoaded && configLoaded ? 1 : 0;
-    },
-    () => 0
-  );
+  const version = useSyncExternalStore(subscribe, snapshot, () => -1);
 
   const value = useMemo(() => {
     if (!merchant) {
@@ -106,18 +107,16 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
       };
     }
     try {
-      const state = getMerchantWalletState(merchant.id);
+      let state = getMerchantWalletState(merchant.id);
       if (!state) {
-        return {
-          ...EMPTY_RESULT,
-          error: "Merchant wallet not found.",
-        };
+        state = ensureMerchantWallet(merchant.id, merchant.name);
       }
       const config = getWalletConfig();
       const effectiveNow = nowMs ?? Date.now();
 
       return {
         wallet: projectWalletView(state),
+        allRows: projectAllLedgerRows(state),
         billingRows: projectLedgerRows(state, "billing"),
         mainRows: projectLedgerRows(state, "main"),
         pendingWithdrawals: projectPendingWithdrawals(state),
@@ -126,12 +125,11 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
         billingSummary: projectBillingSummary(
           state,
           state.autoPay.enabled,
-          state.autoPay.source,
-          null,
-          null
+          state.autoPay.source
         ),
         mainSummary: projectMainSummary(state),
         destination: state.destination,
+        savedMethods: state.savedMethods,
         autoPay: state.autoPay,
         config,
         loading: false,
@@ -143,10 +141,10 @@ export function useCurrentMerchantWallet(): UseCurrentMerchantWalletResult {
         error: err instanceof Error ? err.message : "Failed to load wallet",
       };
     }
-  }, [merchant, nowMs, snapshot]);
+  }, [merchant, nowMs, version]);
 
   return {
     ...value,
-    loading: !merchant || snapshot === 0,
+    loading: !merchant || version < 0,
   };
 }

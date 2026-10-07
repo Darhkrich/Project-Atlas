@@ -13,17 +13,17 @@ import type {
   RegisteredDestination,
 } from "./types";
 import { buildMerchantMoneySeed } from "./seed";
+import { getWalletConfig } from "@/lib/domains/wallet/config-store";
 
 type Listener = () => void;
 
 let store: MerchantMoneyStoreState | null = null;
-let referenceNowMs: number | null = null;
+let version = 0;
 const listeners = new Set<Listener>();
 
 function ensureStore(): MerchantMoneyStoreState {
   if (store === null) {
-    if (referenceNowMs === null) referenceNowMs = Date.now();
-    store = buildMerchantMoneySeed(referenceNowMs);
+    store = buildMerchantMoneySeed(Date.now(), getWalletConfig());
     for (const merchantId of Object.keys(store)) {
       recomputeBalances(merchantId);
     }
@@ -32,11 +32,16 @@ function ensureStore(): MerchantMoneyStoreState {
 }
 
 function notify() {
+  version += 1;
   for (const fn of listeners) fn();
 }
 
 export function isMerchantMoneyStoreLoaded(): boolean {
   return store !== null;
+}
+
+export function getMerchantMoneyStoreVersion(): number {
+  return version;
 }
 
 export function getMerchantMoneyStoreState(): MerchantMoneyStoreState {
@@ -50,6 +55,16 @@ export function getMerchantWalletState(
   return s[merchantId] ?? null;
 }
 
+export function internalUpsertMerchantState(
+  merchantId: string,
+  state: MerchantWalletState
+): MerchantWalletState {
+  const s = ensureStore();
+  s[merchantId] = state;
+  notify();
+  return state;
+}
+
 export function subscribeToMerchantMoneyStore(
   listener: Listener
 ): () => void {
@@ -58,18 +73,6 @@ export function subscribeToMerchantMoneyStore(
     listeners.delete(listener);
   };
 }
-
-// ---------------------------------------------------------------------------
-// Balance derivation.
-//
-// Every wallet balance is derived from the ledger. No balance is stored as a
-// source of truth. Funding, customer payments, and transfer_in entries add.
-// Plan charges and refunds subtract when settled. Withdrawals subtract unless
-// the entry is rejected or failed. Adjustments carry their own sign.
-//
-// Balance is recomputed after every ledger append or patch. Only the ledger
-// changes; the derived number follows.
-// ---------------------------------------------------------------------------
 
 function deriveBalance(
   merchantId: string,
@@ -87,7 +90,9 @@ function deriveBalance(
     } else if (entry.kind === "customer_payment") {
       total += entry.amount;
     } else if (entry.kind === "plan_charge") {
-      if (entry.status === "successful") total -= entry.amount;
+      if (entry.status === "successful" && entry.source === "billing_wallet") {
+        total -= entry.amount;
+      }
     } else if (entry.kind === "refund") {
       if (entry.settledAt) total -= entry.amount;
     } else if (entry.kind === "withdrawal") {
@@ -117,10 +122,6 @@ function recomputeBalances(merchantId: string): void {
     main: { ...wallet.main, balance: mainBalance },
   };
 }
-
-// ---------------------------------------------------------------------------
-// Internal mutation surface. Only mutations.ts calls these.
-// ---------------------------------------------------------------------------
 
 export function internalAppendLedgerEntry(
   entry: MerchantWalletLedgerEntry
@@ -304,8 +305,8 @@ export function internalPatchAutoPayConfig(
 }
 
 export function resetMerchantMoneyStoreForTest(): void {
-  referenceNowMs = Date.now();
-  store = buildMerchantMoneySeed(referenceNowMs);
+  store = buildMerchantMoneySeed(Date.now(), getWalletConfig());
+  version = 0;
   for (const merchantId of Object.keys(store)) {
     recomputeBalances(merchantId);
   }

@@ -124,6 +124,23 @@ export const FINANCIAL_ACTION_LABEL: Record<AuditAction, string> = {
   "subscription.plan.toggle": "Subscription plan toggled",
   "subscription.plan.reorder": "Subscription plan reordered",
 
+  // Subscription, merchant
+  "subscription.merchant.start": "Merchant subscription started",
+  "subscription.merchant.change_plan": "Merchant plan changed",
+  "subscription.merchant.change_cycle": "Merchant billing cycle changed",
+  "subscription.merchant.cancel": "Merchant subscription cancelled",
+  "subscription.merchant.reactivate": "Merchant subscription reactivated",
+  "subscription.merchant.charge_success": "Merchant subscription charge succeeded",
+  "subscription.merchant.charge_failure": "Merchant subscription charge failed",
+  "subscription.merchant.past_due": "Merchant subscription past due",
+
+  // Invoice, merchant
+  "invoice.merchant.issue": "Merchant invoice issued",
+  "invoice.merchant.paid": "Merchant invoice paid",
+  "invoice.merchant.failed": "Merchant invoice failed",
+  "invoice.merchant.void": "Merchant invoice voided",
+  "invoice.merchant.refunded": "Merchant invoice refunded",
+
   // Support
   "support.ticket.status_change": "Ticket status changed",
   "support.ticket.priority_change": "Ticket priority changed",
@@ -158,6 +175,8 @@ export const FINANCIAL_RESOURCE_LABEL: Record<AuditResourceType, string> = {
   catalog_plan: "Catalog plan",
   catalog_network: "Catalog network",
   subscription_plan: "Subscription plan",
+  subscription: "Subscription",
+  invoice: "Invoice",
   support_conversation: "Support conversation",
   customer: "Customer",
 };
@@ -178,6 +197,7 @@ export function sectionForAction(
   if (action.startsWith("treasury.")) return "admin";
   if (action.startsWith("catalog.")) return "digital_services";
   if (action.startsWith("subscription.")) return "ecommerce";
+  if (action.startsWith("invoice.")) return "ecommerce";
   if (action.startsWith("support.")) return "admin";
   return undefined;
 }

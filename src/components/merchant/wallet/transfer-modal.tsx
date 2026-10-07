@@ -14,7 +14,6 @@ interface Props {
   open: boolean;
   billing: MerchantWalletRecord | null;
   main: MerchantWalletRecord | null;
-  submitting: boolean;
   onSubmit: (input: {
     from: WalletKind;
     to: WalletKind;
@@ -27,7 +26,6 @@ export function TransferModal({
   open,
   billing,
   main,
-  submitting,
   onSubmit,
   onClose,
 }: Props) {
@@ -35,6 +33,7 @@ export function TransferModal({
   const [to, setTo] = useState<WalletKind>("billing");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -43,6 +42,7 @@ export function TransferModal({
     setTo("billing");
     setAmount("");
     setError(null);
+    setSubmitting(false);
     setDone(false);
   }, [open]);
 
@@ -64,7 +64,9 @@ export function TransferModal({
       setError("Enter an amount within the source wallet balance.");
       return;
     }
+    setSubmitting(true);
     const result = await onSubmit({ from, to, amount: parsed });
+    setSubmitting(false);
     if (result.ok) {
       setDone(true);
     } else {
@@ -74,11 +76,7 @@ export function TransferModal({
 
   if (done) {
     return (
-      <AtlasModalShell
-        open={open}
-        onClose={onClose}
-        title="Transfer complete"
-      >
+      <AtlasModalShell open={open} onClose={onClose} title="Transfer complete">
         <div className="space-y-4 text-center">
           <p
             role="status"
@@ -122,7 +120,9 @@ export function TransferModal({
             }}
             className="h-10 w-full rounded-md border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
           >
-            <option value="main">Main wallet ({formatCurrency(main.balance)})</option>
+            <option value="main">
+              Main wallet ({formatCurrency(main.balance)})
+            </option>
             <option value="billing">
               Billing wallet ({formatCurrency(billing.balance)})
             </option>
@@ -133,7 +133,7 @@ export function TransferModal({
           <button
             type="button"
             onClick={handleSwap}
-            className="rounded-full border border-neutral-300 p-2 text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-700 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-brand-600 dark:hover:text-brand-300"
+            className="rounded-full border border-neutral-300 p-2 text-neutral-500 transition-colors hover:border-brand-400 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-brand-600 dark:hover:text-brand-300"
             aria-label="Swap source and destination"
           >
             <svg
@@ -170,12 +170,14 @@ export function TransferModal({
             <option value="billing">
               Billing wallet ({formatCurrency(billing.balance)})
             </option>
-            <option value="main">Main wallet ({formatCurrency(main.balance)})</option>
+            <option value="main">
+              Main wallet ({formatCurrency(main.balance)})
+            </option>
           </select>
         </div>
 
         <AtlasInput
-          label="Amount (GHS)"
+          label="Amount (GH\u20B5)"
           type="number"
           placeholder="0.00"
           value={amount}

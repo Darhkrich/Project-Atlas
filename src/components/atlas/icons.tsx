@@ -13,6 +13,9 @@ export type AtlasIconName =
   | "wallet"
   | "card"
   | "bank"
+  | "chart"
+  | "trending-down"
+  | "trending-up"
   | "mobile"
   | "smartphone"
   | "bell"
@@ -115,6 +118,26 @@ const ICONS: Record<AtlasIconName, ReactNode> = {
       <circle cx="12" cy="12" r="10" />
       <path d="M2 12h20" />
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </>
+  ),
+  "trending-down": (
+    <>
+      <path d="M12 20v-6" />
+      <path d="M18 20v-6" />
+      <path d="M6 20v-6" />
+      <path d="M12 14V4" />
+      <path d="M18 14V4" />
+      <path d="M6 14V4" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M12 20v-6" />
+      <path d="M18 20v-6" />
+      <path d="M6 20v-6" />
+      <path d="M12 14V4" />
+      <path d="M18 14V4" />
+      <path d="M6 14V4" />
     </>
   ),
   tv: (

@@ -8,7 +8,6 @@ import { AtlasInput } from "@/components/atlas/Input";
 
 interface Props {
   open: boolean;
-  submitting: boolean;
   onSubmit: (input: {
     cardRef: string;
     cardBrand: string;
@@ -25,17 +24,13 @@ function detectBrand(number: string): string {
   return "Card";
 }
 
-export function UpdateCardModal({
-  open,
-  submitting,
-  onSubmit,
-  onClose,
-}: Props) {
+export function UpdateCardModal({ open, onSubmit, onClose }: Props) {
   const [number, setNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -44,6 +39,7 @@ export function UpdateCardModal({
     setCvv("");
     setName("");
     setError(null);
+    setSubmitting(false);
   }, [open]);
 
   const digits = number.replace(/\D+/g, "");
@@ -58,14 +54,22 @@ export function UpdateCardModal({
       setError("Fill in every field.");
       return;
     }
+    setSubmitting(true);
     const brand = detectBrand(digits);
     const last4 = digits.slice(-4);
     const cardRef = "tok_" + crypto.randomUUID().slice(0, 12);
-    const result = await onSubmit({ cardRef, cardBrand: brand, cardLast4: last4 });
+    const result = await onSubmit({
+      cardRef,
+      cardBrand: brand,
+      cardLast4: last4,
+    });
+    setSubmitting(false);
     if (!result.ok) {
       setError(result.error ?? "Could not save the card.");
     }
   };
+
+  const hasError = error !== null;
 
   return (
     <AtlasModalShell
@@ -84,6 +88,8 @@ export function UpdateCardModal({
             setNumber(e.target.value);
             setError(null);
           }}
+          aria-invalid={hasError ? "true" : undefined}
+          aria-describedby={hasError ? "update-card-error" : undefined}
         />
 
         <div className="grid grid-cols-2 gap-3">
@@ -96,6 +102,8 @@ export function UpdateCardModal({
               setExpiry(e.target.value);
               setError(null);
             }}
+            aria-invalid={hasError ? "true" : undefined}
+            aria-describedby={hasError ? "update-card-error" : undefined}
           />
           <AtlasInput
             label="CVV"
@@ -106,6 +114,8 @@ export function UpdateCardModal({
               setCvv(e.target.value);
               setError(null);
             }}
+            aria-invalid={hasError ? "true" : undefined}
+            aria-describedby={hasError ? "update-card-error" : undefined}
           />
         </div>
 
@@ -117,6 +127,8 @@ export function UpdateCardModal({
             setName(e.target.value);
             setError(null);
           }}
+          aria-invalid={hasError ? "true" : undefined}
+          aria-describedby={hasError ? "update-card-error" : undefined}
         />
 
         <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
@@ -126,6 +138,7 @@ export function UpdateCardModal({
 
         {error && (
           <p
+            id="update-card-error"
             role="alert"
             className="text-xs text-danger-600 dark:text-danger-400"
           >
@@ -141,6 +154,7 @@ export function UpdateCardModal({
             className="flex-1"
             onClick={handleSubmit}
             disabled={!valid || submitting}
+            aria-busy={submitting}
           >
             {submitting ? "Saving" : "Save card"}
           </Button>

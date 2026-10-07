@@ -1,15 +1,19 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AtlasSkeleton } from "@/components/atlas/skeleton";
 import { AtlasErrorState } from "@/components/atlas/error-state";
-import { PaymentFlowModal } from "@/components/payments/PaymentFlowModal";
-import { WalletBalanceHero } from "@/components/merchant/wallet/wallet-balance-hero";
+import {
+  PaymentFlowModal,
+  type PaymentFlowSavedMethod,
+  type PaymentFlowSaveInput,
+} from "@/components/payments/PaymentFlowModal";
+import { WalletMainHero } from "@/components/merchant/wallet/wallet-main-hero";
+import { WalletBillingCard } from "@/components/merchant/wallet/wallet-billing-card";
 import { WalletQuickStats } from "@/components/merchant/wallet/wallet-quick-stats";
-import { WalletCard } from "@/components/merchant/wallet/wallet-card";
-import { WalletPendingWithdrawals } from "@/components/merchant/wallet/wallet-pending-withdrawals";
-import { WalletDestinationCard } from "@/components/merchant/wallet/wallet-destination-card";
-import { WalletRecentActivity } from "@/components/merchant/wallet/wallet-recent-activity";
+import { WalletWaitingOnAtlas } from "@/components/merchant/wallet/wallet-waiting-on-atlas";
+import { WalletUnifiedActivity } from "@/components/merchant/wallet/wallet-unified-activity";
+import { WalletActivityFilters } from "@/components/merchant/wallet/wallet-activity-filters";
 import { TransferModal } from "@/components/merchant/wallet/transfer-modal";
 import { MerchantWithdrawModal } from "@/components/merchant/wallet/merchant-withdraw-modal";
 import { WalletAutoPayModal } from "@/components/merchant/wallet/wallet-auto-pay-modal";
@@ -18,8 +22,10 @@ import { EditDestinationModal } from "@/components/merchant/wallet/edit-destinat
 import { useCurrentMerchantWallet } from "@/lib/merchant/hooks/use-current-merchant-wallet";
 import { useCurrentMerchant } from "@/lib/merchant/hooks/use-current-merchant";
 import { useNow } from "@/lib/shared/hooks/use-now";
+import { useMerchantWalletActivityFilters } from "@/lib/merchant/hooks/use-merchant-wallet-activity-filters";
 import { fundMethods, type PaymentMethod } from "@/lib/payment-methods";
 import {
+  addMerchantSavedMethod,
   cancelMerchantWithdrawal,
   fundMerchantWallet,
   requestDestinationChange,
@@ -48,10 +54,13 @@ function providerFor(
   return "Payment method";
 }
 
+const ALLOWED_FUND_METHOD_IDS = ["momo", "card", "bank"] as const;
+
 export function MerchantWalletOverview() {
   const merchant = useCurrentMerchant();
   const nowMs = useNow();
   const state = useCurrentMerchantWallet();
+  const { filters, setWallet, setKind } = useMerchantWalletActivityFilters();
 
   const [fundTarget, setFundTarget] = useState<FundTarget | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -59,42 +68,138 @@ export function MerchantWalletOverview() {
   const [autoPayOpen, setAutoPayOpen] = useState(false);
   const [updateCardOpen, setUpdateCardOpen] = useState(false);
   const [destinationOpen, setDestinationOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
-  const availableFundMethods: PaymentMethod[] = useMemo(
-    () => fundMethods.filter((m) => m.id !== "wallet" && m.id !== "atlas_points"),
-    []
-  );
+  const toastTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current !== null) {
+        window.clearTimeout(toastTimer.current);
+      }
+    };
+  }, []);
 
   const showToast = (kind: Toast["kind"], text: string) => {
     setToast({ kind, text });
-    window.setTimeout(() => {
+    if (toastTimer.current !== null) {
+      window.clearTimeout(toastTimer.current);
+    }
+    toastTimer.current = window.setTimeout(() => {
       setToast((prev) => (prev && prev.text === text ? null : prev));
+      toastTimer.current = null;
     }, 5000);
   };
+
+  const availableFundMethods: PaymentMethod[] = useMemo(
+    () =>
+      fundMethods.filter((m) =>
+        (ALLOWED_FUND_METHOD_IDS as readonly string[]).includes(m.id)
+      ),
+    []
+  );
+
+  const paymentFlowSavedMethods: PaymentFlowSavedMethod[] = useMemo(
+    () =>
+      state.savedMethods.map((m) => ({
+        id: m.id,
+        methodId: m.methodId,
+        label: m.label,
+        maskedSummary: (m.provider + " " + m.maskedLabel).trim(),
+        fieldValues: {},
+        tokenRef: m.tokenRef,
+      })),
+    [state.savedMethods]
+  );
+
+  const filteredRows = useMemo(() => {
+    const { wallet, kind } = filters;
+    return state.allRows.filter((row) => {
+      if (wallet !== "all" && row.walletType !== wallet) return false;
+      if (kind === "all") return true;
+      if (kind === "transfer") {
+        return row.kind === "transfer_in" || row.kind === "transfer_out";
+      }
+      return row.kind === kind;
+    });
+  }, [state.allRows, filters]);
+
+  const pendingWithdrawalTotal = useMemo(
+    () => state.pendingWithdrawals.reduce((s, r) => s + r.total, 0),
+    [state.pendingWithdrawals]
+  );
+
+  if (state.loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-3">
+          <AtlasSkeleton className="h-64 w-full rounded-2xl lg:col-span-2" />
+          <AtlasSkeleton className="h-64 w-full rounded-2xl" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <AtlasSkeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+        <AtlasSkeleton className="h-72 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <AtlasErrorState
+        title="Could not load your wallet"
+        message={state.error}
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
+
+  if (!state.wallet || !state.quickStats || !state.config) {
+    return (
+      <AtlasErrorState
+        title="Wallet unavailable"
+        message="We could not find a wallet for the current account."
+        onRetry={() => window.location.reload()}
+      />
+    );
+  }
+
+  const view = state.wallet;
 
   const handleFundSubmit = async (input: {
     methodId: string;
     amount: number;
     formData: Record<string, string>;
+    savedMethodId?: string;
   }) => {
     if (!merchant || !fundTarget) {
       return { status: "failed" as const, message: "No merchant session." };
     }
-    const provider = providerFor(input.methodId, input.formData);
-    const maskedLabel = maskAccount(
-      input.formData.phoneNumber ||
-        input.formData.cardNumber ||
-        input.formData.accountNumber ||
-        ""
-    );
+    const saved = input.savedMethodId
+      ? state.savedMethods.find((m) => m.id === input.savedMethodId) ?? null
+      : null;
+
+    const methodId = saved ? saved.methodId : input.methodId;
+    const provider = saved
+      ? saved.provider
+      : providerFor(input.methodId, input.formData);
+    const maskedLabel = saved
+      ? saved.maskedLabel
+      : maskAccount(
+          input.formData.phoneNumber ||
+            input.formData.cardNumber ||
+            input.formData.accountNumber ||
+            ""
+        );
+
     const result = fundMerchantWallet(
       fundTarget,
       {
         amount: input.amount,
-        method: input.methodId as "momo" | "card" | "bank",
+        method: methodId as "momo" | "card" | "bank",
         provider,
         maskedLabel,
       },
@@ -111,6 +216,28 @@ export function MerchantWalletOverview() {
       status: "success" as const,
       message: "Your wallet has been funded successfully.",
     };
+  };
+
+  const handleSaveMethod = (input: PaymentFlowSaveInput) => {
+    if (!merchant) return;
+    const provider = providerFor(input.methodId, input.details);
+    const maskedLabel = maskAccount(
+      input.details.phoneNumber ||
+        input.details.cardNumber ||
+        input.details.accountNumber ||
+        ""
+    );
+    addMerchantSavedMethod(
+      {
+        methodId: input.methodId as "momo" | "card" | "bank",
+        provider,
+        maskedLabel,
+        tokenRef: "tok_" + crypto.randomUUID().slice(0, 12),
+        label: input.label,
+        isDefault: state.savedMethods.length === 0,
+      },
+      { id: merchant.id, name: merchant.name, email: merchant.email }
+    );
   };
 
   const handleTransferSubmit = async (input: {
@@ -151,14 +278,14 @@ export function MerchantWalletOverview() {
   };
 
   const handleCancelWithdrawal = (requestId: string) => {
-    if (!merchant) return;
-    setCancelling(true);
+    if (!merchant || cancellingId !== null) return;
+    setCancellingId(requestId);
     const result = cancelMerchantWithdrawal(requestId, {
       id: merchant.id,
       name: merchant.name,
       email: merchant.email,
     });
-    setCancelling(false);
+    setCancellingId(null);
     if (result.ok) showToast("success", "Withdrawal cancelled.");
     else showToast("error", result.error ?? "Could not cancel.");
   };
@@ -171,16 +298,14 @@ export function MerchantWalletOverview() {
     reason: string;
   }) => {
     if (!merchant) return;
-    setSubmitting(true);
     const result = requestDestinationChange(input, {
       id: merchant.id,
       name: merchant.name,
       email: merchant.email,
     });
-    setSubmitting(false);
     if (result.ok) {
       setDestinationOpen(false);
-      showToast("success", "Destination change submitted for review.");
+      showToast("success", "Withdrawal account submitted for review.");
     } else {
       showToast("error", result.error ?? "Could not submit the change.");
     }
@@ -226,132 +351,79 @@ export function MerchantWalletOverview() {
     return { ok: result.ok, error: result.error };
   };
 
-  const pendingWithdrawalTotal = useMemo(
-    () => state.pendingWithdrawals.reduce((s, r) => s + r.total, 0),
-    [state.pendingWithdrawals]
-  );
-
-  if (state.loading) {
-    return (
-      <div className="space-y-6">
-        <AtlasSkeleton className="h-64 w-full rounded-2xl" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <AtlasSkeleton key={i} className="h-32 w-full" />
-          ))}
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <AtlasSkeleton className="h-72 w-full" />
-          <AtlasSkeleton className="h-72 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (state.error) {
-    return (
-      <AtlasErrorState
-        title="Could not load your wallets"
-        description={state.error}
-        onRetry={() => window.location.reload()}
-      />
-    );
-  }
-
-  if (!state.wallet || !state.quickStats) {
-    return (
-      <AtlasErrorState
-        title="Wallets unavailable"
-        description="We could not find wallets for the current account."
-        onRetry={() => window.location.reload()}
-      />
-    );
-  }
-
-  const view = state.wallet;
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-brand-700 dark:text-brand-300">
-            Finance
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-950 dark:text-white sm:text-3xl">
-            Wallet
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Manage your billing and main wallets, transfer between them, cash
-            out, and review your activity.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setTransferOpen(true)}
-          disabled={view.isFrozen}
-          className="inline-flex w-fit items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-800 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-        >
-          Transfer between wallets
-        </button>
+      <div>
+        <p className="text-sm font-medium text-brand-700 dark:text-brand-300">
+          Finance
+        </p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-950 dark:text-white sm:text-3xl">
+          Wallet
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+          Your money in, money out, and where it goes.
+        </p>
       </div>
 
-      <WalletBalanceHero view={view} />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <WalletMainHero
+            view={view}
+            pendingWithdrawalTotal={pendingWithdrawalTotal}
+            pendingWithdrawalCount={state.pendingWithdrawals.length}
+            destination={state.destination}
+            onWithdraw={() => setWithdrawOpen(true)}
+            onTransfer={() => setTransferOpen(true)}
+            onEditDestination={() => setDestinationOpen(true)}
+          />
+        </div>
+        <div className="lg:col-span-1">
+          <WalletBillingCard
+            record={view.billing}
+            frozen={view.billingFrozen}
+            summary={state.billingSummary}
+            nowMs={nowMs}
+            onFund={() => setFundTarget("billing")}
+            onAutoPay={() => setAutoPayOpen(true)}
+          />
+        </div>
+      </div>
 
       <WalletQuickStats stats={state.quickStats} />
 
-      <WalletPendingWithdrawals
-        rows={state.pendingWithdrawals}
+      <WalletWaitingOnAtlas
+        pending={state.pendingWithdrawals}
+        destination={state.destination}
         nowMs={nowMs}
+        cancellingId={cancellingId}
         onCancel={handleCancelWithdrawal}
-        cancelling={cancelling}
+        onViewDestination={() => setDestinationOpen(true)}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <WalletCard
-          walletType="billing"
-          record={view.billing}
-          frozen={view.billingFrozen}
-          billingSummary={state.billingSummary ?? undefined}
-          nowMs={nowMs}
-          onFund={() => setFundTarget("billing")}
-          onTransfer={() => setTransferOpen(true)}
-          onWithdraw={() => {}}
-          onAutoPay={() => setAutoPayOpen(true)}
+      <div className="space-y-3">
+        <WalletActivityFilters
+          wallet={filters.wallet}
+          kind={filters.kind}
+          onWallet={setWallet}
+          onKind={setKind}
         />
-        <WalletCard
-          walletType="main"
-          record={view.main}
-          frozen={view.mainFrozen}
-          mainSummary={state.mainSummary ?? undefined}
+        <WalletUnifiedActivity
+          rows={filteredRows}
           nowMs={nowMs}
+          viewAllHref="/merchant/transactions"
           onFund={() => setFundTarget("main")}
-          onTransfer={() => setTransferOpen(true)}
-          onWithdraw={() => setWithdrawOpen(true)}
-          onAutoPay={() => {}}
+          emptyHeading={
+            filters.wallet === "all" && filters.kind === "all"
+              ? "Nothing yet"
+              : "No matching activity"
+          }
+          emptyBody={
+            filters.wallet === "all" && filters.kind === "all"
+              ? "Your funding, payments, and payouts will show up here."
+              : "Try a different wallet or kind filter."
+          }
         />
       </div>
-
-      <WalletDestinationCard
-        destination={state.destination}
-        onEdit={() => setDestinationOpen(true)}
-        frozen={view.isFrozen}
-      />
-
-      <WalletRecentActivity
-        title="Billing wallet activity"
-        rows={state.billingRows}
-        nowMs={nowMs}
-        viewAllHref="/merchant/transactions"
-        onFund={() => setFundTarget("billing")}
-      />
-
-      <WalletRecentActivity
-        title="Main wallet activity"
-        rows={state.mainRows}
-        nowMs={nowMs}
-        viewAllHref="/merchant/transactions"
-        onFund={() => setFundTarget("main")}
-      />
 
       <PaymentFlowModal
         open={fundTarget !== null}
@@ -362,6 +434,8 @@ export function MerchantWalletOverview() {
             : "Fund main wallet"
         }
         methods={availableFundMethods}
+        savedMethods={paymentFlowSavedMethods}
+        onSaveMethod={handleSaveMethod}
         onSubmit={handleFundSubmit}
         showAmountInput
         submitLabel="Fund wallet"
@@ -372,7 +446,6 @@ export function MerchantWalletOverview() {
         open={transferOpen}
         billing={view.billing}
         main={view.main}
-        submitting={submitting}
         onSubmit={handleTransferSubmit}
         onClose={() => setTransferOpen(false)}
       />
@@ -383,7 +456,6 @@ export function MerchantWalletOverview() {
         main={view.main}
         destination={state.destination}
         config={state.config}
-        pendingWithdrawalTotal={pendingWithdrawalTotal}
         onSubmit={handleWithdrawSubmit}
         onRequestDestination={() => {
           setWithdrawOpen(false);
@@ -396,7 +468,6 @@ export function MerchantWalletOverview() {
         config={state.autoPay}
         billing={view.billing}
         nextChargeAmount={state.billingSummary?.nextChargeAmount ?? null}
-        submitting={submitting}
         onSetEnabled={handleAutoPayEnabled}
         onSetSource={handleAutoPaySource}
         onRequestCard={() => {
@@ -408,7 +479,6 @@ export function MerchantWalletOverview() {
 
       <UpdateCardModal
         open={updateCardOpen}
-        submitting={submitting}
         onSubmit={handleUpdateCard}
         onClose={() => setUpdateCardOpen(false)}
       />
@@ -416,7 +486,6 @@ export function MerchantWalletOverview() {
       <EditDestinationModal
         open={destinationOpen}
         destination={state.destination}
-        submitting={submitting}
         onSubmit={handleDestinationSubmit}
         onClose={() => setDestinationOpen(false)}
       />

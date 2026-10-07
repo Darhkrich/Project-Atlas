@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AtlasModalShell } from "@/components/atlas/modal-shell";
 import { Button } from "@/components/atlas/button";
 import { AtlasInput } from "@/components/atlas/Input";
@@ -26,6 +26,7 @@ export type PaymentFlowSavedMethod = {
   label: string;
   maskedSummary: string;
   fieldValues: Record<string, string>;
+  tokenRef?: string;
 };
 
 export type PaymentFlowSubmitInput = {
@@ -33,6 +34,8 @@ export type PaymentFlowSubmitInput = {
   methodName: string;
   amount: number;
   formData: Record<string, string>;
+  savedMethodId?: string;
+  tokenRef?: string;
 };
 
 export type PaymentFlowSaveInput = {
@@ -65,6 +68,13 @@ interface PaymentFlowModalProps {
 
 const DEFAULT_OUTCOME_DELAY_MS = 1200;
 
+type SelectedSaved = {
+  id: string;
+  label: string;
+  maskedSummary: string;
+  tokenRef?: string;
+};
+
 export function PaymentFlowModal({
   open,
   mode,
@@ -90,11 +100,28 @@ export function PaymentFlowModal({
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(
     null
   );
+  const [selectedSaved, setSelectedSaved] = useState<SelectedSaved | null>(
+    null
+  );
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<PaymentFlowResult | null>(null);
   const [saveMethod, setSaveMethod] = useState(false);
+
+  const defaultOutcomeTimer = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (defaultOutcomeTimer.current !== null) {
+        window.clearTimeout(defaultOutcomeTimer.current);
+        defaultOutcomeTimer.current = null;
+      }
+    };
+  }, []);
 
   const close = useCallback(() => {
     onClose();
@@ -113,6 +140,7 @@ export function PaymentFlowModal({
       setSelectedMethod(null);
       setStep("method");
     }
+    setSelectedSaved(null);
     setFormData({});
     setErrors({});
     setIsSubmitting(false);
@@ -139,6 +167,7 @@ export function PaymentFlowModal({
 
   const selectMethod = (method: PaymentMethod) => {
     setSelectedMethod(method);
+    setSelectedSaved(null);
     setFormData({});
     setErrors({});
     setSaveMethod(false);
@@ -153,6 +182,12 @@ export function PaymentFlowModal({
     const method = methods.find((m) => m.id === saved.methodId);
     if (!method) return;
     setSelectedMethod(method);
+    setSelectedSaved({
+      id: saved.id,
+      label: saved.label,
+      maskedSummary: saved.maskedSummary,
+      tokenRef: saved.tokenRef,
+    });
     setErrors({});
     setSaveMethod(false);
 
@@ -160,11 +195,19 @@ export function PaymentFlowModal({
     if (showAmountInput) prefilled.amount = "";
     setFormData(prefilled);
 
-    const needsMoreInput =
-      showAmountInput ||
-      method.fields.some((f) => f.required && !prefilled[f.name]);
+    const hasToken = Boolean(saved.tokenRef);
+    const fieldsSatisfied = method.fields.every(
+      (f) => !f.required || prefilled[f.name] || hasToken
+    );
+    const needsForm = showAmountInput || !fieldsSatisfied;
+    setStep(needsForm ? "form" : "confirmation");
+  };
 
-    setStep(needsMoreInput ? "form" : "confirmation");
+  const clearSaved = () => {
+    setSelectedSaved(null);
+    setFormData({});
+    setErrors({});
+    setStep("method");
   };
 
   const updateField = (name: string, value: string) => {
@@ -185,7 +228,7 @@ export function PaymentFlowModal({
         newErrors.amount = "Enter a valid amount.";
       }
     }
-    if (selectedMethod) {
+    if (selectedMethod && !selectedSaved?.tokenRef) {
       selectedMethod.fields.forEach((field) => {
         if (field.required && !formData[field.name]) {
           newErrors[field.name] = field.label + " is required.";
@@ -202,7 +245,11 @@ export function PaymentFlowModal({
 
   const runDefaultOutcome = (): Promise<PaymentFlowResult> =>
     new Promise((resolve) => {
-      window.setTimeout(() => {
+      if (defaultOutcomeTimer.current !== null) {
+        window.clearTimeout(defaultOutcomeTimer.current);
+      }
+      defaultOutcomeTimer.current = window.setTimeout(() => {
+        defaultOutcomeTimer.current = null;
         resolve({ status: "success", message: successMessage });
       }, DEFAULT_OUTCOME_DELAY_MS);
     });
@@ -220,6 +267,8 @@ export function PaymentFlowModal({
             methodName: selectedMethod.name,
             amount: safeEffectiveAmount,
             formData,
+            savedMethodId: selectedSaved?.id,
+            tokenRef: selectedSaved?.tokenRef,
           })
         : await runDefaultOutcome();
     } catch (err) {
@@ -229,11 +278,14 @@ export function PaymentFlowModal({
       };
     }
 
+    if (!mountedRef.current) return;
+
     if (
       outcome.status === "success" &&
       saveMethod &&
       selectedMethod.fields.length > 0 &&
-      onSaveMethod
+      onSaveMethod &&
+      !selectedSaved
     ) {
       const details: Record<string, string> = {};
       for (const field of selectedMethod.fields) {
@@ -265,6 +317,8 @@ export function PaymentFlowModal({
     methods.some((m) => m.id === saved.methodId)
   );
 
+  const usingSavedToken = Boolean(selectedSaved?.tokenRef);
+
   return (
     <AtlasModalShell
       open={open}
@@ -291,7 +345,7 @@ export function PaymentFlowModal({
                     <button
                       type="button"
                       onClick={() => selectSavedMethod(saved)}
-                      className="flex w-full items-center gap-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-left transition-colors hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
+                      className="flex w-full items-center gap-3 rounded-lg border border-brand-200 bg-brand-50 p-3 text-left transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-brand-800 dark:bg-brand-900/30 dark:hover:bg-brand-900/50"
                     >
                       <AtlasIcon
                         name="star"
@@ -319,7 +373,7 @@ export function PaymentFlowModal({
                 <button
                   type="button"
                   onClick={() => selectMethod(method)}
-                  className="flex w-full items-center gap-4 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:border-brand-300 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:border-brand-800 dark:hover:bg-neutral-950"
+                  className="flex w-full items-center gap-4 rounded-lg border border-neutral-200 p-4 text-left transition-colors hover:border-brand-300 hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-neutral-800 dark:hover:border-brand-800 dark:hover:bg-neutral-950"
                 >
                   <div
                     className={
@@ -356,21 +410,40 @@ export function PaymentFlowModal({
             </p>
           )}
 
-          {selectedMethod.fields.map((field) => (
-            <AtlasInput
-              key={field.name}
-              label={field.label}
-              type={field.type || "text"}
-              placeholder={field.placeholder}
-              value={formData[field.name] || ""}
-              onChange={(e) => updateField(field.name, e.target.value)}
-              error={errors[field.name]}
-            />
-          ))}
+          {usingSavedToken && selectedSaved && (
+            <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 dark:border-brand-800 dark:bg-brand-900/30">
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Paying with
+              </p>
+              <p className="mt-0.5 text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                {selectedSaved.label} {selectedSaved.maskedSummary}
+              </p>
+              <button
+                type="button"
+                onClick={clearSaved}
+                className="mt-1 text-xs font-medium text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-300"
+              >
+                Use a different method
+              </button>
+            </div>
+          )}
+
+          {!usingSavedToken &&
+            selectedMethod.fields.map((field) => (
+              <AtlasInput
+                key={field.name}
+                label={field.label}
+                type={field.type || "text"}
+                placeholder={field.placeholder}
+                value={formData[field.name] || ""}
+                onChange={(e) => updateField(field.name, e.target.value)}
+                error={errors[field.name]}
+              />
+            ))}
 
           {showAmountInput && (
             <AtlasInput
-              label="Amount (GHS)"
+              label={"Amount (GH\u20B5)"}
               type="number"
               placeholder="0.00"
               value={formData.amount || amount?.toString() || ""}
@@ -379,17 +452,19 @@ export function PaymentFlowModal({
             />
           )}
 
-          {selectedMethod.fields.length > 0 && onSaveMethod && (
-            <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-              <input
-                type="checkbox"
-                checked={saveMethod}
-                onChange={(e) => setSaveMethod(e.target.checked)}
-                className="h-4 w-4 rounded border-neutral-300 text-brand-800 focus:ring-brand-500"
-              />
-              Save this payment method for future use
-            </label>
-          )}
+          {!usingSavedToken &&
+            selectedMethod.fields.length > 0 &&
+            onSaveMethod && (
+              <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={saveMethod}
+                  onChange={(e) => setSaveMethod(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 text-brand-800 focus:ring-brand-500"
+                />
+                Save this payment method for future use
+              </label>
+            )}
 
           <div className="flex gap-3 pt-2">
             <Button
@@ -423,7 +498,8 @@ export function PaymentFlowModal({
                   Amount
                 </span>
                 <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                  GHS {safeEffectiveAmount.toFixed(2)}
+                  {"GH\u20B5 "}
+                  {safeEffectiveAmount.toFixed(2)}
                 </span>
               </div>
               {selectedMethod.id === "atlas_points" && (
@@ -448,20 +524,34 @@ export function PaymentFlowModal({
               )}
             </div>
 
-            {Object.entries(formData).map(([key, value]) => {
-              if (key === "amount") return null;
-              const field = selectedMethod.fields.find((f) => f.name === key);
-              return (
-                <div key={key} className="mt-2 flex justify-between">
-                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {field?.label ?? key}
-                  </span>
-                  <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                    {value}
-                  </span>
-                </div>
-              );
-            })}
+            {usingSavedToken && selectedSaved && (
+              <div className="mt-2 flex justify-between">
+                <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                  Paying with
+                </span>
+                <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                  {selectedSaved.label} {selectedSaved.maskedSummary}
+                </span>
+              </div>
+            )}
+
+            {!usingSavedToken &&
+              Object.entries(formData).map(([key, value]) => {
+                if (key === "amount") return null;
+                const field = selectedMethod.fields.find(
+                  (f) => f.name === key
+                );
+                return (
+                  <div key={key} className="mt-2 flex justify-between">
+                    <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                      {field?.label ?? key}
+                    </span>
+                    <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {value}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
 
           {insufficientPoints && (
@@ -485,6 +575,7 @@ export function PaymentFlowModal({
               className="flex-1"
               onClick={handleConfirm}
               disabled={isSubmitting || insufficientPoints}
+              aria-busy={isSubmitting}
             >
               {submitText}
             </Button>

@@ -19,7 +19,6 @@ interface Props {
   config: MerchantAutoPayConfig | null;
   billing: MerchantWalletRecord | null;
   nextChargeAmount: number | null;
-  submitting: boolean;
   onSetEnabled: (enabled: boolean) => Promise<{ ok: boolean; error?: string }>;
   onSetSource: (
     source: "card" | "billing_wallet"
@@ -33,7 +32,6 @@ export function WalletAutoPayModal({
   config,
   billing,
   nextChargeAmount,
-  submitting,
   onSetEnabled,
   onSetSource,
   onRequestCard,
@@ -44,12 +42,14 @@ export function WalletAutoPayModal({
     "billing_wallet"
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open || !config) return;
     setEnabled(config.enabled);
     setSource(config.source);
     setError(null);
+    setSubmitting(false);
   }, [open, config]);
 
   if (!config || !billing) return null;
@@ -59,9 +59,11 @@ export function WalletAutoPayModal({
     nextChargeAmount !== null && billing.balance >= nextChargeAmount;
 
   const handleSave = async () => {
+    setSubmitting(true);
     if (source !== config.source) {
       const r = await onSetSource(source);
       if (!r.ok) {
+        setSubmitting(false);
         setError(r.error ?? "Could not change the auto-pay source.");
         return;
       }
@@ -69,10 +71,12 @@ export function WalletAutoPayModal({
     if (enabled !== config.enabled) {
       const r = await onSetEnabled(enabled);
       if (!r.ok) {
+        setSubmitting(false);
         setError(r.error ?? "Could not change the auto-pay status.");
         return;
       }
     }
+    setSubmitting(false);
     onClose();
   };
 
@@ -97,6 +101,7 @@ export function WalletAutoPayModal({
             type="button"
             role="switch"
             aria-checked={enabled}
+            aria-label={enabled ? "Disable auto-pay" : "Enable auto-pay"}
             onClick={() => {
               setEnabled((v) => !v);
               setError(null);
@@ -105,7 +110,6 @@ export function WalletAutoPayModal({
               "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors " +
               (enabled ? "bg-brand-600" : "bg-neutral-300 dark:bg-neutral-700")
             }
-            aria-label={enabled ? "Disable auto-pay" : "Enable auto-pay"}
           >
             <span
               className={
@@ -144,14 +148,10 @@ export function WalletAutoPayModal({
               </p>
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
                 Balance: {formatCurrency(billing.balance)}
-                {nextChargeAmount !== null && (
-                  <>
-                    {" "}
-                    {billingCovers
-                      ? "· covers the next charge"
-                      : "· does not yet cover the next charge"}
-                  </>
-                )}
+                {nextChargeAmount !== null &&
+                  (billingCovers
+                    ? " \u00B7 covers the next charge"
+                    : " \u00B7 does not yet cover the next charge")}
               </p>
             </button>
 
@@ -194,7 +194,7 @@ export function WalletAutoPayModal({
               <button
                 type="button"
                 onClick={onRequestCard}
-                className="text-xs font-medium text-brand-700 hover:underline dark:text-brand-300"
+                className="text-xs font-medium text-brand-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:text-brand-300"
               >
                 Update card
               </button>
@@ -215,7 +215,7 @@ export function WalletAutoPayModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={submitting}>
+          <Button onClick={handleSave} disabled={submitting} aria-busy={submitting}>
             {submitting ? "Saving" : "Save"}
           </Button>
         </div>

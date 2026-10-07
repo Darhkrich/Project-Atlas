@@ -98,6 +98,7 @@ export interface MerchantTransferLedgerEntry extends LedgerBase {
   counterpartyWalletType: MerchantWalletType;
   transferRef: string;
 }
+
 export interface MerchantAdjustmentLedgerEntry extends LedgerBase {
   kind: "adjustment";
   reason: string;
@@ -199,24 +200,17 @@ export interface MerchantWalletState {
 
 export type MerchantMoneyStoreState = Record<string, MerchantWalletState>;
 
-// ---------------------------------------------------------------------------
-// View types consumed by UI layers.
-// ---------------------------------------------------------------------------
-
 export interface MerchantWalletView {
   billing: MerchantWalletRecord;
   main: MerchantWalletRecord;
   /**
-   * @deprecated Use billingFrozen, mainFrozen, anyFrozen, or bothFrozen.
-   * True when either wallet is frozen. Kept for existing consumers on the
-   * merchant dashboard.
+   * @deprecated Use billingFrozen or mainFrozen.
    */
   isFrozen: boolean;
   billingFrozen: boolean;
   mainFrozen: boolean;
-  bothFrozen?: boolean;
-  anyFrozen?: boolean; 
 }
+
 export interface MerchantLedgerRow {
   merchantId: string;
   merchantName: string;
@@ -246,7 +240,7 @@ export interface MerchantPendingWithdrawalRow {
   status: WalletWithdrawalStatus;
   statusLabel: string;
   statusVariant: "success" | "warning" | "danger" | "info" | "neutral";
-  approvalReasons: string[];
+  approvalReasons: WalletApprovalReason[];
   requestedAt: string;
   canCancel: boolean;
   raw: MerchantWithdrawalRequest;

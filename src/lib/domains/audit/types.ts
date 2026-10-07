@@ -21,6 +21,8 @@ export type AuditResourceType =
   | "catalog_plan"
   | "catalog_network"
   | "subscription_plan"
+  | "subscription"
+  | "invoice"
   | "support_conversation"
   | "customer";
 
@@ -131,6 +133,21 @@ export type AuditAction =
   | "subscription.plan.delete"
   | "subscription.plan.toggle"
   | "subscription.plan.reorder"
+  // Subscription, merchant
+  | "subscription.merchant.start"
+  | "subscription.merchant.change_plan"
+  | "subscription.merchant.change_cycle"
+  | "subscription.merchant.cancel"
+  | "subscription.merchant.reactivate"
+  | "subscription.merchant.charge_success"
+  | "subscription.merchant.charge_failure"
+  | "subscription.merchant.past_due"
+  // Invoice, merchant
+  | "invoice.merchant.issue"
+  | "invoice.merchant.paid"
+  | "invoice.merchant.failed"
+  | "invoice.merchant.void"
+  | "invoice.merchant.refunded"
   // Support
   | "support.ticket.status_change"
   | "support.ticket.priority_change"

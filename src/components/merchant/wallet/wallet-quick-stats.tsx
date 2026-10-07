@@ -88,32 +88,32 @@ export function WalletQuickStats({ stats }: Props) {
   return (
     <div
       role="region"
-      aria-label="Merchant wallet summary"
-      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      aria-label="Wallet summary over the last 30 days"
+      className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4"
     >
       {cards.map((c) => (
-        <AtlasCard key={c.key}>
-          <div className="flex items-start gap-4">
+        <AtlasCard key={c.key} padding="sm">
+          <div className="flex items-start gap-3">
             <div
               className={
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl " +
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg " +
                 c.bgClass
               }
             >
               <AtlasIcon
                 name={c.icon}
-                className={"h-5 w-5 " + c.iconClass}
+                className={"h-4 w-4 " + c.iconClass}
                 aria-hidden="true"
               />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 {c.label}
               </p>
-              <p className="mt-1 text-xl font-bold tracking-tight text-neutral-950 dark:text-white">
+              <p className="mt-1 text-lg font-semibold tracking-tight text-neutral-950 tabular-nums dark:text-white">
                 {c.value}
               </p>
-              <div className="mt-1 flex items-center gap-1.5 text-xs">
+              <div className="mt-0.5 flex items-center gap-1 text-xs">
                 <span
                   className={
                     "font-medium " + toneForDelta(c.delta.direction, c.polarity)
