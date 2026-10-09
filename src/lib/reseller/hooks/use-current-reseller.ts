@@ -5,17 +5,19 @@ import { useAuth } from "@/contexts/auth-context";
 export interface CurrentReseller {
   status: string;
   verificationStatus: string;
+  tierId: string;
   id: string;
   name: string;
   email: string;
 }
 
 const FALLBACK_RESELLER: CurrentReseller = {
-    id: "RS-001",
-    name: "Kwame Store",
-    email: "kwame@kwamestore.com",
-    status: "",
-    verificationStatus: ""
+  id: "RS-001",
+  name: "Kwame Store",
+  email: "kwame@kwamestore.com",
+  status: "",
+  verificationStatus: "",
+  tierId: "TIER-1",
 };
 
 /**
@@ -25,7 +27,7 @@ const FALLBACK_RESELLER: CurrentReseller = {
  * match the wallet store, which would blank the wallet.
  *
  * When real auth ships, this reads the session and returns the signed-in
- * reseller's id, name, and email. Callers do not change.
+ * reseller's id, name, email, and tier. Callers do not change.
  */
 export function useCurrentReseller(): CurrentReseller | null {
   const { user } = useAuth();

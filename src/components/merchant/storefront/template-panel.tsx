@@ -4,8 +4,12 @@
 import { useMemo, useState } from "react";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
-import { ONBOARDING_CATEGORIES } from "@/lib/merchant/onboarding/categories";
-import { ONBOARDING_TEMPLATES } from "@/lib/merchant/onboarding/templates";
+import {
+  TEMPLATE_CATEGORY_LABELS,
+  TEMPLATE_CATALOG,
+  templatesForCategory,
+  type TemplateCatalogEntry,
+} from "@/lib/merchant/templates/catalog";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
 import type { MerchantTemplateCategory } from "@/types/merchant-storefront";
 
@@ -21,30 +25,99 @@ interface TemplatePanelProps {
   ) => void;
 }
 
+const CATEGORIES_WITH_TEMPLATES: MerchantTemplateCategory[] = [
+  ...new Set(TEMPLATE_CATALOG.flatMap((t) => t.recommendedFor)),
+];
+
+function countForCategory(category: MerchantTemplateCategory): number {
+  return TEMPLATE_CATALOG.filter((t) =>
+    t.recommendedFor.includes(category)
+  ).length;
+}
+
+function TemplateCard({
+  template,
+  isCurrent,
+  onSelect,
+}: {
+  template: TemplateCatalogEntry;
+  isCurrent: boolean;
+  onSelect: () => void;
+}) {
+  const isComingSoon = template.status === "coming_soon";
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={isCurrent || isComingSoon}
+      aria-disabled={isComingSoon || undefined}
+      className={cn(
+        "overflow-hidden rounded-xl border-2 bg-white text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-neutral-900",
+        isCurrent
+          ? "cursor-default border-brand-600 shadow-md dark:border-brand-500"
+          : isComingSoon
+            ? "cursor-not-allowed border-neutral-200 opacity-70 dark:border-neutral-800"
+            : "border-neutral-200 hover:border-neutral-300 hover:shadow-md dark:border-neutral-800 dark:hover:border-neutral-700"
+      )}
+    >
+      <div className="relative">
+        {template.thumbnail ? (
+          <img
+            src={template.thumbnail}
+            alt=""
+            aria-hidden="true"
+            className="h-28 w-full object-cover"
+          />
+        ) : (
+          <div
+            className="h-28 w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-950"
+            aria-hidden="true"
+          />
+        )}
+        {isCurrent && (
+          <span className="absolute right-2 top-2 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+            Active
+          </span>
+        )}
+        {isComingSoon && !isCurrent && (
+          <span className="absolute right-2 top-2 rounded-full bg-neutral-900/80 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-sm">
+            Coming soon
+          </span>
+        )}
+      </div>
+      <div className="p-3">
+        <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+          {template.name}
+        </p>
+        <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500 dark:text-neutral-400">
+          {template.description}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 export function TemplatePanel({
   draft,
   setField,
   onRequestSwitch,
 }: TemplatePanelProps) {
-  const [categoryFilter, setCategoryFilter] = useState<
-    MerchantTemplateCategory | "all"
-  >("all");
+  const [selectedCategory, setSelectedCategory] =
+    useState<MerchantTemplateCategory>(draft.templateCategory);
 
   const current = useMemo(
-    () => ONBOARDING_TEMPLATES.find((t) => t.id === draft.templateId),
+    () => TEMPLATE_CATALOG.find((t) => t.id === draft.templateId),
     [draft.templateId]
   );
 
-  const filtered = useMemo(() => {
-    if (categoryFilter === "all") return ONBOARDING_TEMPLATES;
-    return ONBOARDING_TEMPLATES.filter((t) =>
-      t.recommendedFor.includes(categoryFilter)
-    );
-  }, [categoryFilter]);
+  const templatesInCategory = useMemo(
+    () => templatesForCategory(selectedCategory),
+    [selectedCategory]
+  );
 
   const handleCategoryPick = (category: MerchantTemplateCategory) => {
+    setSelectedCategory(category);
     setField("templateCategory", category);
-    setCategoryFilter(category);
   };
 
   return (
@@ -61,12 +134,17 @@ export function TemplatePanel({
 
       <div className="flex items-start gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-950">
         <div className="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-800">
-          {current && (
+          {current?.thumbnail ? (
             <img
               src={current.thumbnail}
               alt=""
               aria-hidden="true"
               className="h-full w-full object-cover"
+            />
+          ) : (
+            <div
+              className="h-full w-full bg-gradient-to-br from-neutral-100 to-neutral-200 dark:from-neutral-800 dark:to-neutral-950"
+              aria-hidden="true"
             />
           )}
         </div>
@@ -90,102 +168,79 @@ export function TemplatePanel({
           Category
         </p>
         <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
-          Your category shapes which templates we recommend.
+          Pick the category closest to your store. You will see templates
+          built for it.
         </p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter("all")}
-            aria-pressed={categoryFilter === "all"}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition",
-              categoryFilter === "all"
-                ? "border-brand-600 bg-brand-600 text-white"
-                : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-600"
-            )}
-          >
-            All
-          </button>
-          {ONBOARDING_CATEGORIES.map((cat) => {
-            const selected =
-              categoryFilter === cat.value ||
-              (categoryFilter === "all" &&
-                draft.templateCategory === cat.value);
+
+        <ul
+          role="list"
+          className="mt-3 flex flex-wrap gap-1.5"
+        >
+          {CATEGORIES_WITH_TEMPLATES.map((category) => {
+            const selected = selectedCategory === category;
+            const count = countForCategory(category);
             return (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => handleCategoryPick(cat.value)}
-                aria-pressed={categoryFilter === cat.value}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition",
-                  categoryFilter === cat.value
-                    ? "border-brand-600 bg-brand-600 text-white"
-                    : selected
-                    ? "border-brand-300 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-200"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-600"
-                )}
-              >
-                {cat.label}
-              </button>
+              <li key={category}>
+                <button
+                  type="button"
+                  onClick={() => handleCategoryPick(category)}
+                  aria-pressed={selected}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                    selected
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-600"
+                  )}
+                >
+                  <span>{TEMPLATE_CATEGORY_LABELS[category]}</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-[9px] font-semibold",
+                      selected
+                        ? "bg-white/25 text-white"
+                        : "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </div>
 
       <div>
-        <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-          Available templates
-        </p>
-        {filtered.length === 0 ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+            {TEMPLATE_CATEGORY_LABELS[selectedCategory]} templates
+          </p>
+          <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+            {templatesInCategory.length} total
+          </span>
+        </div>
+
+        {templatesInCategory.length === 0 ? (
           <div className="mt-3 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center dark:border-neutral-700 dark:bg-neutral-950">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              No specific templates for this category yet. General Store
-              works for any product type.
+              No templates in this category yet. More are coming.
             </p>
           </div>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((template) => {
+            {templatesInCategory.map((template) => {
               const isCurrent = draft.templateId === template.id;
               return (
-                <button
+                <TemplateCard
                   key={template.id}
-                  type="button"
-                  onClick={() => {
+                  template={template}
+                  isCurrent={isCurrent}
+                  onSelect={() => {
                     if (isCurrent) return;
-                    onRequestSwitch(template.id, draft.templateCategory);
+                    if (template.status !== "available") return;
+                    onRequestSwitch(template.id, selectedCategory);
                   }}
-                  disabled={isCurrent}
-                  className={cn(
-                    "overflow-hidden rounded-xl border-2 bg-white text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:bg-neutral-900",
-                    isCurrent
-                      ? "cursor-default border-brand-600 shadow-md dark:border-brand-500"
-                      : "border-neutral-200 hover:border-neutral-300 hover:shadow-md dark:border-neutral-800 dark:hover:border-neutral-700"
-                  )}
-                >
-                  <div className="relative">
-                    <img
-                      src={template.thumbnail}
-                      alt=""
-                      aria-hidden="true"
-                      className="h-28 w-full object-cover"
-                    />
-                    {isCurrent && (
-                      <span className="absolute right-2 top-2 rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                        Active
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                      {template.name}
-                    </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-500 dark:text-neutral-400">
-                      {template.description}
-                    </p>
-                  </div>
-                </button>
+                />
               );
             })}
           </div>

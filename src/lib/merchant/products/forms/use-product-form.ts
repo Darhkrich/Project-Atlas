@@ -45,6 +45,8 @@ function baselineFromInitial(
       status: "Active",
       featured: false,
       images: [],
+      variantGroups: [],
+      variants: [],
     };
   }
   const stockAsString =
@@ -60,6 +62,8 @@ function baselineFromInitial(
     status: initial.status,
     featured: initial.featured,
     images: initial.images.slice(),
+    variantGroups: initial.variantGroups.slice(),
+    variants: initial.variants.slice(),
   };
 }
 
@@ -215,11 +219,10 @@ export function useProductForm(
       }
     }
 
-    if (values.stockLevel.trim().length === 0) {
-      next.stockLevel = PRODUCT_STOCK_INVALID;
-    } else {
-      const stock = Number.parseInt(values.stockLevel, 10);
-      if (!Number.isFinite(stock) || stock < 0) {
+    const hasVariants = values.variantGroups.length > 0;
+    if (!hasVariants && values.stockLevel.trim().length > 0) {
+      const stock = Number(values.stockLevel);
+      if (!Number.isFinite(stock) || stock < 0 || !Number.isInteger(stock)) {
         next.stockLevel = PRODUCT_STOCK_INVALID;
       }
     }
@@ -232,6 +235,35 @@ export function useProductForm(
 
     if (values.description.length > PRODUCT_DESCRIPTION_MAX_LENGTH) {
       next.name = next.name ?? "Description is too long.";
+    }
+
+    if (hasVariants) {
+      const names = new Set<string>();
+      for (const g of values.variantGroups) {
+        const gn = g.name.trim();
+        if (gn.length === 0) {
+          next.variants = "Every variant group needs a name.";
+          break;
+        }
+        if (names.has(gn)) {
+          next.variants = "Variant group names must be unique.";
+          break;
+        }
+        names.add(gn);
+        if (g.options.length === 0) {
+          next.variants = "Every variant group needs at least one option.";
+          break;
+        }
+      }
+      if (!next.variants) {
+        for (const v of values.variants) {
+          if (!Number.isInteger(v.stockLevel) || v.stockLevel < 0) {
+            next.variants =
+              "Every variant needs a stock value of zero or more.";
+            break;
+          }
+        }
+      }
     }
 
     return next;
@@ -267,7 +299,13 @@ export function useProductForm(
       const sale = values.salePrice.trim().length
         ? Number.parseFloat(values.salePrice)
         : null;
-      const stock = Number.parseInt(values.stockLevel, 10);
+
+      const hasVariants = values.variantGroups.length > 0;
+      const stockTrimmed = values.stockLevel.trim();
+      const stockParsed =
+        hasVariants || stockTrimmed.length === 0
+          ? null
+          : Number.parseInt(stockTrimmed, 10);
 
       const productPayload = {
         name: values.name.trim(),
@@ -276,11 +314,14 @@ export function useProductForm(
         salePrice: sale !== null ? sale : undefined,
         images: values.images.slice(),
         categoryId: values.categoryId ?? "",
-        inStock: stock > 0,
+        inStock: stockParsed === null ? true : stockParsed > 0,
         featured: values.featured,
         status: values.status,
         sku: finalSku.length > 0 ? finalSku : undefined,
-        stockLevel: stock,
+        stockLevel: stockParsed === null ? undefined : stockParsed,
+        variantGroups:
+          values.variantGroups.length > 0 ? values.variantGroups : undefined,
+        variants: values.variants.length > 0 ? values.variants : undefined,
       };
 
       if (options.mode === "edit" && options.initial) {

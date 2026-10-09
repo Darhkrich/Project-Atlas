@@ -6,6 +6,7 @@ import { AtlasIcon } from "@/components/atlas/icons";
 import type {
   MerchantStorefrontConfig,
   MerchantStorefrontTheme,
+  HeroStyle,
 } from "@/types/merchant-storefront";
 import {
   CORNER_RADIUS_OPTIONS,
@@ -18,6 +19,10 @@ import {
   STOREFRONT_GRID_DENSITY_DESCRIPTION,
   STOREFRONT_GRID_DENSITY_LABEL,
 } from "@/lib/merchant/storefront/config-labels";
+import {
+  HERO_STYLE_DESCRIPTIONS,
+  HERO_STYLE_LABELS,
+} from "@/lib/merchant/storefront/promos-constants";
 import {
   themeDescription,
   themeLabel,
@@ -41,6 +46,14 @@ const THEME_ORDER: MerchantStorefrontTheme[] = [
   "editorial",
   "studio",
   "statement",
+];
+
+const HERO_STYLE_ORDER: HeroStyle[] = [
+  "theme_default",
+  "image_background",
+  "image_side",
+  "image_half",
+  "text_only",
 ];
 
 const inputClass =
@@ -84,6 +97,12 @@ export function AppearancePanel({
     value: String(value),
     label: STOREFRONT_GRID_DENSITY_LABEL[value],
     description: STOREFRONT_GRID_DENSITY_DESCRIPTION[value],
+  }));
+
+  const heroStyleOptions = HERO_STYLE_ORDER.map((value) => ({
+    value,
+    label: HERO_STYLE_LABELS[value],
+    description: HERO_STYLE_DESCRIPTIONS[value],
   }));
 
   return (
@@ -246,6 +265,26 @@ export function AppearancePanel({
               }
               ariaLabel="Product grid density"
               columns={3}
+            />
+          </div>
+        </AtlasField>
+      </div>
+
+      <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <AtlasField
+          label="Hero style"
+          htmlFor="heroStyle"
+          dirty={!isDefault("heroStyle")}
+          onRevertToDefault={() => resetToDefault("heroStyle")}
+          hint="Overrides how your theme renders the hero. Theme default uses the theme's own hero shape."
+        >
+          <div id="heroStyle">
+            <AtlasRadioGroup
+              options={heroStyleOptions}
+              value={draft.heroStyle ?? "theme_default"}
+              onChange={(value) => setField("heroStyle", value as HeroStyle)}
+              ariaLabel="Hero style"
+              columns={1}
             />
           </div>
         </AtlasField>

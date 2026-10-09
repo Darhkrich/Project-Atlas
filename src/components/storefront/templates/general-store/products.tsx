@@ -7,6 +7,8 @@ import { StorefrontLayout } from "@/components/storefront/storefront-layout";
 import { SectionSurface } from "@/components/storefront/shared/section-surface";
 import { GeneralStoreProductCard } from "./product-card";
 import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
+import { resolveCategoryLabel } from "@/lib/merchant/storefront/category-labels";
+import { usePublicCategories } from "@/lib/public-store-bridge";
 import type {
   MerchantStorefrontConfig,
   MerchantStorefrontProduct,
@@ -24,6 +26,7 @@ export function GeneralStoreProductsPage({
   const theme = getThemeDefinition(store.theme);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const categoryLookup = usePublicCategories(store.slug);
 
   const urlCategory = searchParams.get("category") ?? "All";
 
@@ -42,15 +45,19 @@ export function GeneralStoreProductsPage({
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  const resolvedLabels = products.map((p) =>
+    resolveCategoryLabel(p.categoryId, categoryLookup)
+  );
   const categories = [
     "All",
-    ...Array.from(new Set(products.map((p) => p.categoryId))),
+    ...Array.from(new Set(resolvedLabels)),
   ];
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filtered = products.filter((product) => {
+  const filtered = products.filter((product, index) => {
+    const productLabel = resolvedLabels[index];
     const matchesCategory =
-      selectedCategory === "All" || product.categoryId === selectedCategory;
+      selectedCategory === "All" || productLabel === selectedCategory;
     const matchesSearch =
       normalizedSearch.length === 0 ||
       product.name.toLowerCase().includes(normalizedSearch) ||

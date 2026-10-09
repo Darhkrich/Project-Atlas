@@ -11,6 +11,7 @@ import {
 import { useStoreProducts } from "@/contexts/store-products-context";
 import { getStarterCatalog as getStaticProducts } from "@/lib/merchant/products/starter-catalog";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
+import type { PreviewPage } from "@/lib/merchant/storefront/preview-pages";
 
 const DESKTOP_VIEWPORT_WIDTH = 1280;
 const DESKTOP_VIEWPORT_HEIGHT = 800;
@@ -31,17 +32,23 @@ interface MerchantStorefrontPreviewProps {
   store: MerchantStorefrontConfig;
   mode?: "desktop" | "mobile";
   interactive?: boolean;
+  page?: PreviewPage;
+  customPageSlug?: string;
 }
 
 interface PreviewPayload {
   store: MerchantStorefrontConfig;
   products: ReturnType<typeof getStaticProducts>;
+  page: PreviewPage;
+  customPageSlug?: string;
 }
 
 export function MerchantStorefrontPreview({
   store,
   mode = "desktop",
   interactive = false,
+  page = "home",
+  customPageSlug,
 }: MerchantStorefrontPreviewProps) {
   const { getProductsForStore } = useStoreProducts();
   let products = getProductsForStore(store.slug);
@@ -49,7 +56,7 @@ export function MerchantStorefrontPreview({
     products = getStaticProducts(store.templateCategory);
   }
 
-  const payload: PreviewPayload = { store, products };
+  const payload: PreviewPayload = { store, products, page, customPageSlug };
 
   return mode === "desktop" ? (
     <DesktopPreview payload={payload} interactive={interactive} />
@@ -66,8 +73,8 @@ function usePostConfig(
   payloadRef.current = payload;
 
   const signature = useMemo(
-    () => JSON.stringify(payload.store),
-    [payload.store]
+    () => JSON.stringify(payload.store) + "|" + payload.page + "|" + (payload.customPageSlug ?? ""),
+    [payload.store, payload.page, payload.customPageSlug]
   );
 
   useEffect(() => {
@@ -148,15 +155,14 @@ function DesktopPreview({
 
   return (
     <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800">
-      <div className="flex h-8 items-center gap-1.5 border-b border-neutral-200 bg-neutral-100 px-3 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex h-7 items-center gap-1.5 border-b border-neutral-200 bg-neutral-100 px-3 dark:border-neutral-800 dark:bg-neutral-900 sm:h-8">
         <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
       </div>
       <div
         ref={containerRef}
-        className="relative w-full overflow-hidden bg-white"
-        style={{ height: DESKTOP_PREVIEW_HEIGHT }}
+        className="relative h-[420px] w-full overflow-hidden bg-white sm:h-[520px] lg:h-[640px]"
       >
         <iframe
           ref={iframeRef}

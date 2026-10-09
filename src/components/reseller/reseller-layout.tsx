@@ -23,7 +23,7 @@ export function ResellerLayout({ children }: { children: React.ReactNode }) {
       <ResellerMobileNavigation
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
-      />
+      />  
     </div>
   );
 }

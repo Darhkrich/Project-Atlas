@@ -1,3 +1,8 @@
+import type {
+  ProductVariant,
+  ProductVariantGroup,
+} from "@/types/merchant-storefront";
+
 export type ProductStatus = "Active" | "Draft" | "Archived";
 
 export type ProductStatusFilter = "All" | ProductStatus;
@@ -56,6 +61,8 @@ export interface MerchantProductDetail {
   storefrontId: string | null;
   createdAt: number | null;
   updatedAt: number | null;
+  variantGroups: ProductVariantGroup[];
+  variants: ProductVariant[];
 }
 
 export interface ProductFilterState {

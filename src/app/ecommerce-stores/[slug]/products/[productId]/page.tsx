@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { templateRegistry } from "@/components/storefront/templates";
-import { storesWithProducts } from "@/lib/public-store";
+import { usePublicStore } from "@/lib/public-store-bridge";
 import { StoreNotFound } from "@/components/storefront/shared/store-not-found";
 
 export default function ProductDetailPage({
@@ -11,8 +11,8 @@ export default function ProductDetailPage({
   params: Promise<{ slug: string; productId: string }>;
 }) {
   const { slug, productId } = use(params);
+  const entry = usePublicStore(slug);
 
-  const entry = storesWithProducts.find((s) => s.store.slug === slug);
   if (!entry) {
     return <StoreNotFound variant="store" />;
   }

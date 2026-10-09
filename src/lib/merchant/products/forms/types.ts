@@ -1,4 +1,8 @@
 import type { ProductStatus } from "../types";
+import type {
+  ProductVariant,
+  ProductVariantGroup,
+} from "@/types/merchant-storefront";
 
 export interface ProductFormValues {
   name: string;
@@ -11,6 +15,8 @@ export interface ProductFormValues {
   status: ProductStatus;
   featured: boolean;
   images: string[];
+  variantGroups: ProductVariantGroup[];
+  variants: ProductVariant[];
 }
 
 export interface ProductFormErrors {
@@ -21,6 +27,7 @@ export interface ProductFormErrors {
   categoryId?: string;
   images?: string;
   sku?: string;
+  variants?: string;
 }
 
 export interface ProductFormSubmitResult {
@@ -46,5 +53,7 @@ export interface UseProductFormOptions {
     status: ProductStatus;
     featured: boolean;
     images: string[];
+    variantGroups: ProductVariantGroup[];
+    variants: ProductVariant[];
   } | null;
 }

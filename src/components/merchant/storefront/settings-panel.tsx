@@ -3,10 +3,16 @@
 import { AtlasField } from "@/components/atlas/field";
 import { BusinessHoursEditor } from "./business-hours-editor";
 import { ToggleRow } from "./toggle-row";
+import { StarterTemplateButton } from "./starter-template-button";
 import {
   PAYMENT_METHODS,
   type StorefrontPaymentMethod,
 } from "@/lib/merchant/storefront/payment-methods";
+import {
+  PRIVACY_POLICY_STARTER,
+  RETURNS_POLICY_STARTER,
+  TERMS_POLICY_STARTER,
+} from "@/lib/merchant/storefront/legal/starter-copy";
 import type {
   BusinessHours,
   MerchantStorefrontConfig,
@@ -107,6 +113,25 @@ export function SettingsPanel({
     if (!Number.isFinite(parsed) || parsed < 0) return;
     setField("codFee", parsed);
   };
+
+  const taxEnabled =
+    typeof draft.taxPercent === "number" && draft.taxPercent > 0;
+  const taxPercentValue = taxEnabled ? String(draft.taxPercent) : "";
+
+  const commitTaxPercent = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setField("taxPercent", undefined);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return;
+    setField("taxPercent", parsed);
+  };
+
+  const privacyValue = draft.privacyPolicy ?? "";
+  const termsValue = draft.termsPolicy ?? "";
+  const returnsValue = draft.returnsPolicy ?? "";
 
   return (
     <div className="space-y-6">
@@ -297,6 +322,53 @@ export function SettingsPanel({
         )}
       </div>
 
+      <div className="space-y-3 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+          Tax
+        </p>
+
+        <AtlasField
+          label="Tax rate"
+          htmlFor="taxPercent"
+          dirty={!isDefault("taxPercent")}
+          onRevertToDefault={() => resetToDefault("taxPercent")}
+          hint="Leave blank if you do not charge tax. Applies at checkout."
+        >
+          <input
+            id="taxPercent"
+            type="number"
+            min={0}
+            max={100}
+            step={0.5}
+            defaultValue={taxPercentValue}
+            onBlur={(e) => commitTaxPercent(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            placeholder="e.g. 15"
+            className={inputClass}
+          />
+        </AtlasField>
+
+        {taxEnabled && (
+          <div className="space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950">
+            <ToggleRow
+              label="Prices include tax"
+              description="Turn on if your listed prices already include the tax. Turn off if tax is added at checkout."
+              checked={draft.taxIncluded === true}
+              onChange={(next) => setField("taxIncluded", next)}
+            />
+
+            <ToggleRow
+              label="Apply tax to shipping"
+              description="Charge tax on the delivery fee as well as the products."
+              checked={draft.taxAppliesToShipping === true}
+              onChange={(next) => setField("taxAppliesToShipping", next)}
+            />
+          </div>
+        )}
+      </div>
+
       <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <BusinessHoursEditor
           value={draft.businessHours}
@@ -338,13 +410,6 @@ export function SettingsPanel({
         </p>
 
         <ToggleRow
-          label="Show trust section"
-          description="Display secure payments, fast delivery, and support on your storefront."
-          checked={draft.showTrustSection}
-          onChange={(next) => setField("showTrustSection", next)}
-        />
-
-        <ToggleRow
           label="Show featured products"
           description="Display a handpicked product row on your storefront."
           checked={draft.showFeaturedProducts}
@@ -378,19 +443,82 @@ export function SettingsPanel({
         </AtlasField>
       )}
 
-      <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
+      <div className="space-y-4 border-t border-neutral-200 pt-6 dark:border-neutral-800">
+        <div>
+          <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+            Policies
+          </p>
+          <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+            Shown on your storefront and on each policy page. Use a starter
+            template and edit it to match your store.
+          </p>
+        </div>
+
+        <AtlasField
+          label="Privacy policy"
+          htmlFor="privacyPolicy"
+          dirty={!isDefault("privacyPolicy")}
+          onRevertToDefault={() => resetToDefault("privacyPolicy")}
+          trailing={
+            <StarterTemplateButton
+              onClick={() =>
+                setField("privacyPolicy", PRIVACY_POLICY_STARTER)
+              }
+              disabled={privacyValue === PRIVACY_POLICY_STARTER}
+            />
+          }
+        >
+          <textarea
+            id="privacyPolicy"
+            value={privacyValue}
+            onChange={(e) => setField("privacyPolicy", e.target.value)}
+            rows={6}
+            placeholder="Explain how you collect, use, and protect customer data."
+            className={inputClass + " resize-none"}
+          />
+        </AtlasField>
+
+        <AtlasField
+          label="Terms of service"
+          htmlFor="termsPolicy"
+          dirty={!isDefault("termsPolicy")}
+          onRevertToDefault={() => resetToDefault("termsPolicy")}
+          trailing={
+            <StarterTemplateButton
+              onClick={() => setField("termsPolicy", TERMS_POLICY_STARTER)}
+              disabled={termsValue === TERMS_POLICY_STARTER}
+            />
+          }
+        >
+          <textarea
+            id="termsPolicy"
+            value={termsValue}
+            onChange={(e) => setField("termsPolicy", e.target.value)}
+            rows={6}
+            placeholder="Describe the rules customers agree to when buying from you."
+            className={inputClass + " resize-none"}
+          />
+        </AtlasField>
+
         <AtlasField
           label="Returns policy"
           htmlFor="returnsPolicy"
           dirty={!isDefault("returnsPolicy")}
           onRevertToDefault={() => resetToDefault("returnsPolicy")}
-          hint="Shown on your storefront and on the returns page."
+          trailing={
+            <StarterTemplateButton
+              onClick={() =>
+                setField("returnsPolicy", RETURNS_POLICY_STARTER)
+              }
+              disabled={returnsValue === RETURNS_POLICY_STARTER}
+            />
+          }
         >
           <textarea
             id="returnsPolicy"
-            value={draft.returnsPolicy ?? ""}
+            value={returnsValue}
             onChange={(e) => setField("returnsPolicy", e.target.value)}
-            rows={5}
+            rows={6}
             placeholder="Describe when and how customers can return an item."
             className={inputClass + " resize-none"}
           />

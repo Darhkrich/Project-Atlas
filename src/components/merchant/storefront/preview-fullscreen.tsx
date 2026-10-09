@@ -5,6 +5,10 @@ import { AtlasIcon } from "@/components/atlas/icons";
 import { MerchantStorefrontPreview } from "./merchant-storefront-preview";
 import { cn } from "@/lib/utils";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
+import type {
+  PreviewPage,
+  PreviewPageOption,
+} from "@/lib/merchant/storefront/preview-pages";
 
 type PreviewMode = "desktop" | "mobile";
 
@@ -14,6 +18,10 @@ interface PreviewFullscreenProps {
   config: MerchantStorefrontConfig;
   mode: PreviewMode;
   onModeChange: (mode: PreviewMode) => void;
+  page: PreviewPage;
+  customPageSlug?: string;
+  pageOptions: PreviewPageOption[];
+  onPageChange: (page: PreviewPage, customPageSlug?: string) => void;
 }
 
 export function PreviewFullscreen({
@@ -22,6 +30,10 @@ export function PreviewFullscreen({
   config,
   mode,
   onModeChange,
+  page,
+  customPageSlug,
+  pageOptions,
+  onPageChange,
 }: PreviewFullscreenProps) {
   useEffect(() => {
     if (!open) return;
@@ -39,6 +51,11 @@ export function PreviewFullscreen({
 
   if (!open) return null;
 
+  const selectedValue =
+    page === "custom_page" && customPageSlug
+      ? "custom_page:" + customPageSlug
+      : page;
+
   return (
     <div
       role="dialog"
@@ -46,8 +63,8 @@ export function PreviewFullscreen({
       aria-label="Full-screen storefront preview"
       className="fixed inset-0 z-50 flex flex-col bg-neutral-950"
     >
-      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-800 bg-neutral-900 px-4">
-        <div>
+      <div className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-neutral-800 bg-neutral-900 px-4 py-2 sm:gap-3 sm:py-0">
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-white">
             Storefront preview
           </p>
@@ -55,7 +72,36 @@ export function PreviewFullscreen({
             Interactive. Click through as a customer would.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="fullscreen-preview-page" className="sr-only">
+            Preview page
+          </label>
+          <select
+            id="fullscreen-preview-page"
+            value={selectedValue}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw.startsWith("custom_page:")) {
+                onPageChange("custom_page", raw.slice("custom_page:".length));
+              } else {
+                onPageChange(raw as PreviewPage);
+              }
+            }}
+            className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs font-medium text-neutral-200 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
+          >
+            {pageOptions.map((opt) => {
+              const value =
+                opt.value === "custom_page" && opt.customPageSlug
+                  ? "custom_page:" + opt.customPageSlug
+                  : opt.value;
+              return (
+                <option key={value} value={value}>
+                  {opt.label}
+                </option>
+              );
+            })}
+          </select>
+
           <div
             role="group"
             aria-label="Preview device"
@@ -98,12 +144,14 @@ export function PreviewFullscreen({
           </button>
         </div>
       </div>
-      <div className="flex flex-1 items-stretch justify-center overflow-hidden bg-neutral-950 p-4">
+      <div className="flex flex-1 items-stretch justify-center overflow-x-hidden overflow-y-auto bg-neutral-950 p-2 sm:p-4">
         <div className="flex max-h-full w-full max-w-6xl flex-col overflow-hidden">
           <MerchantStorefrontPreview
             store={config}
             mode={mode}
             interactive
+            page={page}
+            customPageSlug={customPageSlug}
           />
         </div>
       </div>

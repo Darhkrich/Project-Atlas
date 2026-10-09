@@ -347,3 +347,18 @@
     grid-template-columns: repeat(var(--atlas-grid-cols, 3), minmax(0, 1fr));
   }
 }
+
+
+/* Hide the visible scrollbar on scrollable regions. Scroll behavior is
+   unchanged. Used by AtlasModalShell so mobile modals read cleanly.
+   The bar still renders inside native platform scrollviews if the
+   browser ignores these rules; every modern target respects them. */
+.atlas-scroll-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.atlas-scroll-hidden::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

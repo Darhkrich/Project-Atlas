@@ -5,6 +5,8 @@ import { AtlasIcon } from "@/components/atlas/icons";
 import { SectionSurface } from "@/components/storefront/shared/section-surface";
 import { GeneralStoreProductCard } from "./product-card";
 import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
+import { resolveCategoryLabel } from "@/lib/merchant/storefront/category-labels";
+import { usePublicCategories } from "@/lib/public-store-bridge";
 import type {
   MerchantStorefrontConfig,
   MerchantStorefrontProduct,
@@ -22,12 +24,14 @@ export function GeneralStoreFeaturedProducts({
   allProducts,
 }: GeneralStoreFeaturedProductsProps) {
   const theme = getThemeDefinition(store.theme);
+  const categoryLookup = usePublicCategories(store.slug);
 
   if (products.length === 0) return null;
 
   const counts = new Map<string, number>();
   for (const p of allProducts) {
-    counts.set(p.categoryId, (counts.get(p.categoryId) ?? 0) + 1);
+    const label = resolveCategoryLabel(p.categoryId, categoryLookup);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   const categories = Array.from(counts.keys()).slice(0, 6);
 

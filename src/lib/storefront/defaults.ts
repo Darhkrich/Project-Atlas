@@ -1,6 +1,7 @@
 import type { StorefrontConfig } from "./types";
 
 export const defaultStorefrontConfig: StorefrontConfig = {
+  ownerId: "reseller-default",
   id: "reseller-default",
   storefrontId: "SF-RS-001",
   store: {
@@ -26,7 +27,8 @@ export const defaultStorefrontConfig: StorefrontConfig = {
     enabled: true,
     template: "classic",
     title: "Welcome to My Storefront",
-    subtitle: "Affordable data, airtime, and digital services delivered instantly.",
+    subtitle:
+      "Affordable data, airtime, and digital services delivered instantly.",
     primaryAction: {
       label: "Buy Now",
       type: "services",
@@ -63,7 +65,8 @@ export const defaultStorefrontConfig: StorefrontConfig = {
   footer: {
     enabled: true,
     description: "Your trusted partner for digital services.",
-    copyright: `©️ ${new Date().getFullYear()} My Storefront`,
+    copyright:
+      "\u00A9 " + String(new Date().getFullYear()) + " My Storefront",
   },
   publication: {
     isPublished: false,
@@ -106,6 +109,8 @@ export const mockStorefronts: Record<string, StorefrontConfig> = {
   },
 };
 
-export function getMockStorefrontBySlug(slug: string): StorefrontConfig | undefined {
+export function getMockStorefrontBySlug(
+  slug: string,
+): StorefrontConfig | undefined {
   return mockStorefronts[slug];
 }

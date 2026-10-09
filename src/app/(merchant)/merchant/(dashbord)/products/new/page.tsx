@@ -1,5 +1,7 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AtlasIcon } from "@/components/atlas/icons";
@@ -7,6 +9,7 @@ import { useStorefrontConfig } from "@/contexts/storefront-config-context";
 import { useCategories } from "@/contexts/categories-context";
 import { useStoreProducts } from "@/contexts/store-products-context";
 import { useEnsuredCategories } from "@/lib/merchant/categories/use-ensured-categories";
+import { useProductLimit } from "@/lib/merchant/products/use-product-limit";
 import { ProductForm } from "@/components/merchant/products/product-form";
 
 export default function NewProductPage() {
@@ -14,6 +17,7 @@ export default function NewProductPage() {
   const { storefrontConfig } = useStorefrontConfig();
   const { getProductsForStore } = useStoreProducts();
   const { getCategoriesForStore } = useCategories();
+  const limit = useProductLimit();
 
   const storeSlug = storefrontConfig.slug || "my-store";
   const templateCategory = storefrontConfig.templateCategory;
@@ -29,6 +33,43 @@ export default function NewProductPage() {
   for (const p of products) {
     if (!p.categoryId) continue;
     categoryCounts[p.categoryId] = (categoryCounts[p.categoryId] ?? 0) + 1;
+  }
+
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (!limit.atLimit) return;
+    setRedirecting(true);
+    const timer = window.setTimeout(() => {
+      router.replace("/merchant/products?limit=hit");
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [limit.atLimit, router]);
+
+  if (redirecting) {
+    return (
+      <div className="flex min-h-[400px] flex-col items-center justify-center">
+        <AtlasIcon
+          name="alert"
+          className="h-6 w-6 text-danger-500"
+          aria-hidden="true"
+        />
+        <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+          Plan limit reached. Redirecting to products.
+        </p>
+        <Link
+          href="/merchant/billing"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-danger-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-danger-700"
+        >
+          <AtlasIcon
+            name="trending-up"
+            className="h-4 w-4"
+            aria-hidden="true"
+          />
+          Upgrade plan
+        </Link>
+      </div>
+    );
   }
 
   return (

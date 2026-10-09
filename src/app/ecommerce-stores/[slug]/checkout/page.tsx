@@ -4,7 +4,7 @@ import { use } from "react";
 import { StorefrontLayout } from "@/components/storefront/storefront-layout";
 import { StorefrontCheckoutPage } from "@/components/storefront/storefront-checkout-page";
 import { StoreNotFound } from "@/components/storefront/shared/store-not-found";
-import { storesWithProducts } from "@/lib/public-store";
+import { usePublicStore } from "@/lib/public-store-bridge";
 
 export default function CheckoutPage({
   params,
@@ -12,8 +12,8 @@ export default function CheckoutPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
+  const entry = usePublicStore(slug);
 
-  const entry = storesWithProducts.find((s) => s.store.slug === slug);
   if (!entry) {
     return <StoreNotFound variant="store" />;
   }

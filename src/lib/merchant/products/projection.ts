@@ -122,6 +122,10 @@ export function projectProductDetail(
     storefrontId: null,
     createdAt: null,
     updatedAt: null,
+    variantGroups: Array.isArray(product.variantGroups)
+      ? product.variantGroups
+      : [],
+    variants: Array.isArray(product.variants) ? product.variants : [],
   };
 }
 

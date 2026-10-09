@@ -37,3 +37,19 @@ export const PRODUCT_IMAGE_INVALID_TYPE =
   "Only image files are supported.";
 export const PRODUCT_SKU_DUPLICATE =
   "Another product already uses this SKU.";
+
+export const PRODUCT_LIMIT_NEAR_TITLE = "Approaching your plan limit";
+export const PRODUCT_LIMIT_AT_TITLE = "Plan limit reached";
+export const PRODUCT_LIMIT_UNRESOLVED_TITLE =
+  "Plan limit could not be checked";
+export const PRODUCT_LIMIT_UNRESOLVED_BODY =
+  "Your plan could not be loaded. Products can still be added, but the limit is not enforced until the plan resolves.";
+
+export const PRODUCT_LIMIT_UPGRADE_CTA = "Upgrade plan";
+export const PRODUCT_LIMIT_MANAGE_CTA = "Manage billing";
+export const PRODUCT_LIMIT_ADD_BLOCKED_LABEL = "Upgrade to add";
+export const PRODUCT_LIMIT_ADD_BLOCKED_TITLE =
+  "Plan limit reached. Upgrade to add more products.";
+export const PRODUCT_LIMIT_REDIRECT_NOTICE =
+  "You have reached your plan limit.";
+export const PRODUCT_LIMIT_NO_PLAN = "your current";

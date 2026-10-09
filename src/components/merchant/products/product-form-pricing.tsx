@@ -28,6 +28,41 @@ function fieldClass(hasError: boolean): string {
   );
 }
 
+interface StockState {
+  text: string;
+  tone: "muted" | "warning" | "danger";
+}
+
+function stockState(raw: string): StockState {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return {
+      text: "Leave blank if you do not track stock. The product will always show as available.",
+      tone: "muted",
+    };
+  }
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+    return { text: "", tone: "muted" };
+  }
+  if (n === 0) {
+    return { text: "This product will show as out of stock.", tone: "danger" };
+  }
+  if (n <= 5) {
+    return {
+      text: "Only " + n + " left. Customers see this on the product page.",
+      tone: "warning",
+    };
+  }
+  return { text: "In stock.", tone: "muted" };
+}
+
+const TONE_CLASS: Record<StockState["tone"], string> = {
+  muted: "text-neutral-500 dark:text-neutral-400",
+  warning: "text-warning-600 dark:text-warning-400",
+  danger: "text-danger-600 dark:text-danger-400",
+};
+
 export function ProductFormPricing({
   values,
   errors,
@@ -40,6 +75,11 @@ export function ProductFormPricing({
     Number.isFinite(price) &&
     Number.isFinite(sale) &&
     sale >= price;
+
+  const hasVariants = values.variantGroups.length > 0;
+  const stockHint = stockState(values.stockLevel);
+  const showStockHint =
+    !hasVariants && stockHint.text.length > 0 && !errors.stockLevel;
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900 sm:p-6">
@@ -117,37 +157,59 @@ export function ProductFormPricing({
           )}
         </div>
 
-        <div>
-          <label
-            htmlFor="product-stock"
-            className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
-          >
-            Stock level <span className="text-danger-500">*</span>
-          </label>
-          <input
-            id="product-stock"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            step="1"
-            value={values.stockLevel}
-            onChange={(e) => updateField("stockLevel", e.target.value)}
-            placeholder="0"
-            aria-invalid={errors.stockLevel ? "true" : undefined}
-            aria-describedby={
-              errors.stockLevel ? "product-stock-error" : undefined
-            }
-            className={fieldClass(Boolean(errors.stockLevel))}
-          />
-          {errors.stockLevel && (
-            <p
-              id="product-stock-error"
-              className="mt-1 text-xs text-danger-600 dark:text-danger-400"
+        {!hasVariants && (
+          <div>
+            <label
+              htmlFor="product-stock"
+              className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
             >
-              {errors.stockLevel}
+              Stock level (optional)
+            </label>
+            <input
+              id="product-stock"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              value={values.stockLevel}
+              onChange={(e) => updateField("stockLevel", e.target.value)}
+              placeholder="e.g. 12"
+              aria-invalid={errors.stockLevel ? "true" : undefined}
+              aria-describedby={
+                errors.stockLevel
+                  ? "product-stock-error"
+                  : showStockHint
+                    ? "product-stock-hint"
+                    : undefined
+              }
+              className={fieldClass(Boolean(errors.stockLevel))}
+            />
+            {errors.stockLevel && (
+              <p
+                id="product-stock-error"
+                className="mt-1 text-xs text-danger-600 dark:text-danger-400"
+              >
+                {errors.stockLevel}
+              </p>
+            )}
+            {showStockHint && (
+              <p
+                id="product-stock-hint"
+                className={cn("mt-1 text-xs", TONE_CLASS[stockHint.tone])}
+              >
+                {stockHint.text}
+              </p>
+            )}
+          </div>
+        )}
+
+        {hasVariants && (
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-800 dark:bg-neutral-950 sm:col-span-2">
+            <p className="text-xs text-neutral-600 dark:text-neutral-300">
+              Stock is managed per variant. See the Variants section below.
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         <div>
           <label

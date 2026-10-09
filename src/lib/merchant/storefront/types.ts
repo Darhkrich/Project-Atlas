@@ -7,6 +7,7 @@ export type StorefrontTabKey =
   | "appearance"
   | "shipping"
   | "seo"
+  | "integrations"
   | "domain"
   | "settings";
 

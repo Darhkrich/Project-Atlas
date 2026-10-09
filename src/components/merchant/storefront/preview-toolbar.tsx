@@ -2,6 +2,10 @@
 
 import { AtlasIcon } from "@/components/atlas/icons";
 import { cn } from "@/lib/utils";
+import type {
+  PreviewPage,
+  PreviewPageOption,
+} from "@/lib/merchant/storefront/preview-pages";
 
 type PreviewMode = "desktop" | "mobile";
 
@@ -11,6 +15,10 @@ interface PreviewToolbarProps {
   onFullscreen: () => void;
   title?: string;
   subtitle?: string;
+  page: PreviewPage;
+  customPageSlug?: string;
+  pageOptions: PreviewPageOption[];
+  onPageChange: (page: PreviewPage, customPageSlug?: string) => void;
 }
 
 export function PreviewToolbar({
@@ -19,10 +27,19 @@ export function PreviewToolbar({
   onFullscreen,
   title = "Live preview",
   subtitle = "This is how customers see your store",
+  page,
+  customPageSlug,
+  pageOptions,
+  onPageChange,
 }: PreviewToolbarProps) {
+  const selectedValue =
+    page === "custom_page" && customPageSlug
+      ? "custom_page:" + customPageSlug
+      : page;
+
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="min-w-0">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-white px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="min-w-0 flex-1">
         <p className="text-xs font-semibold text-neutral-900 dark:text-neutral-100">
           {title}
         </p>
@@ -30,7 +47,36 @@ export function PreviewToolbar({
           {subtitle}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <label htmlFor="preview-page" className="sr-only">
+          Preview page
+        </label>
+        <select
+          id="preview-page"
+          value={selectedValue}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw.startsWith("custom_page:")) {
+              onPageChange("custom_page", raw.slice("custom_page:".length));
+            } else {
+              onPageChange(raw as PreviewPage);
+            }
+          }}
+          className="rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-xs font-medium text-neutral-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/10 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200"
+        >
+          {pageOptions.map((opt) => {
+            const value =
+              opt.value === "custom_page" && opt.customPageSlug
+                ? "custom_page:" + opt.customPageSlug
+                : opt.value;
+            return (
+              <option key={value} value={value}>
+                {opt.label}
+              </option>
+            );
+          })}
+        </select>
+
         <div
           role="group"
           aria-label="Preview device"
@@ -63,6 +109,7 @@ export function PreviewToolbar({
             Mobile
           </button>
         </div>
+
         <button
           type="button"
           onClick={onFullscreen}

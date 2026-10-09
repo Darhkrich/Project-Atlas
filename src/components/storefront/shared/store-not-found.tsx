@@ -1,24 +1,38 @@
 import Link from "next/link";
 
 interface StoreNotFoundProps {
-  variant?: "store" | "product";
+  variant?: "store" | "product" | "page";
 }
 
+const COPY: Record<
+  NonNullable<StoreNotFoundProps["variant"]>,
+  { title: string; body: string }
+> = {
+  store: {
+    title: "Store not found",
+    body: "This storefront does not exist or is not yet live.",
+  },
+  product: {
+    title: "Product not found",
+    body: "This product is no longer available.",
+  },
+  page: {
+    title: "Page not found",
+    body: "This page does not exist or is not published yet.",
+  },
+};
+
 export function StoreNotFound({ variant = "store" }: StoreNotFoundProps) {
-  const title = variant === "store" ? "Store not found" : "Product not found";
-  const body =
-    variant === "store"
-      ? "This storefront does not exist or is not yet live."
-      : "This product is no longer available.";
+  const copy = COPY[variant];
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="max-w-md text-center">
         <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100">
-          {title}
+          {copy.title}
         </h1>
         <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-          {body}
+          {copy.body}
         </p>
         <Link
           href="/"

@@ -2,11 +2,12 @@
 
 import { Suspense, use } from "react";
 import { templateRegistry } from "@/components/storefront/templates";
-import { storesWithProducts } from "@/lib/public-store";
+import { usePublicStore } from "@/lib/public-store-bridge";
 import { StoreNotFound } from "@/components/storefront/shared/store-not-found";
 
 function ProductsInner({ slug }: { slug: string }) {
-  const entry = storesWithProducts.find((s) => s.store.slug === slug);
+  const entry = usePublicStore(slug);
+
   if (!entry) {
     return <StoreNotFound variant="store" />;
   }

@@ -1,27 +1,14 @@
-// lib/domains/orders/use-reseller-orders.ts
 "use client";
 
 import { useSyncExternalStore } from "react";
 import {
   getOrders,
   subscribeToOrdersStore,
-} from "@/lib/admin/mock/orders-store";
+} from "@/lib/domains/orders/orders-store";
 import type { Order } from "@/lib/admin/types/orders";
+import type { ResellerOrderRow } from "./reseller-order-types";
 
-export interface ResellerOrderRow {
-  paymentMethodId: string;
-  id: string;
-  audience: "storefront_user" | "reseller";
-  serviceId: string;
-  providerId: string;
-  networkId?: string;
-  customerName: string;
-  customerPhone: string;
-  amount: number;
-  commission: number;
-  status: Order["status"];
-  createdAt: string;
-}
+export type { ResellerOrderRow } from "./reseller-order-types";
 
 function toRow(order: Order): ResellerOrderRow | null {
   if (order.audience === "direct") return null;

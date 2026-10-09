@@ -8,7 +8,12 @@ import type {
   ProductSortKey,
   ProductStatusFilter,
 } from "@/lib/merchant/products/types";
-import { PRODUCT_SORT_LABELS } from "@/lib/merchant/products/labels";
+import {
+  PRODUCT_LIMIT_ADD_BLOCKED_LABEL,
+  PRODUCT_LIMIT_ADD_BLOCKED_TITLE,
+  PRODUCT_SORT_LABELS,
+} from "@/lib/merchant/products/labels";
+import { ProductExportButton } from "./product-export-button";
 
 interface ProductToolbarProps {
   search: string;
@@ -20,6 +25,9 @@ interface ProductToolbarProps {
   sort: ProductSortKey;
   onSortChange: (key: ProductSortKey) => void;
   categories: MerchantCategory[];
+  atProductLimit: boolean;
+  visibleProductIds: string[];
+  onOpenImport: () => void;
 }
 
 export function ProductToolbar({
@@ -32,6 +40,9 @@ export function ProductToolbar({
   sort,
   onSortChange,
   categories,
+  atProductLimit,
+  visibleProductIds,
+  onOpenImport,
 }: ProductToolbarProps) {
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -62,7 +73,9 @@ export function ProductToolbar({
           <select
             id="product-status-filter"
             value={status}
-            onChange={(e) => onStatusChange(e.target.value as ProductStatusFilter)}
+            onChange={(e) =>
+              onStatusChange(e.target.value as ProductStatusFilter)
+            }
             className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
           >
             <option value="All">All statuses</option>
@@ -106,15 +119,45 @@ export function ProductToolbar({
         </div>
       </div>
 
-      <Link
-        href="/merchant/products/new"
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+      <div className="flex flex-wrap items-center gap-2">
+        <ProductExportButton visibleProductIds={visibleProductIds} />
+
+        <button
+          type="button"
+          onClick={onOpenImport}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+        >
+          <AtlasIcon name="upload" className="h-4 w-4" aria-hidden="true" />
+          Import
+        </button>
+
+        {atProductLimit ? (
+          <Link
+            href="/merchant/billing"
+            title={PRODUCT_LIMIT_ADD_BLOCKED_TITLE}
+            className={cn(
+              "inline-flex items-center justify-center gap-2 rounded-lg bg-danger-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-danger-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-danger-500 focus-visible:ring-offset-2"
+            )}
+          >
+            <AtlasIcon
+              name="trending-up"
+              className="h-4 w-4"
+              aria-hidden="true"
+            />
+            {PRODUCT_LIMIT_ADD_BLOCKED_LABEL}
+          </Link>
+        ) : (
+          <Link
+            href="/merchant/products/new"
+            className={cn(
+              "inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            )}
+          >
+            <AtlasIcon name="add" className="h-4 w-4" aria-hidden="true" />
+            Add product
+          </Link>
         )}
-      >
-        <AtlasIcon name="add" className="h-4 w-4" aria-hidden="true" />
-        Add product
-      </Link>
+      </div>
     </div>
   );
 }

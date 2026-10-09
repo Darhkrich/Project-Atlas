@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/atlas/button";
 import { MerchantStorefrontPreview } from "@/components/merchant/storefront/merchant-storefront-preview";
@@ -10,8 +10,21 @@ import {
   validateSlug,
 } from "@/lib/merchant/onboarding/slug";
 import { startOnboardingDraft } from "@/lib/merchant/onboarding/progress-mutations";
-import { DEFAULT_TEMPLATE_ID } from "@/lib/merchant/onboarding/templates";
-import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
+import {
+  DEFAULT_TEMPLATE_ID,
+  TEMPLATE_CATALOG,
+  TEMPLATE_CATEGORY_LABELS,
+  templatesForCategory,
+} from "@/lib/merchant/templates/catalog";
+import { cn } from "@/lib/utils";
+import type {
+  MerchantStorefrontConfig,
+  MerchantTemplateCategory,
+} from "@/types/merchant-storefront";
+
+const CATEGORIES_WITH_TEMPLATES: MerchantTemplateCategory[] = [
+  ...new Set(TEMPLATE_CATALOG.flatMap((t) => t.recommendedFor)),
+];
 
 function merchantIdForSlug(slug: string): string {
   const base = slug || "new";
@@ -26,9 +39,28 @@ function slugErrorMessage(reason: string | undefined): string | null {
   return null;
 }
 
+interface SelectedTemplate {
+  id: string;
+  category: MerchantTemplateCategory;
+}
+
 export default function MerchantWelcomePage() {
   const router = useRouter();
   const [businessName, setBusinessName] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [selectedCategory, setSelectedCategory] =
+    useState<MerchantTemplateCategory>("general");
+  const [selectedTemplate, setSelectedTemplate] = useState<SelectedTemplate>({
+    id: DEFAULT_TEMPLATE_ID,
+    category: "general",
+  });
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const slug = deriveSlug(businessName);
   const slugCheck = validateSlug(slug);
@@ -36,6 +68,8 @@ export default function MerchantWelcomePage() {
   const url = storefrontUrl(slug);
   const merchantId = merchantIdForSlug(slug);
   const slugError = slugErrorMessage(slugCheck.reason);
+
+  const templatesInCategory = templatesForCategory(selectedCategory);
 
   const previewConfig: MerchantStorefrontConfig = {
     storefrontId: merchantId,
@@ -48,8 +82,8 @@ export default function MerchantWelcomePage() {
     heroTitle: businessName || "Welcome to our store",
     heroDescription: "Browse our collection and find something you love.",
     theme: "airy",
-    templateId: DEFAULT_TEMPLATE_ID,
-    templateCategory: "general",
+    templateId: selectedTemplate.id,
+    templateCategory: selectedTemplate.category,
     announcement: "",
     contactEmail: "",
     contactPhone: "",
@@ -96,7 +130,7 @@ export default function MerchantWelcomePage() {
       </header>
 
       <main id="welcome-main" className="mx-auto max-w-6xl px-4 py-10">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-neutral-950 dark:text-white sm:text-4xl">
               Your Atlas store starts here.
@@ -135,6 +169,100 @@ export default function MerchantWelcomePage() {
                 )}
               </div>
 
+              <div>
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  Template
+                </span>
+                <p className="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">
+                  Pick a starting point. You can change it any time.
+                </p>
+
+                <ul
+                  role="list"
+                  className="mt-3 flex flex-wrap gap-1.5"
+                >
+                  {CATEGORIES_WITH_TEMPLATES.map((category) => {
+                    const selected = selectedCategory === category;
+                    return (
+                      <li key={category}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCategory(category)}
+                          aria-pressed={selected}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs font-medium transition",
+                            selected
+                              ? "border-brand-600 bg-brand-600 text-white"
+                              : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-600"
+                          )}
+                        >
+                          {TEMPLATE_CATEGORY_LABELS[category]}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {templatesInCategory.length === 0 ? (
+                  <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+                    No templates in this category yet.
+                  </p>
+                ) : (
+                  <ul role="list" className="mt-3 space-y-2">
+                    {templatesInCategory.map((template) => {
+                      const selected = selectedTemplate.id === template.id;
+                      const comingSoon = template.status === "coming_soon";
+                      return (
+                        <li key={template.id}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (comingSoon) return;
+                              setSelectedTemplate({
+                                id: template.id,
+                                category: selectedCategory,
+                              });
+                            }}
+                            disabled={comingSoon}
+                            aria-disabled={comingSoon || undefined}
+                            aria-pressed={selected}
+                            className={cn(
+                              "w-full rounded-lg border px-4 py-3 text-left transition",
+                              selected
+                                ? "border-brand-600 bg-brand-50 dark:border-brand-500 dark:bg-brand-900/20"
+                                : comingSoon
+                                  ? "cursor-not-allowed border-neutral-200 bg-white opacity-60 dark:border-neutral-800 dark:bg-neutral-900"
+                                  : "border-neutral-200 bg-white hover:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-600"
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p
+                                className={cn(
+                                  "text-xs font-semibold",
+                                  selected
+                                    ? "text-brand-700 dark:text-brand-300"
+                                    : "text-neutral-900 dark:text-neutral-100"
+                                )}
+                              >
+                                {template.name}
+                              </p>
+                              {comingSoon && (
+                                <span className="shrink-0 rounded-full bg-neutral-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
+                                  Coming soon
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400">
+                              {template.description}
+                            </p>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
                   <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -164,8 +292,11 @@ export default function MerchantWelcomePage() {
             </div>
           </div>
 
-          <div aria-hidden="true" className="hidden lg:block">
-            <MerchantStorefrontPreview store={previewConfig} mode="desktop" />
+          <div className="mt-6 lg:mt-0">
+            <MerchantStorefrontPreview
+              store={previewConfig}
+              mode={isMobile ? "mobile" : "desktop"}
+            />
           </div>
         </div>
       </main>

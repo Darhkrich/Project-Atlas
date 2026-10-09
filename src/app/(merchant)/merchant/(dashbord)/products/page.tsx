@@ -11,18 +11,34 @@ import { useCategories } from "@/contexts/categories-context";
 import { useEnsuredCategories } from "@/lib/merchant/categories/use-ensured-categories";
 import { useProductFilters } from "@/lib/merchant/products/use-product-filters";
 import { useMerchantProducts } from "@/lib/merchant/products/use-merchant-products";
+import { useProductLimit } from "@/lib/merchant/products/use-product-limit";
+import { useProductSelection } from "@/lib/merchant/products/use-product-selection";
 import { getStarterCatalog } from "@/lib/merchant/products/starter-catalog";
-import type { MerchantProductRow } from "@/lib/merchant/products/types";
+import { PRODUCT_LIMIT_REDIRECT_NOTICE } from "@/lib/merchant/products/labels";
+import type {
+  MerchantProductRow,
+  ProductStatus,
+} from "@/lib/merchant/products/types";
 import { ProductToolbar } from "@/components/merchant/products/product-toolbar";
 import { ProductList } from "@/components/merchant/products/product-list";
 import { ProductEmptyState } from "@/components/merchant/products/product-empty-state";
 import { ProductDeleteModal } from "@/components/merchant/products/product-delete-modal";
+import { ProductLimitBanner } from "@/components/merchant/products/product-limit-banner";
+import { ProductImportModal } from "@/components/merchant/products/product-import-modal";
+import { ProductBulkBar } from "@/components/merchant/products/product-bulk-bar";
+import { ProductBulkConfirmModal } from "@/components/merchant/products/product-bulk-confirm-modal";
 
 export default function MerchantProductsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { storefrontConfig } = useStorefrontConfig();
-  const { updateProduct, deleteProduct, seedProducts } = useStoreProducts();
+  const {
+    updateProduct,
+    updateProducts,
+    deleteProduct,
+    deleteProducts,
+    seedProducts,
+  } = useStoreProducts();
   const { getCategoriesForStore } = useCategories();
 
   const storeSlug = storefrontConfig.slug || "my-store";
@@ -36,36 +52,65 @@ export default function MerchantProductsPage() {
 
   const filtersApi = useProductFilters();
   const snapshot = useMerchantProducts(filtersApi.filters);
+  const limit = useProductLimit();
+
+  const resetKey = JSON.stringify(filtersApi.filters);
+  const selection = useProductSelection(resetKey);
 
   const [deleteTarget, setDeleteTarget] = useState<MerchantProductRow | null>(
     null
   );
+  const [importOpen, setImportOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = searchParams.get("saved");
+    const limitHit = searchParams.get("limit");
     if (saved) {
-      setFlash(
-        saved === "created"
-          ? "Product created."
-          : "Changes saved."
-      );
-      const url = new URL(window.location.href);
-      url.searchParams.delete("saved");
-      window.history.replaceState({}, "", url.toString());
-      const timer = window.setTimeout(() => setFlash(null), 4000);
-      return () => window.clearTimeout(timer);
+      setFlash(saved === "created" ? "Product created." : "Changes saved.");
+    } else if (limitHit === "hit") {
+      setFlash(PRODUCT_LIMIT_REDIRECT_NOTICE);
+    } else {
+      return;
     }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("saved");
+    url.searchParams.delete("limit");
+    window.history.replaceState({}, "", url.toString());
+    const timer = window.setTimeout(() => setFlash(null), 4000);
+    return () => window.clearTimeout(timer);
   }, [searchParams]);
+
+  function showTimedFlash(message: string) {
+    setFlash(message);
+    window.setTimeout(() => setFlash(null), 4000);
+  }
 
   const handleSeedSamples = () => {
     setSeeding(true);
     const catalog = getStarterCatalog(templateCategory);
-    seedProducts(storeSlug, catalog);
+    const remaining =
+      limit.isUnlimited || limit.remaining === null
+        ? catalog.length
+        : Math.min(catalog.length, limit.remaining);
+    const toSeed = catalog.slice(0, remaining);
+    if (toSeed.length === 0) {
+      setSeeding(false);
+      setFlash(
+        "No room on your plan for sample products. Upgrade to add more."
+      );
+      return;
+    }
+    seedProducts(storeSlug, toSeed);
     window.setTimeout(() => {
       setSeeding(false);
-      setFlash("Sample products added. Edit or remove them any time.");
+      setFlash(
+        toSeed.length === catalog.length
+          ? "Sample products added. Edit or remove them any time."
+          : "Some sample products added. Plan limit reached for the rest."
+      );
     }, 0);
   };
 
@@ -78,6 +123,91 @@ export default function MerchantProductsPage() {
     deleteProduct(storeSlug, product.id);
     setDeleteTarget(null);
   };
+
+  const handleImported = (added: number, skipped: number) => {
+    if (added === 0) {
+      showTimedFlash("No products were imported.");
+      return;
+    }
+    if (skipped === 0) {
+      showTimedFlash(
+        added + (added === 1 ? " product imported." : " products imported.")
+      );
+    } else {
+      showTimedFlash(
+        added +
+          " imported. " +
+          skipped +
+          " skipped due to errors or plan limit."
+      );
+    }
+  };
+
+  const visibleIds = snapshot.rows.map((r) => r.id);
+  const allSelected = selection.allSelected(visibleIds);
+  const someSelected = selection.someSelected(visibleIds);
+
+  function handleToggleAll() {
+    if (allSelected) selection.clear();
+    else selection.selectAll(visibleIds);
+  }
+
+  function handleBulkSetStatus(status: ProductStatus) {
+    const count = selection.count;
+    updateProducts(storeSlug, selection.ids, { status });
+    selection.clear();
+    showTimedFlash(
+      count +
+        (count === 1 ? " product updated." : " products updated.")
+    );
+  }
+
+  function handleBulkSetCategory(categoryId: string) {
+    const count = selection.count;
+    updateProducts(storeSlug, selection.ids, { categoryId });
+    selection.clear();
+    showTimedFlash(
+      count +
+        (count === 1 ? " product updated." : " products updated.")
+    );
+  }
+
+  function handleBulkSetFeatured(featured: boolean) {
+    const count = selection.count;
+    updateProducts(storeSlug, selection.ids, { featured });
+    selection.clear();
+    showTimedFlash(
+      count +
+        (count === 1 ? " product updated." : " products updated.")
+    );
+  }
+
+  function handleBulkArchive() {
+    const count = selection.count;
+    updateProducts(storeSlug, selection.ids, { status: "Archived" });
+    selection.clear();
+    showTimedFlash(
+      count +
+        (count === 1
+          ? " product archived."
+          : " products archived.")
+    );
+  }
+
+  function handleBulkDeleteConfirm() {
+    const count = selection.count;
+    deleteProducts(storeSlug, selection.ids);
+    selection.clear();
+    setBulkDeleteOpen(false);
+    showTimedFlash(
+      count +
+        (count === 1 ? " product deleted." : " products deleted.")
+    );
+  }
+
+  const selectedRows = snapshot.rows.filter((r) =>
+    selection.isSelected(r.id)
+  );
 
   const showNoProducts =
     snapshot.totalCount === 0 && !filtersApi.hasActiveFilters;
@@ -112,6 +242,8 @@ export default function MerchantProductsPage() {
         </div>
       )}
 
+      <ProductLimitBanner evaluation={limit} />
+
       {!showNoProducts && (
         <ProductToolbar
           search={filtersApi.filters.search}
@@ -123,6 +255,9 @@ export default function MerchantProductsPage() {
           sort={filtersApi.filters.sort}
           onSortChange={filtersApi.setSort}
           categories={categories}
+          atProductLimit={limit.atLimit}
+          visibleProductIds={visibleIds}
+          onOpenImport={() => setImportOpen(true)}
         />
       )}
 
@@ -131,6 +266,7 @@ export default function MerchantProductsPage() {
           variant="no-products"
           onSeedSamples={handleSeedSamples}
           seeding={seeding}
+          atProductLimit={limit.atLimit}
         />
       )}
 
@@ -144,9 +280,29 @@ export default function MerchantProductsPage() {
       {!showNoProducts && !showNoMatches && (
         <ProductList
           rows={snapshot.rows}
+          isSelected={selection.isSelected}
+          onToggleSelect={selection.toggle}
+          allSelected={allSelected}
+          someSelected={someSelected}
+          onToggleAll={handleToggleAll}
           onDelete={(product) => setDeleteTarget(product)}
         />
       )}
+
+      {!showNoProducts && !showNoMatches && (
+        <div className="h-16" aria-hidden="true" />
+      )}
+
+      <ProductBulkBar
+        count={selection.count}
+        categories={categories}
+        onClear={selection.clear}
+        onSetStatus={handleBulkSetStatus}
+        onSetCategory={handleBulkSetCategory}
+        onSetFeatured={handleBulkSetFeatured}
+        onArchive={handleBulkArchive}
+        onDelete={() => setBulkDeleteOpen(true)}
+      />
 
       <ProductDeleteModal
         open={deleteTarget !== null}
@@ -158,6 +314,21 @@ export default function MerchantProductsPage() {
         onDeletePermanently={() => {
           if (deleteTarget) handleDeletePermanently(deleteTarget);
         }}
+      />
+
+      <ProductBulkConfirmModal
+        open={bulkDeleteOpen}
+        onClose={() => setBulkDeleteOpen(false)}
+        products={selectedRows}
+        onConfirm={handleBulkDeleteConfirm}
+      />
+
+      <ProductImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        slug={storeSlug}
+        categories={categories}
+        onImported={handleImported}
       />
     </div>
   );

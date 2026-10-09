@@ -6,9 +6,12 @@ import { cn } from "@/lib/utils";
 import type { MerchantProductRow } from "@/lib/merchant/products/types";
 import { PRODUCT_STATUS_LABELS } from "@/lib/merchant/products/labels";
 import { StockBadge } from "./stock-badge";
+import { ProductSelectCheckbox } from "./product-select-checkbox";
 
 interface ProductCardProps {
   product: MerchantProductRow;
+  selected: boolean;
+  onToggleSelect: () => void;
   onDelete: (product: MerchantProductRow) => void;
 }
 
@@ -18,12 +21,37 @@ function statusDotClass(status: MerchantProductRow["status"]): string {
   return "bg-neutral-400";
 }
 
-export function ProductCard({ product, onDelete }: ProductCardProps) {
+export function ProductCard({
+  product,
+  selected,
+  onToggleSelect,
+  onDelete,
+}: ProductCardProps) {
   const hasSale =
     product.salePrice !== null && product.salePrice < product.price;
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
+    <div
+      className={cn(
+        "rounded-xl border bg-white p-4 dark:bg-neutral-900",
+        selected
+          ? "border-brand-500 bg-brand-50/40 dark:border-brand-500 dark:bg-brand-900/10"
+          : "border-neutral-200 dark:border-neutral-800"
+      )}
+    >
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <span className="inline-flex items-center gap-2">
+          <ProductSelectCheckbox
+            checked={selected}
+            onChange={onToggleSelect}
+            label={"Select " + product.name}
+          />
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            {selected ? "Selected" : "Select"}
+          </span>
+        </span>
+      </div>
+
       <Link
         href={"/merchant/products/" + product.id}
         className="flex items-start gap-3"
@@ -83,7 +111,10 @@ export function ProductCard({ product, onDelete }: ProductCardProps) {
           />
           <span className="inline-flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
             <span
-              className={cn("h-1.5 w-1.5 rounded-full", statusDotClass(product.status))}
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                statusDotClass(product.status)
+              )}
               aria-hidden="true"
             />
             {PRODUCT_STATUS_LABELS[product.status]}

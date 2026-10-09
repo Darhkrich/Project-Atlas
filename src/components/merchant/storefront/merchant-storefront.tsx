@@ -25,6 +25,12 @@ import {
   filterStorefrontMethods,
   type StorefrontPaymentMethod,
 } from "@/lib/merchant/storefront/payment-methods";
+import {
+  STATIC_PREVIEW_PAGES,
+  type PreviewPage,
+  type PreviewPageOption,
+} from "@/lib/merchant/storefront/preview-pages";
+import { usePages } from "@/lib/merchant/storefront/pages/use-pages";
 import type {
   StorefrontStatus,
   StorefrontTabKey,
@@ -38,6 +44,7 @@ import { SectionsPanel } from "./sections-panel";
 import { AppearancePanel } from "./appearance-panel";
 import { ShippingPanel } from "./shipping-panel";
 import { SeoPanel } from "./seo-panel";
+import { IntegrationsPanel } from "./integrations-panel";
 import { SettingsPanel } from "./settings-panel";
 import { PublishHistory } from "./publish-history";
 import { PublishModal } from "./publish-modal";
@@ -57,6 +64,7 @@ const TABS: AtlasTab<StorefrontTabKey>[] = [
   { key: "appearance", label: "Appearance" },
   { key: "shipping", label: "Shipping" },
   { key: "seo", label: "SEO" },
+  { key: "integrations", label: "Integrations" },
   { key: "domain", label: "Domain" },
   { key: "settings", label: "Settings" },
 ];
@@ -78,6 +86,7 @@ export function MerchantStorefrontManagement() {
 
   const draft = useStorefrontDraft(storefrontConfig);
   const templateSwitch = useTemplateSwitch();
+  const { pages } = usePages(storefrontConfig.storefrontId);
 
   const autosave = useAutosave({
     value: draft.draft,
@@ -96,6 +105,10 @@ export function MerchantStorefrontManagement() {
   const [previewMode, setPreviewMode] = useState<PreviewMode>("desktop");
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [previewPage, setPreviewPage] = useState<PreviewPage>("home");
+  const [previewCustomPageSlug, setPreviewCustomPageSlug] = useState<
+    string | undefined
+  >(undefined);
 
   const [switchRequest, setSwitchRequest] = useState<{
     toTemplateId: string;
@@ -112,6 +125,23 @@ export function MerchantStorefrontManagement() {
     () => filterStorefrontMethods(plan?.paymentMethods ?? []),
     [plan]
   );
+
+  const pageOptions: PreviewPageOption[] = useMemo(() => {
+    const published = pages
+      .filter((p) => p.published)
+      .sort((a, b) => a.order - b.order);
+    const customOptions: PreviewPageOption[] = published.map((p) => ({
+      value: "custom_page",
+      label: p.title,
+      customPageSlug: p.slug,
+    }));
+    return [...STATIC_PREVIEW_PAGES, ...customOptions];
+  }, [pages]);
+
+  function handlePageChange(next: PreviewPage, customPageSlug?: string) {
+    setPreviewPage(next);
+    setPreviewCustomPageSlug(next === "custom_page" ? customPageSlug : undefined);
+  }
 
   const storeUrl = domain
     ? storefrontUrlFromDomain(domain)
@@ -193,8 +223,8 @@ export function MerchantStorefrontManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">
             My Store
           </p>
@@ -223,7 +253,7 @@ export function MerchantStorefrontManagement() {
         <div
           role="status"
           aria-live="polite"
-          className="flex items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 dark:border-brand-800 dark:bg-brand-900/20"
+          className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50 px-4 py-2.5 dark:border-brand-800 dark:bg-brand-900/20 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
         >
           <span className="text-sm text-brand-900 dark:text-brand-200">
             Template switched. Undo available for{" "}
@@ -232,7 +262,7 @@ export function MerchantStorefrontManagement() {
           <button
             type="button"
             onClick={handleRevertSwitch}
-            className="text-sm font-semibold text-brand-700 hover:underline dark:text-brand-300"
+            className="self-start text-sm font-semibold text-brand-700 hover:underline dark:text-brand-300 sm:self-auto"
           >
             Undo
           </button>
@@ -250,7 +280,7 @@ export function MerchantStorefrontManagement() {
         <div
           role="tabpanel"
           aria-label={TABS.find((t) => t.key === tab)?.label}
-          className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900"
+          className="min-w-0 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 sm:p-5"
         >
           {tab === "branding" && (
             <BrandingPanel
@@ -298,6 +328,14 @@ export function MerchantStorefrontManagement() {
               resetToDefault={draft.resetToDefault}
             />
           )}
+          {tab === "integrations" && (
+            <IntegrationsPanel
+              draft={draft.draft}
+              patch={draft.patch}
+              isDefault={draft.isDefault}
+              resetToDefault={draft.resetToDefault}
+            />
+          )}
           {tab === "domain" && (
             <DomainSection
               storefrontId={draft.draft.storefrontId}
@@ -321,17 +359,23 @@ export function MerchantStorefrontManagement() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 lg:sticky lg:top-20">
+        <div className="min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900 lg:sticky lg:top-20">
           <PreviewToolbar
             mode={previewMode}
             onModeChange={setPreviewMode}
             onFullscreen={() => setFullscreenOpen(true)}
             subtitle={displayUrl}
+            page={previewPage}
+            customPageSlug={previewCustomPageSlug}
+            pageOptions={pageOptions}
+            onPageChange={handlePageChange}
           />
-          <div className="bg-neutral-100 p-4 dark:bg-neutral-950">
+          <div className="bg-neutral-100 p-3 dark:bg-neutral-950 sm:p-4">
             <MerchantStorefrontPreview
               store={draft.draft}
               mode={previewMode}
+              page={previewPage}
+              customPageSlug={previewCustomPageSlug}
             />
           </div>
         </div>
@@ -339,8 +383,8 @@ export function MerchantStorefrontManagement() {
 
       <PublishHistory storefrontId={draft.draft.storefrontId} now={now} />
 
-      <div className="flex items-center gap-2 text-[11px] text-neutral-400 dark:text-neutral-500">
-        <AtlasIcon name="info" aria-hidden="true" className="h-3 w-3" />
+      <div className="flex items-start gap-2 text-[11px] leading-relaxed text-neutral-400 dark:text-neutral-500 sm:items-center">
+        <AtlasIcon name="info" aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0 sm:mt-0" />
         <span>
           Changes save automatically. You can close this page at any time.
         </span>
@@ -368,6 +412,10 @@ export function MerchantStorefrontManagement() {
         config={draft.draft}
         mode={previewMode}
         onModeChange={setPreviewMode}
+        page={previewPage}
+        customPageSlug={previewCustomPageSlug}
+        pageOptions={pageOptions}
+        onPageChange={handlePageChange}
       />
     </div>
   );

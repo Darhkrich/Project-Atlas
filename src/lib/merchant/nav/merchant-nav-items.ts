@@ -58,6 +58,24 @@ export const merchantNavItems: MerchantNavItem[] = [
     group: "business",
   },
   {
+    label: "Discounts",
+    href: "/merchant/discounts",
+    icon: "tag",
+    group: "business",
+  },
+  {
+    label: "Emails",
+    href: "/merchant/emails",
+    icon: "mail",
+    group: "business",
+  },
+  {
+    label: "Run promo",
+    href: "/merchant/promos",
+    icon: "star",
+    group: "business",
+  },
+  {
     label: "Analytics",
     href: "/merchant/analytics",
     icon: "bar-chart",
@@ -67,6 +85,12 @@ export const merchantNavItems: MerchantNavItem[] = [
     label: "Storefront",
     href: "/merchant/storefront",
     icon: "store",
+    group: "store",
+  },
+  {
+    label: "Pages",
+    href: "/merchant/pages",
+    icon: "file-text",
     group: "store",
   },
   {
@@ -86,6 +110,12 @@ export const merchantNavItems: MerchantNavItem[] = [
     href: "/merchant/transactions",
     icon: "transactions",
     group: "billing",
+  },
+  {
+    label: "Team",
+    href: "/merchant/team",
+    icon: "users",
+    group: "support",
   },
   {
     label: "Settings",

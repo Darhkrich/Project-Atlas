@@ -4,9 +4,12 @@ import { StorefrontLayout } from "@/components/storefront/storefront-layout";
 import { GeneralStoreHero } from "./hero";
 import { GeneralStoreFeaturedProducts } from "./featured-products";
 import { GeneralStoreFeaturedCollection } from "./featured-collection";
+import { GeneralStorePromoBeforeHero } from "./promo-before-hero-section";
+import { GeneralStorePromoAfterHero } from "./promo-after-hero-section";
 import { AboutSection } from "@/components/storefront/shared/about-section";
 import { TrustStrip } from "@/components/storefront/shared/trust-strip";
 import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
+import { visibleBanners } from "@/lib/merchant/storefront/promo-utils";
 import type {
   MerchantStorefrontConfig,
   MerchantStorefrontProduct,
@@ -49,16 +52,22 @@ export function GeneralStoreTemplate({
     store.showFeaturedProducts !== false && featured.length > 0;
   const showAbout = store.showAbout !== false;
 
+  const banners = visibleBanners(store.promoBanners);
+  const showBeforeHero =
+    store.promoPlacement === "before_hero" && banners.length > 0;
+  const showAfterHero =
+    store.promoPlacement === "after_hero" && banners.length > 0;
+
   return (
     <StorefrontLayout store={store}>
       {order.map((key) => {
         if (key === "hero") {
           return (
-            <GeneralStoreHero
-              key="hero"
-              store={store}
-              product={heroProduct}
-            />
+            <div key="hero">
+              {showBeforeHero && <GeneralStorePromoBeforeHero store={store} />}
+              <GeneralStoreHero store={store} product={heroProduct} />
+              {showAfterHero && <GeneralStorePromoAfterHero store={store} />}
+            </div>
           );
         }
         if (key === "trust" && showTrust) {

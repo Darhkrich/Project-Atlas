@@ -11,14 +11,14 @@ import { GeneralStoreProductCard } from "./product-card";
 import { useCart } from "@/contexts/cart-context";
 import { getThemeDefinition } from "@/lib/merchant/storefront/themes";
 import { productIsInStock } from "@/lib/merchant/storefront/products";
+import { resolveCategoryLabel } from "@/lib/merchant/storefront/category-labels";
+import { usePublicCategories } from "@/lib/public-store-bridge";
 import type {
   MerchantStorefrontConfig,
   MerchantStorefrontProduct,
   ProductVariant,
   ProductVariantGroup,
 } from "@/types/merchant-storefront";
-import { StorefrontLayout } from "@/components/storefront/storefront-layout";
-
 
 interface GeneralStoreProductDetailProps {
   store: MerchantStorefrontConfig;
@@ -79,6 +79,7 @@ export function GeneralStoreProductDetail({
 }: GeneralStoreProductDetailProps) {
   const theme = getThemeDefinition(store.theme);
   const { addItem } = useCart();
+  const categoryLookup = usePublicCategories(store.slug);
 
   const groups: ProductVariantGroup[] = product.variantGroups ?? [];
   const variants: ProductVariant[] = product.variants ?? [];
@@ -100,7 +101,7 @@ export function GeneralStoreProductDetail({
       if (stock.level === undefined) return q;
       if (stock.level <= 0) return 1;
       if (q > stock.level) return stock.level;
-      return q;
+      return q;  
     });
   }, [stock.level]);
 
@@ -118,9 +119,13 @@ export function GeneralStoreProductDetail({
   const others = products.filter((p) => p.id !== product.id);
   const relatedSource = sameCategory.length > 0 ? sameCategory : others;
   const related = relatedSource.slice(0, 6);
+  const categoryLabel = resolveCategoryLabel(
+    product.categoryId,
+    categoryLookup
+  );
   const relatedHeading =
     sameCategory.length > 0
-      ? "More in " + product.categoryId
+      ? "More in " + categoryLabel
       : "More products";
 
   const primaryImage = product.images[0] ?? "";
@@ -148,7 +153,6 @@ export function GeneralStoreProductDetail({
   }
 
   return (
-    <StorefrontLayout store={store}>
     <SectionSurface theme={theme} ariaLabel={product.name}>
       <nav
         aria-label="Breadcrumb"
@@ -301,9 +305,7 @@ export function GeneralStoreProductDetail({
           aria-label="Related products"
           className="mt-20"
         >
-          <h2 className={theme.typography.sectionTitle}>
-            {relatedHeading}
-          </h2>
+          <h2 className={theme.typography.sectionTitle}>{relatedHeading}</h2>
           <div className={"atlas-product-grid mt-8 " + theme.layout.gridGap}>
             {related.map((item) => (
               <GeneralStoreProductCard
@@ -316,7 +318,6 @@ export function GeneralStoreProductDetail({
         </section>
       )}
     </SectionSurface>
-    </StorefrontLayout>
   );
 }
 

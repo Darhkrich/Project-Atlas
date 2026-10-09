@@ -6,6 +6,7 @@ import type { MerchantProductDetail } from "@/lib/merchant/products/types";
 import type { MerchantCategory } from "@/lib/merchant/categories/types";
 import { ProductFormBasic } from "./product-form-basic";
 import { ProductFormPricing } from "./product-form-pricing";
+import { ProductFormVariants } from "./product-form-variants";
 import { ProductFormStatus } from "./product-form-status";
 import { ProductFormActions } from "./product-form-actions";
 
@@ -46,6 +47,8 @@ export function ProductForm({
           status: initial.status,
           featured: initial.featured,
           images: initial.images,
+          variantGroups: initial.variantGroups,
+          variants: initial.variants,
         }
       : null,
   });
@@ -80,6 +83,12 @@ export function ProductForm({
           />
 
           <ProductFormPricing
+            values={form.values}
+            errors={form.errors}
+            updateField={form.updateField}
+          />
+
+          <ProductFormVariants
             values={form.values}
             errors={form.errors}
             updateField={form.updateField}

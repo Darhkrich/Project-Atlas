@@ -142,7 +142,9 @@ export function AtlasModalShell({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">{children}</div>
+        <div className="atlas-scroll-hidden flex-1 overflow-y-auto p-4">
+          {children}
+        </div>
 
         {footer && (
           <div className="border-t border-neutral-200 p-4 dark:border-neutral-800">

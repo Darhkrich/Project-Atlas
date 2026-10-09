@@ -3,6 +3,7 @@ import { AuthGuard } from "@/components/auth/AuthGuard";
 import { ResellerLayout } from "@/components/reseller/reseller-layout";
 import { StorefrontProvider } from "@/contexts/storefront-context";
 import { StorefrontCustomerProvider } from "@/contexts/storefront-customer-context";
+import { ResellerStorefrontProvider } from "@/contexts/reseller-storefront-context";
 
 export default function ResellerAreaLayout({
   children,
@@ -13,9 +14,11 @@ export default function ResellerAreaLayout({
     <ResellerLayout>
       <StorefrontProvider>
         <StorefrontCustomerProvider>
-          <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
-            {children}
-          </div>
+          <ResellerStorefrontProvider>
+            <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
+              {children}
+            </div>
+          </ResellerStorefrontProvider>
         </StorefrontCustomerProvider>
       </StorefrontProvider>
     </ResellerLayout>

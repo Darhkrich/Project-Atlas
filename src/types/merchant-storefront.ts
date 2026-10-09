@@ -111,12 +111,40 @@ export interface AnalyticsProviders {
   tiktokPixel?: string;
 }
 
-// icon must be one of the values the storefront knows how to render.
-// Validated in normalizeMerchantStorefront. Unknown values are dropped.
 export interface TrustItem {
   icon: string;
   label: string;
 }
+
+export type PromoBannerAlignment = "left" | "center" | "right";
+
+export interface PromoBanner {
+  id: string;
+  imageUrl?: string;
+  headline: string;
+  subhead?: string;
+  badge?: string;
+  linkUrl?: string;
+  linkLabel?: string;
+  alignment: PromoBannerAlignment;
+  backgroundColor?: string;
+  enabled: boolean;
+  order: number;
+}
+
+export type PromoPlacement =
+  | "before_hero"
+  | "after_hero"
+  | "as_hero_background";
+
+export type PromoTransition = "auto" | "manual" | "both";
+
+export type HeroStyle =
+  | "theme_default"
+  | "image_background"
+  | "image_side"
+  | "image_half"
+  | "text_only";
 
 export interface MerchantStorefrontConfig {
   storefrontId: string;
@@ -175,10 +203,13 @@ export interface MerchantStorefrontConfig {
 
   wwwRedirect?: WwwRedirect;
 
-  showPromoInHero?: boolean;
-  promoText?: string;
-  promoLink?: string;
-  promoLinkLabel?: string;
+  promoBanners?: PromoBanner[];
+  promoPlacement?: PromoPlacement;
+  promoTransition?: PromoTransition;
+  promoAutoIntervalMs?: number;
+  promoLoop?: boolean;
+
+  heroStyle?: HeroStyle;
 
   showCategoryStrip?: boolean;
   showAbout?: boolean;
@@ -195,6 +226,15 @@ export interface MerchantStorefrontConfig {
 
   trustItems?: TrustItem[];
   showLookbook?: boolean;
+
+  /** @deprecated Replaced by promoBanners. Migrated on first read. */
+  showPromoInHero?: boolean;
+  /** @deprecated Replaced by promoBanners. Migrated on first read. */
+  promoText?: string;
+  /** @deprecated Replaced by promoBanners. Migrated on first read. */
+  promoLink?: string;
+  /** @deprecated Replaced by promoBanners. Migrated on first read. */
+  promoLinkLabel?: string;
 
   /** @deprecated Domains moved to lib/domains/store.ts. Do not read. */
   customDomain?: string;
@@ -216,7 +256,7 @@ export const DEFAULT_BUSINESS_HOURS: BusinessHours = [
   { day: "sun", closed: true, open: "10:00", close: "16:00" },
 ];
 
-export const MERCHANT_STOREFRONT_CONFIG_VERSION = 4;
+export const MERCHANT_STOREFRONT_CONFIG_VERSION = 5;
 
 export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   storefrontId: "SF-MER-001",
@@ -268,10 +308,14 @@ export const defaultMerchantStorefront: MerchantStorefrontConfig = {
   termsPolicy: "",
   wwwRedirect: "none",
 
-  showPromoInHero: false,
-  promoText: "",
-  promoLink: "",
-  promoLinkLabel: "Shop now",
+  promoBanners: undefined,
+  promoPlacement: "after_hero",
+  promoTransition: "auto",
+  promoAutoIntervalMs: 5000,
+  promoLoop: true,
+
+  heroStyle: "theme_default",
+
   showCategoryStrip: true,
   showAbout: true,
   heroImageInAbout: false,

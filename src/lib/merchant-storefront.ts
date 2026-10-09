@@ -4,9 +4,14 @@ import {
   MERCHANT_STOREFRONT_CONFIG_VERSION,
   type AnalyticsProviders,
   type BusinessHours,
+  type HeroStyle,
   type MenuItem,
   type MerchantStorefrontConfig,
   type MerchantStorefrontTheme,
+  type PromoBanner,
+  type PromoBannerAlignment,
+  type PromoPlacement,
+  type PromoTransition,
   type StorefrontCornerRadius,
   type StorefrontFont,
   type StorefrontGridDensity,
@@ -33,8 +38,6 @@ const VALID_THEMES: MerchantStorefrontTheme[] = [
   "statement",
 ];
 
-// These must be members of AtlasIconName. Adding a new value here requires
-// adding the icon to components/atlas/icons.tsx first.
 const VALID_TRUST_ICONS: string[] = [
   "shield",
   "package",
@@ -44,7 +47,32 @@ const VALID_TRUST_ICONS: string[] = [
   "star",
 ];
 
-// Legacy theme names from configVersion < 3.
+const VALID_PROMO_PLACEMENTS: PromoPlacement[] = [
+  "before_hero",
+  "after_hero",
+  "as_hero_background",
+];
+
+const VALID_PROMO_TRANSITIONS: PromoTransition[] = [
+  "auto",
+  "manual",
+  "both",
+];
+
+const VALID_HERO_STYLES: HeroStyle[] = [
+  "theme_default",
+  "image_background",
+  "image_side",
+  "image_half",
+  "text_only",
+];
+
+const VALID_BANNER_ALIGNMENTS: PromoBannerAlignment[] = [
+  "left",
+  "center",
+  "right",
+];
+
 const LEGACY_THEME_MAP: Record<string, MerchantStorefrontTheme> = {
   modern: "airy",
   classic: "editorial",
@@ -197,6 +225,121 @@ function normalizeTrustItems(value: unknown): TrustItem[] | undefined {
   return result;
 }
 
+function normalizeBannerAlignment(value: unknown): PromoBannerAlignment {
+  if (typeof value === "string") {
+    const found = VALID_BANNER_ALIGNMENTS.find((a) => a === value);
+    if (found) return found;
+  }
+  return "left";
+}
+
+function normalizePromoBanners(value: unknown): PromoBanner[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result: PromoBanner[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const id = typeof e.id === "string" ? e.id : crypto.randomUUID();
+    const headline = typeof e.headline === "string" ? e.headline : "";
+    const imageUrl = asOptionalString(e.imageUrl);
+    const subhead = asOptionalString(e.subhead);
+    const badge = asOptionalString(e.badge);
+    const linkUrl = asOptionalString(e.linkUrl);
+    const linkLabel = asOptionalString(e.linkLabel);
+    const backgroundColor = asOptionalString(e.backgroundColor);
+
+    if (headline.length === 0 && !imageUrl) continue;
+
+    const order =
+      typeof e.order === "number" && Number.isFinite(e.order) ? e.order : 0;
+    const enabled = typeof e.enabled === "boolean" ? e.enabled : true;
+
+    result.push({
+      id,
+      imageUrl,
+      headline,
+      subhead,
+      badge,
+      linkUrl,
+      linkLabel,
+      alignment: normalizeBannerAlignment(e.alignment),
+      backgroundColor,
+      enabled,
+      order,
+    });
+  }
+  if (result.length === 0) return undefined;
+  return result.sort((a, b) => a.order - b.order);
+}
+
+// "inside_hero" was the placement name in configVersion 5. It has been
+// replaced by "after_hero". Configs saved before this change migrate here.
+function normalizePromoPlacement(value: unknown): PromoPlacement {
+  if (typeof value === "string") {
+    if (value === "inside_hero") return "after_hero";
+    const found = VALID_PROMO_PLACEMENTS.find((p) => p === value);
+    if (found) return found;
+  }
+  return "after_hero";
+}
+
+function normalizePromoTransition(value: unknown): PromoTransition {
+  if (typeof value === "string") {
+    const found = VALID_PROMO_TRANSITIONS.find((t) => t === value);
+    if (found) return found;
+  }
+  return "auto";
+}
+
+function normalizeHeroStyle(value: unknown): HeroStyle {
+  if (typeof value === "string") {
+    const found = VALID_HERO_STYLES.find((h) => h === value);
+    if (found) return found;
+  }
+  return "theme_default";
+}
+
+function normalizePromoInterval(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 2000) {
+    return Math.min(value, 60000);
+  }
+  return 5000;
+}
+
+function migrateLegacyPromo(
+  banners: PromoBanner[] | undefined,
+  legacy: {
+    showPromoInHero: unknown;
+    promoText: unknown;
+    promoLink: unknown;
+    promoLinkLabel: unknown;
+  }
+): PromoBanner[] | undefined {
+  if (banners && banners.length > 0) return banners;
+  const show = legacy.showPromoInHero === true;
+  const text =
+    typeof legacy.promoText === "string" ? legacy.promoText.trim() : "";
+  if (!show || text.length === 0) return banners;
+
+  const link =
+    typeof legacy.promoLink === "string" ? legacy.promoLink.trim() : "";
+  const label =
+    typeof legacy.promoLinkLabel === "string" &&
+    legacy.promoLinkLabel.trim().length > 0
+      ? legacy.promoLinkLabel.trim()
+      : "Shop now";
+
+  const migrated: PromoBanner = {
+    id: crypto.randomUUID(),
+    headline: text,
+    alignment: "left",
+    enabled: true,
+    order: 0,
+    ...(link.length > 0 ? { linkUrl: link, linkLabel: label } : {}),
+  };
+  return [migrated];
+}
+
 export function normalizeMerchantStorefront(
   input: Partial<MerchantStorefrontConfig> | null | undefined
 ): MerchantStorefrontConfig {
@@ -215,6 +358,16 @@ export function normalizeMerchantStorefront(
 
   const status: MerchantStorefrontConfig["status"] =
     src.status === "live" ? "live" : "draft";
+
+  const promoBanners = migrateLegacyPromo(
+    normalizePromoBanners(src.promoBanners),
+    {
+      showPromoInHero: src.showPromoInHero,
+      promoText: src.promoText,
+      promoLink: src.promoLink,
+      promoLinkLabel: src.promoLinkLabel,
+    }
+  );
 
   return {
     storefrontId: asString(src.storefrontId, base.storefrontId),
@@ -285,16 +438,14 @@ export function normalizeMerchantStorefront(
     termsPolicy: asString(src.termsPolicy, base.termsPolicy ?? ""),
     wwwRedirect: normalizeWwwRedirect(src.wwwRedirect),
 
-    showPromoInHero: asBoolean(
-      src.showPromoInHero,
-      base.showPromoInHero ?? false
-    ),
-    promoText: asString(src.promoText, base.promoText ?? ""),
-    promoLink: asString(src.promoLink, base.promoLink ?? ""),
-    promoLinkLabel: asString(
-      src.promoLinkLabel,
-      base.promoLinkLabel ?? "Shop now"
-    ),
+    promoBanners,
+    promoPlacement: normalizePromoPlacement(src.promoPlacement),
+    promoTransition: normalizePromoTransition(src.promoTransition),
+    promoAutoIntervalMs: normalizePromoInterval(src.promoAutoIntervalMs),
+    promoLoop: asBoolean(src.promoLoop, base.promoLoop ?? true),
+
+    heroStyle: normalizeHeroStyle(src.heroStyle),
+
     showCategoryStrip: asBoolean(
       src.showCategoryStrip,
       base.showCategoryStrip ?? true
@@ -315,6 +466,11 @@ export function normalizeMerchantStorefront(
     sectionOrder: normalizeSectionOrder(src.sectionOrder),
     trustItems: normalizeTrustItems(src.trustItems),
     showLookbook: asBoolean(src.showLookbook, base.showLookbook ?? true),
+
+    showPromoInHero: undefined,
+    promoText: undefined,
+    promoLink: undefined,
+    promoLinkLabel: undefined,
 
     customDomain: src.customDomain,
     customDomainStatus: src.customDomainStatus,

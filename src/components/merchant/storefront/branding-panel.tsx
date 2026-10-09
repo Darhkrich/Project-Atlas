@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState } from "react";
@@ -77,49 +78,53 @@ export function BrandingPanel({
         />
       </AtlasField>
 
-      <AtlasField
-        label="Tagline"
-        htmlFor="tagline"
-        dirty={!isDefault("tagline")}
-        onRevertToDefault={() => resetToDefault("tagline")}
-        hint="A short line that appears under your store name."
-      >
-        <input
-          id="tagline"
-          type="text"
-          value={draft.tagline}
-          onChange={(e) => setField("tagline", e.target.value)}
-          placeholder="e.g., Beauty that shines"
-          className={inputClass}
+      <div className="space-y-2">
+        <AtlasField
+          label="Tagline"
+          htmlFor="tagline"
+          dirty={!isDefault("tagline")}
+          onRevertToDefault={() => resetToDefault("tagline")}
+          hint="A short line that appears under your store name."
+        >
+          <input
+            id="tagline"
+            type="text"
+            value={draft.tagline}
+            onChange={(e) => setField("tagline", e.target.value)}
+            placeholder="e.g., Beauty that shines"
+            className={inputClass}
+          />
+        </AtlasField>
+        <AtlasSuggestionList
+          suggestions={suggestions("tagline")}
+          onSelect={(s) => setField("tagline", s)}
+          onShuffle={() => shuffle("tagline")}
         />
-      </AtlasField>
-      <AtlasSuggestionList
-        suggestions={suggestions("tagline")}
-        onSelect={(s) => setField("tagline", s)}
-        onShuffle={() => shuffle("tagline")}
-      />
+      </div>
 
-      <AtlasField
-        label="Store description"
-        htmlFor="description"
-        dirty={!isDefault("description")}
-        onRevertToDefault={() => resetToDefault("description")}
-        hint="A short paragraph about your store. Shown on the storefront."
-      >
-        <textarea
-          id="description"
-          value={draft.description}
-          onChange={(e) => setField("description", e.target.value)}
-          rows={3}
-          placeholder="Tell customers about your store"
-          className={inputClass + " resize-none"}
+      <div className="space-y-2">
+        <AtlasField
+          label="Store description"
+          htmlFor="description"
+          dirty={!isDefault("description")}
+          onRevertToDefault={() => resetToDefault("description")}
+          hint="A short paragraph about your store. Shown on the storefront."
+        >
+          <textarea
+            id="description"
+            value={draft.description}
+            onChange={(e) => setField("description", e.target.value)}
+            rows={3}
+            placeholder="Tell customers about your store"
+            className={inputClass + " resize-none"}
+          />
+        </AtlasField>
+        <AtlasSuggestionList
+          suggestions={suggestions("description")}
+          onSelect={(s) => setField("description", s)}
+          onShuffle={() => shuffle("description")}
         />
-      </AtlasField>
-      <AtlasSuggestionList
-        suggestions={suggestions("description")}
-        onSelect={(s) => setField("description", s)}
-        onShuffle={() => shuffle("description")}
-      />
+      </div>
 
       <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -145,7 +150,7 @@ export function BrandingPanel({
         </div>
       </div>
 
-      <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
+      <div className="space-y-2 border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <AtlasField
           label="Hero headline"
           htmlFor="heroTitle"
@@ -168,25 +173,27 @@ export function BrandingPanel({
         />
       </div>
 
-      <AtlasField
-        label="Hero description"
-        htmlFor="heroDescription"
-        dirty={!isDefault("heroDescription")}
-        onRevertToDefault={() => resetToDefault("heroDescription")}
-      >
-        <textarea
-          id="heroDescription"
-          value={draft.heroDescription}
-          onChange={(e) => setField("heroDescription", e.target.value)}
-          rows={3}
-          className={inputClass + " resize-none"}
+      <div className="space-y-2">
+        <AtlasField
+          label="Hero description"
+          htmlFor="heroDescription"
+          dirty={!isDefault("heroDescription")}
+          onRevertToDefault={() => resetToDefault("heroDescription")}
+        >
+          <textarea
+            id="heroDescription"
+            value={draft.heroDescription}
+            onChange={(e) => setField("heroDescription", e.target.value)}
+            rows={3}
+            className={inputClass + " resize-none"}
+          />
+        </AtlasField>
+        <AtlasSuggestionList
+          suggestions={suggestions("heroDescription")}
+          onSelect={(s) => setField("heroDescription", s)}
+          onShuffle={() => shuffle("heroDescription")}
         />
-      </AtlasField>
-      <AtlasSuggestionList
-        suggestions={suggestions("heroDescription")}
-        onSelect={(s) => setField("heroDescription", s)}
-        onShuffle={() => shuffle("heroDescription")}
-      />
+      </div>
 
       <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
         <HeroImageField

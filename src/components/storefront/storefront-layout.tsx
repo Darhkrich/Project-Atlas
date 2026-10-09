@@ -3,9 +3,19 @@
 import { useState, useEffect, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import Script from "next/script";
 import { AtlasIcon } from "@/components/atlas/icons";
 import { useCart } from "@/contexts/cart-context";
 import { useCustomerAuth } from "@/contexts/customer-auth-context";
+import {
+  menuForRender,
+  resolveMenuHref,
+} from "@/lib/merchant/storefront/menu";
+import {
+  buildGaInit,
+  buildMetaPixelInit,
+  buildTiktokPixelInit,
+} from "@/lib/merchant/storefront/analytics-snippets";
 import type { MerchantStorefrontConfig } from "@/types/merchant-storefront";
 
 interface StorefrontLayoutProps {
@@ -23,12 +33,11 @@ export function StorefrontLayout({ store, children }: StorefrontLayoutProps) {
   }, [store.slug, setStoreSlug]);
 
   const slug = store.slug || "my-store";
-  const navItems = [
-    { label: "Home", href: `/ecommerce-stores/${slug}` },
-    { label: "Products", href: `/ecommerce-stores/${slug}/products` },
-    { label: "About", href: `/ecommerce-stores/${slug}/about` },
-    { label: "Contact", href: `/ecommerce-stores/${slug}/contact` },
-  ];
+  const menuItems = menuForRender(store.menuItems);
+  const navItems = menuItems.map((item) => ({
+    label: item.label,
+    href: resolveMenuHref(item.href, slug),
+  }));
 
   const font = store.font ?? "atlas";
   const radius = store.cornerRadius ?? "soft";
@@ -39,6 +48,8 @@ export function StorefrontLayout({ store, children }: StorefrontLayoutProps) {
     "--atlas-grid-cols": gridCols,
   } as CSSProperties;
 
+  const providers = store.analyticsProviders;
+
   return (
     <div
       data-font={font}
@@ -47,6 +58,33 @@ export function StorefrontLayout({ store, children }: StorefrontLayoutProps) {
       style={rootStyle}
       className="atlas-storefront min-h-screen overflow-x-hidden"
     >
+      {providers?.ga && (
+        <>
+          <Script
+            id="atlas-ga-src"
+            strategy="afterInteractive"
+            src={
+              "https://www.googletagmanager.com/gtag/js?id=" + providers.ga
+            }
+          />
+          <Script id="atlas-ga-init" strategy="afterInteractive">
+            {buildGaInit(providers.ga)}
+          </Script>
+        </>
+      )}
+
+      {providers?.metaPixel && (
+        <Script id="atlas-meta-pixel" strategy="afterInteractive">
+          {buildMetaPixelInit(providers.metaPixel)}
+        </Script>
+      )}
+
+      {providers?.tiktokPixel && (
+        <Script id="atlas-tiktok-pixel" strategy="afterInteractive">
+          {buildTiktokPixelInit(providers.tiktokPixel)}
+        </Script>
+      )}
+
       {store.showAnnouncement && store.announcement && (
         <div
           className="atlas-storefront-announcement px-3 py-2 text-center text-xs font-medium text-white"
